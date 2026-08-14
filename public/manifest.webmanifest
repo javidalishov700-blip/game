@@ -1,11 +1,11 @@
 {
-  "name": "POPDRAW",
-  "short_name": "POPDRAW",
-  "description": "Shoot matching blocks, stack like Tetris, snipe pips, win the draw.",
+  "name": "ANTIMASS",
+  "short_name": "ANTIMASS",
+  "description": "Invert a brick's mass and weaponize the collapse.",
   "start_url": ".",
   "display": "standalone",
-  "background_color": "#f3d5e4",
-  "theme_color": "#f3d5e4",
+  "background_color": "#05040c",
+  "theme_color": "#05040c",
   "orientation": "portrait",
   "icons": [
     {

@@ -1,8 +1,10 @@
-# POPDRAW
+# ANTIMASS
 
-Shoot matching blocks. Stack like Tetris. Snipe flying pips. Win the DRAW.
+Invert one brick. Weaponize the collapse.
 
-A Play Store-style 2D mashup: Block Blast pops + Tetris stacking + gallery shooting + a pistol-duel timing beat. Easy for the first minute, then it layers more colors, faster drops, and tighter draws.
+A physics demolition well: you do not snipe targets. You flip a brick's mass sign so gravity yanks it the wrong way, then ride the chain reaction — impact contagion, snapped support cables, same-color antimass annihilation, and cores crushed in the wreckage.
+
+The miss that hurts is not a missed shot. It is inverting the wrong keystone and watching a 12x annihilation fly into the ceiling.
 
 ## Run it
 
@@ -13,17 +15,12 @@ npm run dev
 
 | Input | Action |
 | --- | --- |
-| Tap a column | Shoot your current color up that stack |
-| Tap NEXT ball | Swap current / next (like puzzle shooters) |
-| Tap a flying pip | Bonus + bomb or rainbow shot |
-| DRAW! overlay | Tap while the needle is in the green |
-| 1–5 / Space | Shoot columns (desktop) |
-| S | Swap |
+| Tap a brick | Invert its mass (it falls *up*) and slam a gravity wake into neighbors |
+| Tap an inverted brick | Detonate it into a shockwave |
+| Tap a hex **anchor** | Snap every cable welded to it |
 | M | Mute |
 
-Same color as the top of a stack = **pop the whole connected group** (Block Blast). Wrong color = **the shot stacks on top** (Tetris). If any column hits the red ceiling, you're stacked out.
-
-Difficulty ramp: 2 colors and slow garbage at the start → 3rd color ~40 pts → pips ~10 pts → DRAW duels ~35 pts → faster drops later. Garbage colors are biased toward what's already on the board so you are not starved of matches.
+Same-color antimass collisions **annihilate** and invert everything in the blast. Cores (the star orbs) only die when crushed by inverted mass or a shockwave. Spill too much antimass through the roof and the **rift** ruptures; let the pile rest above the red line and you **overflow**.
 
 ```bash
 npm test
@@ -39,4 +36,6 @@ npx cap sync android
 npx cap open android
 ```
 
-App id: `com.javidalishov.popdraw`.
+App id: `com.javidalishov.antimass`.
+
+Stack: Vite + TypeScript + Canvas 2D + a fixed-step impulse physics loop + Capacitor. Chosen over React Native so the sim and neon pass stay on one 60fps rAF thread with no bridge.

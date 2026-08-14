@@ -1,12 +1,12 @@
 import type { CapacitorConfig } from "@capacitor/cli";
 
 const config: CapacitorConfig = {
-  appId: "com.javidalishov.popdraw",
-  appName: "POPDRAW",
+  appId: "com.javidalishov.antimass",
+  appName: "ANTIMASS",
   webDir: "dist",
-  backgroundColor: "#f3d5e4",
+  backgroundColor: "#05040c",
   android: {
-    backgroundColor: "#f3d5e4",
+    backgroundColor: "#05040c",
     allowMixedContent: false,
   },
 };

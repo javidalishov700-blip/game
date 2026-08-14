@@ -1,5 +1,5 @@
 import { AudioBus } from "./audio";
-import { PopDrawGame } from "./game";
+import { AntimassGame } from "./game";
 import "./style.css";
 
 const canvasEl = document.querySelector("#game");
@@ -9,7 +9,7 @@ if (!(canvasEl instanceof HTMLCanvasElement)) {
 const canvas = canvasEl;
 
 const audio = new AudioBus();
-const game = new PopDrawGame(canvas, audio);
+const game = new AntimassGame(canvas, audio);
 
 function fit(): void {
   const vv = window.visualViewport;
@@ -37,7 +37,7 @@ canvas.addEventListener("pointerdown", (event) => {
 });
 canvas.addEventListener("pointermove", (event) => {
   const p = canvasPoint(event);
-  game.hover(p.x, p.y);
+  game.hoverAt(p.x, p.y);
 });
 canvas.addEventListener("contextmenu", (e) => e.preventDefault());
 
@@ -47,36 +47,11 @@ window.addEventListener("keydown", (e) => {
     audio.toggleMute();
     return;
   }
-  if (e.code === "KeyS" || e.code === "ShiftLeft" || e.code === "ShiftRight") {
-    e.preventDefault();
-    game.swapAmmo();
-    return;
-  }
-  const colKeys: Record<string, number> = {
-    Digit1: 0,
-    Digit2: 1,
-    Digit3: 2,
-    Digit4: 3,
-    Digit5: 4,
-    Numpad1: 0,
-    Numpad2: 1,
-    Numpad3: 2,
-    Numpad4: 3,
-    Numpad5: 4,
-  };
-  if (e.code in colKeys && !e.repeat) {
-    e.preventDefault();
-    const col = colKeys[e.code]!;
-    const x = (col + 0.5) / 5 * canvas.getBoundingClientRect().width;
-    const y = canvas.getBoundingClientRect().height * 0.55;
-    game.hover(x, y);
-    game.tap(x, y);
-  }
   if (e.code === "Space" || e.code === "Enter") {
     e.preventDefault();
     if (!e.repeat) {
       const r = canvas.getBoundingClientRect();
-      game.tap(r.width * 0.5, r.height * 0.55);
+      game.tap(r.width * 0.5, r.height * 0.62);
     }
   }
 });
