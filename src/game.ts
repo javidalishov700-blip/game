@@ -242,7 +242,7 @@ export class FlinchGame {
     const lane = laneFromPoint(x, y, this.cx(), this.cy());
     this.tapLane = lane;
     this.tapLaneT = 0.14;
-    const hit = this.pickSpike(lane);
+    const hit = this.pickSpike(lane) ?? (this.wave <= 1 ? this.pickUrgent() : null);
     if (!hit) {
       this.audio.tapUi();
       return;
@@ -353,11 +353,12 @@ export class FlinchGame {
 
   private spawn(spec: Spawn): void {
     const d = this.difficulty();
+    const dur = approachTime(d) * (this.wave <= 1 ? 1.25 : 1);
     this.spikes.push({
       ...spec,
       id: this.nextId++,
       t: 0,
-      dur: approachTime(d),
+      dur,
       dead: false,
     });
   }
@@ -374,6 +375,23 @@ export class FlinchGame {
       if (dist < bestDist) {
         best = s;
         bestDist = dist;
+      }
+    }
+    return best;
+  }
+
+  /** Wave 1 only: parry the spike that is already in the gold window. */
+  private pickUrgent(): Spike | null {
+    const win = windowsFor(this.difficulty());
+    let best: Spike | null = null;
+    let bestP = -1;
+    for (const s of this.spikes) {
+      if (s.dead || s.kind === "ghost") continue;
+      const p = s.t / s.dur;
+      if (p < win.good || p >= 1) continue;
+      if (p > bestP) {
+        best = s;
+        bestP = p;
       }
     }
     return best;
@@ -700,11 +718,14 @@ export class FlinchGame {
       ctx.arc(x, y, R, a0, a1);
       ctx.closePath();
       const hot = this.tapLane === i && this.tapLaneT > 0;
+      const incoming = this.laneHeat(i);
       ctx.fillStyle = hot
-        ? "rgba(232,195,106,0.12)"
-        : i % 2 === 0
-          ? "rgba(255,255,255,0.018)"
-          : "rgba(0,0,0,0.1)";
+        ? "rgba(232,195,106,0.14)"
+        : incoming > 0
+          ? `rgba(232,195,106,${0.04 + incoming * 0.16})`
+          : i % 2 === 0
+            ? "rgba(255,255,255,0.018)"
+            : "rgba(0,0,0,0.1)";
       ctx.fill();
       ctx.strokeStyle = "rgba(232,195,106,0.07)";
       ctx.lineWidth = 1;
@@ -714,6 +735,19 @@ export class FlinchGame {
       ctx.stroke();
     }
     void S;
+  }
+
+  private laneHeat(lane: number): number {
+    const win = windowsFor(this.difficulty());
+    let heat = 0;
+    for (const s of this.spikes) {
+      if (s.dead) continue;
+      const p = s.t / s.dur;
+      if (liveLane(s, p) !== lane) continue;
+      if (p >= win.good && p < 1) heat = Math.max(heat, s.kind === "ghost" ? 0.35 : 1);
+      else if (p > 0.25) heat = Math.max(heat, 0.25);
+    }
+    return heat;
   }
 
   private drawRing(S: number): void {

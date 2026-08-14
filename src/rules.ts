@@ -68,7 +68,7 @@ export function waveHint(wave: number): string {
 }
 
 export function buildWave(wave: number): Spawn[] {
-  const n = Math.min(16, 5 + wave);
+  const n = Math.min(16, wave <= 1 ? 5 : 5 + wave);
   const out: Spawn[] = [];
   let last = -1;
   for (let i = 0; i < n; i++) {
@@ -78,7 +78,7 @@ export function buildWave(wave: number): Spawn[] {
     let kind: SpikeKind = "normal";
     if (wave >= 2 && Math.random() < 0.2) kind = "gold";
     if (wave >= 3 && Math.random() < 0.18) kind = "ghost";
-    const gap = Math.max(0.2, 0.56 - wave * 0.036);
+    const gap = wave <= 1 ? 1.15 : Math.max(0.2, 0.56 - wave * 0.036);
     const spawn: Spawn = { lane, kind, gap };
     if (wave >= 5 && kind === "normal" && Math.random() < 0.32) {
       spawn.feintTo = (lane + (Math.random() < 0.5 ? 1 : LANES - 1)) % LANES;

@@ -43,7 +43,7 @@ describe("waves", () => {
 
   it("keeps wave 1 as single normal spikes", () => {
     const wave = buildWave(1);
-    expect(wave.length).toBe(6);
+    expect(wave.length).toBe(5);
     expect(wave.every((s) => s.kind === "normal" && s.feintTo == null)).toBe(true);
   });
 
