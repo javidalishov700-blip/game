@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="colorBackground">#FF080812</color>
+    <color name="colorBall">#FF00EEBB</color>
+    <color name="colorWell">#FF9B59FF</color>
+    <color name="colorPortalPink">#FFFF5EC8</color>
+    <color name="colorPortalGold">#FFFFD700</color>
+    <color name="colorPortalGreen">#FF00FF88</color>
+    <color name="colorPortalBlue">#FF00BFFF</color>
+    <color name="colorPortalOrange">#FFFF6A00</color>
+</resources>

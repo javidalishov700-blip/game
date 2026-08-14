@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">GravitAP</string>
+    <string name="game_title">GRAVITAP</string>
+    <string name="tap_to_play">TAP TO PLAY</string>
+    <string name="game_over">GAME OVER</string>
+    <string name="new_record">NEW RECORD!</string>
+    <string name="tap_to_retry">TAP TO RETRY</string>
+    <string name="best">BEST</string>
+    <string name="score">SCORE</string>
+    <string name="level">LVL</string>
+    <string name="combo_format">×%d COMBO</string>
+    <string name="score_format">%,d</string>
+</resources>

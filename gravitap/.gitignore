@@ -1,0 +1,25 @@
+# Android
+*.iml
+.gradle
+/local.properties
+/.idea
+.DS_Store
+/build
+/captures
+.externalNativeBuild
+.cxx
+local.properties
+
+# Keystore
+*.jks
+*.keystore
+
+# Generated
+/app/release/
+/app/debug/
+
+# Gradle
+gradle/wrapper/gradle-wrapper.jar
+
+# Kotlin
+*.kotlin_module
