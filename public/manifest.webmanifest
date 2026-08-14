@@ -1,11 +1,11 @@
 {
-  "name": "POPDRAW",
-  "short_name": "POPDRAW",
-  "description": "Shoot matching blocks, stack like Tetris, snipe pips, win the draw.",
+  "name": "FLINCH",
+  "short_name": "FLINCH",
+  "description": "Wait. Then tap.",
   "start_url": ".",
   "display": "standalone",
-  "background_color": "#f3d5e4",
-  "theme_color": "#f3d5e4",
+  "background_color": "#09090b",
+  "theme_color": "#09090b",
   "orientation": "portrait",
   "icons": [
     {
