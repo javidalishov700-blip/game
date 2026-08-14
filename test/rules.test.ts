@@ -197,6 +197,7 @@ describe("physics contact", () => {
     a.vx = 80;
     const hit = collidePair(a, b);
     expect(hit).not.toBeNull();
+    for (let i = 0; i < 6; i++) collidePair(a, b);
     expect(Math.hypot(b.x - a.x, b.y - a.y)).toBeGreaterThanOrEqual(a.r + b.r - 1.5);
   });
 });

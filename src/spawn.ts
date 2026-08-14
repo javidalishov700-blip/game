@@ -82,10 +82,19 @@ export function wavePile(score: number, seed: number, existing: Body[]): Structu
   }
 
   if (!bodies.some((b) => b.kind === "core")) {
-    const host = bodies.find((b) => b.kind === "brick");
-    if (host && canPlace(host.x, host.y - BRICK_R * 1.6, CORE_R, placed.concat(bodies))) {
+    const host = bodies
+      .filter((b) => b.kind === "brick")
+      .sort((a, b) => a.y - b.y)[0];
+    if (host) {
+      host.kind = "core";
+      host.r = CORE_R;
+      host.mass = Math.max(0.35, 0.7 * (CORE_R * CORE_R) * 0.0048);
+      host.pinned = false;
+    } else {
       bodies.push(
-        makeBody("core", host.x, host.y - BRICK_R * 1.6, host.color, { incoming }),
+        makeBody("core", well.x + well.w * 0.5, baseY - BRICK_R * 2, rng.int(0, colors - 1), {
+          incoming,
+        }),
       );
     }
   }

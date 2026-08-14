@@ -32,15 +32,24 @@ export type Shockwave = {
   color: number;
 };
 
+export type InvertEvent = {
+  type: "invert";
+  id: number;
+  contagion: boolean;
+  x: number;
+  y: number;
+  color: number;
+};
+
 export type SimEvent =
-  | { type: "invert"; id: number; contagion: boolean; x: number; y: number; color: number }
+  | InvertEvent
   | { type: "annihilate"; a: number; b: number; x: number; y: number; color: number }
   | { type: "corePop"; id: number; x: number; y: number; color: number }
   | { type: "snap"; x: number; y: number }
   | { type: "detonate"; id: number; x: number; y: number; color: number }
   | { type: "escape"; id: number };
 
-export function invertBody(body: Body, wakes: Wake[]): SimEvent | null {
+export function invertBody(body: Body, wakes: Wake[]): InvertEvent | null {
   if (!body.alive || body.kind !== "brick" || body.sign < 0) return null;
   body.sign = -1;
   body.heat = 1;
@@ -65,8 +74,8 @@ export function applyWakes(wakes: Wake[], bodies: Body[], dt: number): void {
     for (const b of bodies) {
       if (!b.alive || b.pinned || b.sign < 0) continue;
       const d = Math.hypot(b.x - w.x, b.y - w.y);
-      if (d > w.r || d < 0.001) continue;
-      const falloff = 1 - d / w.r;
+      if (d > w.r) continue;
+      const falloff = d < 0.001 ? 1 : 1 - d / w.r;
       b.vy += w.mag * falloff * u * dt;
     }
     if (w.life <= 0) wakes.splice(i, 1);
@@ -78,10 +87,10 @@ export function applyShockwave(wave: Shockwave, bodies: Body[]): SimEvent[] {
   for (const b of bodies) {
     if (!b.alive) continue;
     const d = Math.hypot(b.x - wave.x, b.y - wave.y);
-    if (d > wave.r || d < 0.001) continue;
-    const u = 1 - d / wave.r;
-    const nx = (b.x - wave.x) / d;
-    const ny = (b.y - wave.y) / d;
+    if (d > wave.r) continue;
+    const u = d < 0.001 ? 1 : 1 - d / wave.r;
+    const nx = d < 0.001 ? 0 : (b.x - wave.x) / d;
+    const ny = d < 0.001 ? -1 : (b.y - wave.y) / d;
     const im = invMass(b);
     if (im > 0) {
       const kick = wave.force * u * im * b.mass;
@@ -288,11 +297,5 @@ export function comboBump(events: SimEvent[]): number {
 export function livingCores(bodies: Body[]): number {
   let n = 0;
   for (const b of bodies) if (b.alive && b.kind === "core") n += 1;
-  return n;
-}
-
-export function livingBricks(bodies: Body[]): number {
-  let n = 0;
-  for (const b of bodies) if (b.alive && b.kind === "brick") n += 1;
   return n;
 }

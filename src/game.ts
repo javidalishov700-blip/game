@@ -238,6 +238,8 @@ export class AntimassGame {
       applyWakes(this.wakes, this.bodies, h);
       integrate(this.bodies, h);
       const contacts = collideAll(this.bodies);
+      collideAll(this.bodies);
+      collideAll(this.bodies);
       const snaps = solveWelds(this.welds, this.bodies);
       walls(this.bodies);
       if (this.mode !== "play") continue;
