@@ -1,0 +1,65 @@
+# Windows / no-Mac iOS upload. Used by Codemagic cloud Macs.
+# Setup: STORE.md → "Windows’tan yükleme"
+workflows:
+  ios-app-store:
+    name: iOS App Store (Windows)
+    max_build_duration: 60
+    instance_type: mac_mini_m2
+    integrations:
+      app_store_connect: codemagic
+    environment:
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.javidalishov.flinch
+      vars:
+        BUNDLE_ID: com.javidalishov.flinch
+        XCODE_WORKSPACE: ios/App/App.xcworkspace
+        XCODE_SCHEME: App
+        # App Store Connect → App → App Information → Apple ID (numeric)
+        APP_STORE_APP_ID: "SET_ME"
+      node: 22
+      xcode: latest
+      cocoapods: default
+    scripts:
+      - name: Install and build web
+        script: |
+          npm ci
+          npm test
+          npm run icons
+          npm run build
+      - name: Generate iOS project
+        script: |
+          npx cap add ios
+          npx cap sync ios
+          PLIST="$CM_BUILD_DIR/ios/App/App/Info.plist"
+          /usr/libexec/PlistBuddy -c "Add :ITSAppUsesNonExemptEncryption bool false" "$PLIST" \
+            || /usr/libexec/PlistBuddy -c "Set :ITSAppUsesNonExemptEncryption false" "$PLIST"
+      - name: CocoaPods
+        script: |
+          cd ios/App && pod install
+      - name: Code signing
+        script: |
+          xcode-project use-profiles
+      - name: Build number
+        script: |
+          cd ios/App
+          if [ "$APP_STORE_APP_ID" != "SET_ME" ]; then
+            LATEST=$(app-store-connect get-latest-testflight-build-number "$APP_STORE_APP_ID" || echo 0)
+            agvtool new-version -all $((LATEST + 1))
+          else
+            agvtool new-version -all "$BUILD_NUMBER"
+          fi
+          agvtool new-marketing-version 1.0.0
+      - name: IPA
+        script: |
+          xcode-project build-ipa \
+            --workspace "$CM_BUILD_DIR/$XCODE_WORKSPACE" \
+            --scheme "$XCODE_SCHEME"
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+    publishing:
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: true
+        submit_to_app_store: false
