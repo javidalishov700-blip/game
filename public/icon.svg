@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="WICK">
+  <rect width="512" height="512" rx="108" fill="#0a0608"/>
+  <circle cx="256" cy="256" r="168" fill="none" stroke="#3a2218" stroke-width="10"/>
+  <circle cx="256" cy="256" r="168" fill="none" stroke="#ffb35a" stroke-width="3" opacity="0.55"/>
+  <path d="M256 414c8-46 6-78 0-112-18 22-38 18-38 48 0 42 18 64 38 64z" fill="#3a2418"/>
+  <path d="M256 132c42 58 78 96 78 148 0 52-34 86-78 86s-78-34-78-86c0-52 36-90 78-148z" fill="#ff4d1a"/>
+  <path d="M256 168c28 40 52 68 52 112 0 36-22 58-52 58s-52-22-52-58c0-44 24-72 52-112z" fill="#ffb12a"/>
+  <path d="M256 214c14 22 24 38 24 62 0 22-12 34-24 34s-24-12-24-34c0-24 10-40 24-62z" fill="#fff3c4"/>
+  <circle cx="256" cy="256" r="10" fill="#fffdf2"/>
+</svg>
