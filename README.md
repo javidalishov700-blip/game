@@ -11,6 +11,8 @@ npm install
 npm run dev
 ```
 
+Mağazaya yüklemek (App Store + Google Play): **[STORE.md](STORE.md)**
+
 | Input | Action |
 | --- | --- |
 | Tap anywhere | Parry / start / retry |
@@ -22,5 +24,4 @@ npm test
 npm run build
 ```
 
-Play Store: `npm run build && npx cap add android && npx cap sync android`  
 App id: `com.javidalishov.flinch`

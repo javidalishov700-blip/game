@@ -1,3 +1,6 @@
+import { Capacitor } from "@capacitor/core";
+import { SplashScreen } from "@capacitor/splash-screen";
+import { StatusBar } from "@capacitor/status-bar";
 import { AudioBus } from "./audio";
 import { FlinchGame } from "./game";
 import "./style.css";
@@ -67,3 +70,20 @@ document.addEventListener("visibilitychange", () => {
     raf = requestAnimationFrame(loop);
   }
 });
+
+async function bootNative(): Promise<void> {
+  if (!Capacitor.isNativePlatform()) return;
+  try {
+    await StatusBar.setOverlaysWebView({ overlay: true });
+    await StatusBar.hide();
+  } catch {
+    /* web / missing plugin */
+  }
+  try {
+    await SplashScreen.hide();
+  } catch {
+    /* web / missing plugin */
+  }
+}
+
+void bootNative();
