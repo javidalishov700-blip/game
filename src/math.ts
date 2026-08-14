@@ -28,6 +28,6 @@ export function gravityAccel(
   return { ax: dx * inv * a, ay: dy * inv * a, dist };
 }
 
-/** Circular-orbit speed at distance `r` for a given GM. */
+/** Circular-orbit speed at distance `r` for a given GM (Kepler: inner = faster). */
 export const circularSpeed = (gm: number, r: number): number =>
   Math.sqrt(gm / Math.max(24, r));

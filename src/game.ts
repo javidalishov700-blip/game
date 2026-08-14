@@ -1,5 +1,5 @@
 import type { AudioBus } from "./audio";
-import { circularSpeed, clamp, gravityAccel, len, lerp, rand } from "./math";
+import { circularSpeed, clamp, len, lerp, rand } from "./math";
 
 type Mode = "title" | "play" | "death";
 type DeathKind = "burn" | "fade";
@@ -258,7 +258,7 @@ export class WickGame {
 
   private updatePhysics(dt: number): void {
     if (this.mode === "title") {
-      this.holdOrbit(dt, 2.4);
+      this.cling(dt);
       this.rememberTrail();
       return;
     }
@@ -268,23 +268,22 @@ export class WickGame {
     this.wasHolding = this.holding;
 
     if (this.holding) {
-      this.holdOrbit(dt, this.mode === "play" ? 1.65 : 2.4);
-      if (justHeld && this.mode === "play") {
-        const now = this.time;
-        if (now - this.lastRecapture > 0.18) {
-          this.audio.recapture();
-          this.lastRecapture = now;
-          this.burst(this.px, this.py, 10, 255, 200, 80, 80);
-        }
-      }
+      if (justHeld && this.mode === "play") this.snapRecapture();
+      this.cling(dt);
     } else {
       // Coast. Tiny drag keeps high-speed voids readable.
       this.vx *= 1 - 0.04 * dt;
       this.vy *= 1 - 0.04 * dt;
+      const cap = this.minDim() * 2.4;
+      const spd = len(this.vx, this.vy);
+      if (spd > cap) {
+        this.vx = (this.vx / spd) * cap;
+        this.vy = (this.vy / spd) * cap;
+      }
+      this.px += this.vx * dt;
+      this.py += this.vy * dt;
     }
 
-    this.px += this.vx * dt;
-    this.py += this.vy * dt;
     this.rememberTrail();
 
     const dx = this.px - this.cx;
@@ -315,28 +314,39 @@ export class WickGame {
     }
   }
 
-  private holdOrbit(dt: number, assist: number): void {
-    const g = gravityAccel(this.px, this.py, this.cx, this.cy, this.gm);
-    this.vx += g.ax * dt;
-    this.vy += g.ay * dt;
+  /**
+   * Hold = locked circular rail at the current altitude.
+   * Radius stays put (the flame grows into you); release to change altitude.
+   */
+  private cling(dt: number): void {
+    const dx = this.px - this.cx;
+    const dy = this.py - this.cy;
+    const dist = Math.max(12, Math.hypot(dx, dy));
+    let ang = Math.atan2(dy, dx);
+    const tx = -Math.sin(ang);
+    const ty = Math.cos(ang);
+    const sign = this.vx * tx + this.vy * ty >= 0 ? 1 : -1;
+    const spd = circularSpeed(this.gm, dist);
+    ang += sign * (spd / dist) * dt;
+    this.px = this.cx + Math.cos(ang) * dist;
+    this.py = this.cy + Math.sin(ang) * dist;
+    this.vx = -Math.sin(ang) * spd * sign;
+    this.vy = Math.cos(ang) * spd * sign;
+  }
 
-    const dist = Math.max(16, g.dist);
-    if (dist > this.flameR * 1.35) {
-      const speed = circularSpeed(this.gm, dist);
-      const tx = -(this.py - this.cy) / dist;
-      const ty = (this.px - this.cx) / dist;
-      const aligned = this.vx * tx + this.vy * ty;
-      const sign = aligned >= 0 ? 1 : -1;
-      const blend = 1 - Math.pow(0.001, dt * assist);
-      this.vx = lerp(this.vx, tx * speed * sign, blend);
-      this.vy = lerp(this.vy, ty * speed * sign, blend);
-    }
-
-    const cap = this.minDim() * 2.4;
-    const spd = len(this.vx, this.vy);
-    if (spd > cap) {
-      this.vx = (this.vx / spd) * cap;
-      this.vy = (this.vy / spd) * cap;
+  private snapRecapture(): void {
+    const now = this.time;
+    if (now - this.lastRecapture <= 0.18) return;
+    this.lastRecapture = now;
+    const dist = Math.max(12, Math.hypot(this.px - this.cx, this.py - this.cy));
+    const rx = (this.px - this.cx) / dist;
+    const ry = (this.py - this.cy) / dist;
+    const radial = Math.abs(this.vx * rx + this.vy * ry);
+    this.audio.recapture();
+    this.burst(this.px, this.py, radial > 90 ? 18 : 10, 255, 200, 80, 90);
+    if (radial > 90) {
+      this.shake = Math.max(this.shake, 0.22);
+      this.zoomPunch = 1.03;
     }
   }
 

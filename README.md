@@ -43,12 +43,12 @@ Then in Android Studio: generate a signed **AAB** (`Build > Generate Signed App 
 
 ## Core loop (what to extend next)
 
-- `src/game.ts` — physics, motes, deaths, juice, HUD
+- `src/game.ts` — cling rails, coast physics, motes, deaths, juice, HUD
 - `src/audio.ts` — Web Audio synth (no sound files)
-- `src/math.ts` — gravity helper used by the orbit assist
+- `src/math.ts` — Kepler speed + gravity helper
 - `src/main.ts` — canvas fit, input, rAF loop
 
-Difficulty is endless: flame radius grows, light radius shrinks, hot motes spawn on the inner and outer rims for 2× score. Near-missing the flame awards **SEARED**. Combos chain if you collect within 1.15s.
+Difficulty is endless: flame radius grows, light radius shrinks, hot motes spawn on the inner and outer rims for 2× score. Near-missing the flame while coasting awards **SEARED**. Combos chain if you collect within 1.15s. Hold locks you onto a circular rail at your current altitude — release is the only way to change height.
 
 ## License
 
