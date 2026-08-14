@@ -53,11 +53,32 @@ Kendi bilgisayarında iOS derlemesi yok. Sıra:
 5. Listing’i Windows’tan doldur (aşağıdaki kopyala-yapıştır). Privacy Policy için `privacy.html`’in **https** adresi şart.
 6. **Codemagic** ile IPA üret ve yükle:
    1. [codemagic.io](https://codemagic.io) → GitHub ile giriş → bu repo’yu ekle
-   2. Teams → Integrations → **Developer Portal** → Apple API key (`.p8` + Issuer ID + Key ID)
+   2. Teams → Integrations → **Developer Portal** → Apple API key (`.p8` + Issuer ID + Key ID). Integration adı: `codemagic`
    3. Codemagic, `codemagic.yaml` dosyasını görür. Workflow: **iOS App Store (Windows)**
    4. İlk seferde `APP_STORE_APP_ID` değişkenini App Store Connect → App → App Information → **Apple ID** (sayı) ile doldur
    5. Start new build. Bitince TestFlight’a düşer (10–30 dk işlem).
    6. App Store Connect → TestFlight’ta build yeşil olunca → App Store sekmesi → sürümü seç → **Submit for Review**
+
+#### `No matching profiles found for bundle identifier 'com.javidalishov.flinch'`
+
+Codemagic imza profili bulamadı. Apple tarafında App ID yok demektir. Windows tarayıcıda:
+
+1. [developer.apple.com/account](https://developer.apple.com/account) — üyelik **Active** olmalı (ödeme geçmeden Identifier oluşturamazsın).
+2. Certificates, Identifiers & Profiles → **Identifiers** → **+**
+   - App IDs → App
+   - Description: `FLINCH`
+   - Bundle ID: **Explicit** → `com.javidalishov.flinch`
+   - Register
+3. [appstoreconnect.apple.com](https://appstoreconnect.apple.com) → Apps → **+** → New App
+   - Platform: iOS
+   - Name: `FLINCH`
+   - Primary language: English
+   - Bundle ID listesinde `com.javidalishov.flinch` görünmeli — görünmüyorsa adım 2 bitmemiş
+   - SKU: `flinch-ios`
+4. Codemagic → Team settings → Integrations → Apple Developer Portal bağlı mı kontrol et (API key **App Manager** veya **Admin**).
+5. Bu branch’i tekrar **Start new build**.
+
+Profili artık build sırasında Codemagic oluşturur (`--create`). App ID’yi senin Apple hesabında bir kez kaydetmen şart.
 
 Ekran görüntüsü (Windows): Chrome’da oyunu aç (`npm run dev`), F12 → cihaz toolbar → iPhone 14 Pro Max, 3–5 kare al. App Store 6.7" ister (ör. 1290×2796). Küçükse bir görsel editörde o boyuta büyüt.
 
