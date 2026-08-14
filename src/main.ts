@@ -25,21 +25,38 @@ fit();
 window.addEventListener("resize", fit);
 window.visualViewport?.addEventListener("resize", fit);
 
-const onDown = (event: Event): void => {
+function canvasPoint(event: PointerEvent): { x: number; y: number } {
+  const r = canvas.getBoundingClientRect();
+  return { x: event.clientX - r.left, y: event.clientY - r.top };
+}
+
+let holdPointer: number | null = null;
+
+canvas.addEventListener("pointerdown", (event) => {
   event.preventDefault();
+  const p = canvasPoint(event);
+  if (game.tapHud(p.x, p.y)) return;
+  if (holdPointer !== null) return;
+  holdPointer = event.pointerId;
   game.setHolding(true);
-};
-const onUp = (event: Event): void => {
-  event.preventDefault();
+});
+
+const releasePointer = (event: PointerEvent): void => {
+  if (holdPointer !== null && event.pointerId !== holdPointer) return;
+  holdPointer = null;
   game.setHolding(false);
 };
 
-canvas.addEventListener("pointerdown", onDown);
-window.addEventListener("pointerup", onUp);
-window.addEventListener("pointercancel", onUp);
+window.addEventListener("pointerup", releasePointer);
+window.addEventListener("pointercancel", releasePointer);
 canvas.addEventListener("contextmenu", (e) => e.preventDefault());
 
 window.addEventListener("keydown", (e) => {
+  if (e.code === "KeyM" && !e.repeat) {
+    audio.unlock();
+    audio.toggleMute();
+    return;
+  }
   if (e.code === "Space" || e.code === "Enter") {
     e.preventDefault();
     if (!e.repeat) game.setHolding(true);
@@ -62,6 +79,7 @@ raf = requestAnimationFrame(loop);
 document.addEventListener("visibilitychange", () => {
   if (document.hidden) {
     cancelAnimationFrame(raf);
+    holdPointer = null;
     game.setHolding(false);
   } else {
     game.skipClock();

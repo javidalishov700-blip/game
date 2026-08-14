@@ -5,6 +5,10 @@ export class AudioBus {
   private holdGain: GainNode | null = null;
   private muted = false;
 
+  get isMuted(): boolean {
+    return this.muted;
+  }
+
   get enabled(): boolean {
     return this.ctx !== null && !this.muted;
   }
@@ -17,7 +21,7 @@ export class AudioBus {
           .webkitAudioContext;
       this.ctx = new Ctx();
       this.master = this.ctx.createGain();
-      this.master.gain.value = 0.32;
+      this.master.gain.value = this.muted ? 0 : 0.32;
       this.master.connect(this.ctx.destination);
       this.patchHoldDrone();
     }
@@ -26,8 +30,14 @@ export class AudioBus {
     }
   }
 
+  toggleMute(): boolean {
+    this.muted = !this.muted;
+    if (this.master) this.master.gain.value = this.muted ? 0 : 0.32;
+    return this.muted;
+  }
+
   setHolding(holding: boolean): void {
-    if (!this.ctx || !this.holdGain) return;
+    if (!this.ctx || !this.holdGain || this.muted) return;
     const t = this.ctx.currentTime;
     this.holdGain.gain.cancelScheduledValues(t);
     this.holdGain.gain.setTargetAtTime(holding ? 0.045 : 0.0, t, 0.06);
@@ -57,6 +67,11 @@ export class AudioBus {
     this.blip(164.81, 0.16, "sine", 0.12);
   }
 
+  ash(): void {
+    this.noise(0.18, 0.16, 1400);
+    this.blip(110, 0.2, "square", 0.12);
+  }
+
   private patchHoldDrone(): void {
     if (!this.ctx || !this.master) return;
     const oscA = this.ctx.createOscillator();
@@ -84,7 +99,7 @@ export class AudioBus {
     type: OscillatorType,
     gain: number,
   ): void {
-    if (!this.ctx || !this.master) return;
+    if (!this.ctx || !this.master || this.muted) return;
     const t = this.ctx.currentTime;
     const osc = this.ctx.createOscillator();
     const g = this.ctx.createGain();
@@ -100,7 +115,7 @@ export class AudioBus {
   }
 
   private noise(dur: number, gain: number, freq: number): void {
-    if (!this.ctx || !this.master) return;
+    if (!this.ctx || !this.master || this.muted) return;
     const samples = Math.floor(this.ctx.sampleRate * dur);
     const buffer = this.ctx.createBuffer(1, samples, this.ctx.sampleRate);
     const data = buffer.getChannelData(0);

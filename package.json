@@ -7,6 +7,7 @@
     "dev": "vite --host",
     "build": "tsc && vite build",
     "preview": "vite preview --host",
+    "test": "vitest run",
     "android:add": "npm run build && cap add android",
     "android:sync": "npm run build && cap sync android"
   },
@@ -17,6 +18,7 @@
   "devDependencies": {
     "@capacitor/cli": "^7.4.3",
     "typescript": "~5.6.3",
-    "vite": "^6.3.5"
+    "vite": "^6.3.5",
+    "vitest": "^3.2.4"
   }
 }

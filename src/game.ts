@@ -1,8 +1,20 @@
 import type { AudioBus } from "./audio";
-import { circularSpeed, clamp, len, lerp, rand } from "./math";
+import {
+  arenaRadii,
+  circularSpeed,
+  clamp,
+  clingSpiralRate,
+  inSafeRing,
+  len,
+  lerp,
+  rand,
+  runDifficulty,
+  stepCling,
+  stepCoast,
+} from "./math";
 
 type Mode = "title" | "play" | "death";
-type DeathKind = "burn" | "fade";
+type DeathKind = "burn" | "fade" | "ash";
 
 type Mote = {
   x: number;
@@ -10,6 +22,7 @@ type Mote = {
   phase: number;
   worth: number;
   hot: boolean;
+  ash: boolean;
 };
 
 type Particle = {
@@ -80,6 +93,11 @@ export class WickGame {
   private hintLife = 2.8;
   private taughtRelease = false;
   private seared = false;
+  private invuln = 0;
+  private pointerDown = false;
+  private titleHold = 0;
+  private flyArmed = false;
+  private runHold = 0;
 
   private particles: Particle[] = [];
   private particleAt = 0;
@@ -99,7 +117,7 @@ export class WickGame {
     if (!ctx) throw new Error("Canvas 2D is unavailable");
     this.ctx = ctx;
     this.audio = audio;
-    this.best = Number(localStorage.getItem(STORAGE_KEY) || 0) || 0;
+    this.best = readBest();
     this.seedStars();
     this.resetSpark(true);
   }
@@ -116,18 +134,40 @@ export class WickGame {
     if (this.mode === "title") this.resetSpark(true);
   }
 
-  setHolding(down: boolean): void {
-    this.holding = down;
-    if (down) this.audio.unlock();
-    this.audio.setHolding(down && this.mode === "play");
+  /** Returns true if the tap was consumed by HUD (mute), so gameplay should ignore it. */
+  tapHud(x: number, y: number): boolean {
+    const m = this.muteHit();
+    if (x >= m.x && x <= m.x + m.s && y >= m.y && y <= m.y + m.s) {
+      this.audio.unlock();
+      this.audio.toggleMute();
+      return true;
+    }
+    return false;
+  }
 
-    if (this.mode === "title" && down) {
-      this.startRun();
+  setHolding(down: boolean): void {
+    this.pointerDown = down;
+    if (down) this.audio.unlock();
+
+    if (this.mode === "title") {
+      if (!down) this.titleHold = 0;
       return;
     }
-    if (this.mode === "death" && down && this.allowRestart) {
-      this.startRun();
+
+    if (this.mode === "death") {
+      if (down && this.allowRestart) this.startRun();
+      else this.holding = down;
+      return;
     }
+
+    if (!this.flyArmed) {
+      this.holding = true;
+      this.audio.setHolding(true);
+      return;
+    }
+
+    this.holding = down;
+    this.audio.setHolding(down);
   }
 
   skipClock(): void {
@@ -141,9 +181,24 @@ export class WickGame {
     if (dt > 0.05) dt = 0.05;
     const rawDt = dt;
 
+    if (this.mode === "title" && this.pointerDown) {
+      this.titleHold += rawDt;
+      if (this.titleHold >= 0.14) this.startRun();
+    }
+
+    if (this.mode === "play" && !this.flyArmed) {
+      this.holding = true;
+      if (this.pointerDown) this.runHold += rawDt;
+      if (this.runHold >= 0.18) {
+        this.flyArmed = true;
+        this.holding = this.pointerDown;
+        this.audio.setHolding(this.holding);
+      }
+    }
+
     if (this.mode === "death") {
       this.deathAge += rawDt;
-      if (!this.holding && this.deathAge > 0.4) this.allowRestart = true;
+      if (!this.pointerDown && this.deathAge > 0.4) this.allowRestart = true;
       dt *= this.deathAge < 0.55 ? 0.22 : 0;
     }
     if (this.hitStop > 0) {
@@ -157,6 +212,7 @@ export class WickGame {
     this.flash = Math.max(0, this.flash - dt * 3.2);
     this.zoomPunch = lerp(this.zoomPunch, 1, 1 - Math.pow(0.001, dt));
     this.hintLife = Math.max(0, this.hintLife - dt);
+    this.invuln = Math.max(0, this.invuln - dt);
     this.comboTimer = Math.max(0, this.comboTimer - dt);
     if (this.comboTimer <= 0) this.combo = 0;
 
@@ -169,7 +225,8 @@ export class WickGame {
   }
 
   private get difficulty(): number {
-    return 1 - Math.exp(-(this.time * 0.035 + this.score * 0.018));
+    if (this.mode === "title") return 0;
+    return runDifficulty(this.time, this.score);
   }
 
   private minDim(): number {
@@ -177,21 +234,17 @@ export class WickGame {
   }
 
   private updateRadii(): void {
-    const m = this.minDim();
-    const d = this.mode === "play" ? this.difficulty : 0;
-    this.flameR = m * lerp(0.07, 0.155, d);
-    this.lightR = m * lerp(0.455, 0.305, d);
-    const mid = (this.flameR + this.lightR) * 0.52;
-    const period = lerp(2.25, 1.55, d);
-    const omega = (Math.PI * 2) / period;
-    this.gm = mid * mid * mid * omega * omega;
+    const arena = arenaRadii(this.minDim(), this.difficulty);
+    this.flameR = arena.flameR;
+    this.lightR = arena.lightR;
+    this.gm = arena.gm;
   }
 
   private resetSpark(orbit: boolean): void {
     this.cx = this.w * 0.5;
     this.cy = this.h * 0.48;
     this.updateRadii();
-    const r = (this.flameR + this.lightR) * 0.52;
+    const r = arenaRadii(this.minDim(), 0).startR;
     const ang = -Math.PI * 0.25;
     this.px = this.cx + Math.cos(ang) * r;
     this.py = this.cy + Math.sin(ang) * r;
@@ -225,6 +278,11 @@ export class WickGame {
     this.zoomPunch = 1.04;
     this.wasHolding = true;
     this.lastT = 0;
+    this.invuln = 1.05;
+    this.flyArmed = false;
+    this.runHold = 0;
+    this.holding = true;
+    this.titleHold = 0;
     this.resetSpark(true);
     this.placeRailMote(0.85);
     this.audio.setHolding(true);
@@ -245,6 +303,10 @@ export class WickGame {
       this.audio.burn();
       this.burst(this.px, this.py, 70, 255, 90, 20, 420);
       this.buzz(40);
+    } else if (kind === "ash") {
+      this.audio.ash();
+      this.burst(this.px, this.py, 56, 80, 80, 90, 260);
+      this.buzz(35);
     } else {
       this.audio.fade();
       this.burst(this.px, this.py, 48, 140, 210, 255, 80, true);
@@ -252,7 +314,7 @@ export class WickGame {
     }
     if (this.score > this.best) {
       this.best = this.score;
-      localStorage.setItem(STORAGE_KEY, String(this.best));
+      writeBest(this.best);
     }
   }
 
@@ -269,19 +331,29 @@ export class WickGame {
 
     if (this.holding) {
       if (justHeld && this.mode === "play") this.snapRecapture();
-      this.cling(dt);
+      const next = stepCling(
+        { px: this.px, py: this.py, vx: this.vx, vy: this.vy },
+        this.cx,
+        this.cy,
+        this.gm,
+        dt,
+        this.mode === "play" ? clingSpiralRate(this.minDim(), this.difficulty) : 0,
+      );
+      this.px = next.px;
+      this.py = next.py;
+      this.vx = next.vx;
+      this.vy = next.vy;
     } else {
-      // Coast. Tiny drag keeps high-speed voids readable.
-      this.vx *= 1 - 0.04 * dt;
-      this.vy *= 1 - 0.04 * dt;
-      const cap = this.minDim() * 2.4;
-      const spd = len(this.vx, this.vy);
-      if (spd > cap) {
-        this.vx = (this.vx / spd) * cap;
-        this.vy = (this.vy / spd) * cap;
-      }
-      this.px += this.vx * dt;
-      this.py += this.vy * dt;
+      const next = stepCoast(
+        { px: this.px, py: this.py, vx: this.vx, vy: this.vy },
+        dt,
+        0.04,
+        this.minDim() * 2.4,
+      );
+      this.px = next.px;
+      this.py = next.py;
+      this.vx = next.vx;
+      this.vy = next.vy;
     }
 
     this.rememberTrail();
@@ -293,9 +365,10 @@ export class WickGame {
     this.flameLeanY = lerp(this.flameLeanY, clamp(dy / this.lightR, -1, 1) * 10, 0.12);
 
     if (this.mode !== "play") return;
+    if (this.invuln > 0) return;
 
-    if (dist < this.flameR + 7) this.die("burn");
-    else if (dist > this.lightR - 5) this.die("fade");
+    const distSafe = inSafeRing(dist, this.flameR, this.lightR);
+    if (!distSafe) this.die(dist < this.flameR + 7 ? "burn" : "fade");
 
     if (dist < this.flameR + 18) {
       if (!this.seared && dist > this.flameR + 8) {
@@ -315,23 +388,21 @@ export class WickGame {
   }
 
   /**
-   * Hold = locked circular rail at the current altitude.
-   * Radius stays put (the flame grows into you); release to change altitude.
+   * Title-screen idle uses the same rail with no spiral.
    */
   private cling(dt: number): void {
-    const dx = this.px - this.cx;
-    const dy = this.py - this.cy;
-    const dist = Math.max(12, Math.hypot(dx, dy));
-    let ang = Math.atan2(dy, dx);
-    const tx = -Math.sin(ang);
-    const ty = Math.cos(ang);
-    const sign = this.vx * tx + this.vy * ty >= 0 ? 1 : -1;
-    const spd = circularSpeed(this.gm, dist);
-    ang += sign * (spd / dist) * dt;
-    this.px = this.cx + Math.cos(ang) * dist;
-    this.py = this.cy + Math.sin(ang) * dist;
-    this.vx = -Math.sin(ang) * spd * sign;
-    this.vy = Math.cos(ang) * spd * sign;
+    const next = stepCling(
+      { px: this.px, py: this.py, vx: this.vx, vy: this.vy },
+      this.cx,
+      this.cy,
+      this.gm,
+      dt,
+      0,
+    );
+    this.px = next.px;
+    this.py = next.py;
+    this.vx = next.vx;
+    this.vy = next.vy;
   }
 
   private snapRecapture(): void {
@@ -368,32 +439,50 @@ export class WickGame {
       const mote = this.motes[i]!;
       mote.phase += dt * 3;
       if (len(mote.x - this.px, mote.y - this.py) < 16) {
-        this.collect(mote);
-        this.motes.splice(i, 1);
+        if (mote.ash) {
+          if (this.invuln <= 0) {
+            this.die("ash");
+            this.motes.splice(i, 1);
+          }
+        } else {
+          this.collect(mote);
+          this.motes.splice(i, 1);
+        }
       }
     }
   }
 
   private spawnMote(): void {
     const d = this.difficulty;
+    const ash =
+      this.collected >= 6 && Math.random() < 0.12 + d * 0.22 && this.motes.filter((m) => m.ash).length < 2;
     for (let i = 0; i < 16; i++) {
-      const hot = this.collected >= 2 && Math.random() < 0.28 + d * 0.35;
+      const hot = !ash && this.collected >= 2 && Math.random() < 0.28 + d * 0.35;
       if (hot && !this.taughtRelease) {
         this.hint = "RELEASE TO FLY";
         this.hintLife = 2.6;
         this.taughtRelease = true;
       }
-      const u = hot
-        ? Math.random() < 0.5
-          ? rand(0.06, 0.2)
-          : rand(0.8, 0.94)
-        : rand(0.32, 0.68);
+      const u = ash
+        ? rand(0.22, 0.78)
+        : hot
+          ? Math.random() < 0.5
+            ? rand(0.06, 0.2)
+            : rand(0.8, 0.94)
+          : rand(0.32, 0.68);
       const dist = lerp(this.flameR + 22, this.lightR - 18, u);
       const ang = rand(0, Math.PI * 2);
       const x = this.cx + Math.cos(ang) * dist;
       const y = this.cy + Math.sin(ang) * dist;
       if (len(x - this.px, y - this.py) > this.minDim() * 0.16) {
-        this.motes.push({ x, y, phase: rand(0, 6), worth: hot ? 2 : 1, hot });
+        this.motes.push({
+          x,
+          y,
+          phase: rand(0, 6),
+          worth: hot ? 2 : 1,
+          hot,
+          ash,
+        });
         return;
       }
     }
@@ -410,6 +499,7 @@ export class WickGame {
       phase: 0,
       worth: 1,
       hot: false,
+      ash: false,
     });
   }
 
@@ -565,6 +655,7 @@ export class WickGame {
     this.drawBackdrop();
     this.drawLight();
     this.drawBounds();
+    this.drawGhost();
     this.drawMotes();
     this.drawTrail();
     this.drawSpark();
@@ -713,18 +804,58 @@ export class WickGame {
       ctx.save();
       ctx.translate(mote.x, mote.y);
       ctx.rotate(mote.phase * 0.4);
-      ctx.shadowColor = mote.hot ? "#ffb060" : "#ffe9a8";
-      ctx.shadowBlur = 12;
-      ctx.fillStyle = mote.hot ? "#ffd19a" : "#fff6d2";
-      ctx.beginPath();
-      ctx.moveTo(0, -s);
-      ctx.lineTo(s * 0.7, 0);
-      ctx.lineTo(0, s);
-      ctx.lineTo(-s * 0.7, 0);
-      ctx.closePath();
-      ctx.fill();
+      if (mote.ash) {
+        ctx.shadowColor = "#6a7a88";
+        ctx.shadowBlur = 8;
+        ctx.fillStyle = "#1b2228";
+        ctx.strokeStyle = "rgba(180, 210, 230, 0.55)";
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        for (let i = 0; i < 5; i++) {
+          const a = (i / 5) * Math.PI * 2 - Math.PI / 2;
+          const r = i % 2 === 0 ? s + 3 : s * 0.45;
+          const x = Math.cos(a) * r;
+          const y = Math.sin(a) * r;
+          if (i === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        }
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+      } else {
+        ctx.shadowColor = mote.hot ? "#ffb060" : "#ffe9a8";
+        ctx.shadowBlur = 12;
+        ctx.fillStyle = mote.hot ? "#ffd19a" : "#fff6d2";
+        ctx.beginPath();
+        ctx.moveTo(0, -s);
+        ctx.lineTo(s * 0.7, 0);
+        ctx.lineTo(0, s);
+        ctx.lineTo(-s * 0.7, 0);
+        ctx.closePath();
+        ctx.fill();
+      }
       ctx.restore();
     }
+  }
+
+  private drawGhost(): void {
+    if (this.holding || this.mode !== "play") return;
+    const { ctx } = this;
+    let s = { px: this.px, py: this.py, vx: this.vx, vy: this.vy };
+    const dt = 1 / 60;
+    ctx.save();
+    for (let i = 0; i < 18; i++) {
+      s = stepCoast(s, dt, 0.04, this.minDim() * 2.4);
+      const dist = Math.hypot(s.px - this.cx, s.py - this.cy);
+      const lethal = !inSafeRing(dist, this.flameR, this.lightR);
+      ctx.fillStyle = lethal
+        ? `rgba(255, 90, 70, ${0.45 - i * 0.02})`
+        : `rgba(210, 230, 255, ${0.4 - i * 0.018})`;
+      ctx.beginPath();
+      ctx.arc(s.px, s.py, i % 3 === 0 ? 2.4 : 1.4, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
   }
 
   private drawTrail(): void {
@@ -780,6 +911,9 @@ export class WickGame {
     ctx.save();
     ctx.translate(this.px, this.py);
     ctx.rotate(ang);
+    if (this.invuln > 0 && Math.floor(this.invuln * 12) % 2 === 0) {
+      ctx.globalAlpha = 0.35;
+    }
     ctx.shadowColor = `rgba(${lerp(140, 255, heat)|0}, ${lerp(200, 140, heat)|0}, ${lerp(255, 60, heat)|0}, 0.9)`;
     ctx.shadowBlur = 16;
     ctx.fillStyle = `rgb(${lerp(210, 255, heat)|0}, ${lerp(240, 210, heat)|0}, ${lerp(255, 180, heat)|0})`;
@@ -829,8 +963,10 @@ export class WickGame {
     ctx.fillStyle = "rgba(255,255,255,0.38)";
     ctx.font = "600 12px system-ui, sans-serif";
     ctx.fillText("BEST  " + this.best, pad, top);
-    ctx.textAlign = "right";
-    ctx.fillText(this.holding ? "CLINGING" : "DRIFTING", w - pad, top);
+    ctx.textAlign = "center";
+    ctx.fillStyle = "rgba(255,255,255,0.4)";
+    ctx.fillText(this.holding ? "CLINGING" : "DRIFTING", w * 0.5, top);
+    this.drawMute();
 
     ctx.textAlign = "center";
     ctx.fillStyle = "#fff6e8";
@@ -856,7 +992,7 @@ export class WickGame {
       ctx.fillText("HOLD TO ORBIT   ·   RELEASE TO FLY", w * 0.5, h * 0.2 + 28);
       ctx.fillStyle = "rgba(255,255,255,0.55)";
       ctx.font = "600 13px system-ui, sans-serif";
-      ctx.fillText("Don't burn. Don't fade.", w * 0.5, h * 0.2 + 50);
+      ctx.fillText("Don't burn. Don't fade. Don't eat the ash.", w * 0.5, h * 0.2 + 50);
       const pulse = 0.55 + 0.45 * Math.sin(this.ambientT * 3);
       ctx.globalAlpha = pulse;
       ctx.font = "700 16px system-ui, sans-serif";
@@ -870,7 +1006,15 @@ export class WickGame {
       ctx.fillRect(0, 0, w, h);
       ctx.fillStyle = "#fff3d8";
       ctx.font = `800 ${Math.round(this.minDim() * 0.09)}px system-ui, sans-serif`;
-      ctx.fillText(this.deathKind === "burn" ? "BURNED" : "FADED", w * 0.5, h * 0.2);
+      ctx.fillText(
+        this.deathKind === "burn"
+          ? "BURNED"
+          : this.deathKind === "ash"
+            ? "SNUFFED"
+            : "FADED",
+        w * 0.5,
+        h * 0.2,
+      );
       ctx.font = `800 ${Math.round(this.minDim() * 0.16)}px system-ui, sans-serif`;
       ctx.fillText(String(this.score), w * 0.5, h * 0.2 + this.minDim() * 0.16);
       ctx.font = "600 14px system-ui, sans-serif";
@@ -889,5 +1033,57 @@ export class WickGame {
         ctx.globalAlpha = 1;
       }
     }
+  }
+
+  private muteHit(): { x: number; y: number; s: number } {
+    const s = 36;
+    return { x: this.w - Math.max(18, this.w * 0.06) - s, y: Math.max(20, this.h * 0.04) - 8, s };
+  }
+
+  private drawMute(): void {
+    const { ctx } = this;
+    const m = this.muteHit();
+    const cx = m.x + m.s * 0.5;
+    const cy = m.y + m.s * 0.5;
+    ctx.save();
+    ctx.strokeStyle = "rgba(255,255,255,0.45)";
+    ctx.fillStyle = "rgba(255,255,255,0.45)";
+    ctx.lineWidth = 1.6;
+    ctx.beginPath();
+    ctx.moveTo(cx - 8, cy - 3);
+    ctx.lineTo(cx - 3, cy - 3);
+    ctx.lineTo(cx + 3, cy - 8);
+    ctx.lineTo(cx + 3, cy + 8);
+    ctx.lineTo(cx - 3, cy + 3);
+    ctx.lineTo(cx - 8, cy + 3);
+    ctx.closePath();
+    ctx.stroke();
+    if (this.audio.isMuted) {
+      ctx.beginPath();
+      ctx.moveTo(cx - 10, cy - 10);
+      ctx.lineTo(cx + 10, cy + 10);
+      ctx.stroke();
+    } else {
+      ctx.beginPath();
+      ctx.arc(cx + 5, cy, 6, -0.6, 0.6);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+}
+
+function readBest(): number {
+  try {
+    return Number(localStorage.getItem(STORAGE_KEY) || 0) || 0;
+  } catch {
+    return 0;
+  }
+}
+
+function writeBest(n: number): void {
+  try {
+    localStorage.setItem(STORAGE_KEY, String(n));
+  } catch {
+    /* private mode / blocked storage */
   }
 }

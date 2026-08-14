@@ -25,9 +25,15 @@ Open the local URL (Vite prints it), then **hold click / space / finger** to beg
 
 | Input | Action |
 | --- | --- |
-| Hold (finger, mouse, Space, Enter) | Gravity on — orbit the flame |
-| Release | Gravity off — fly tangent |
+| Hold (finger, mouse, Space, Enter) | Cling — orbit the flame, slowly spiral in |
+| Release | Coast tangent (ghost dots show the path) |
 | Hold after death | Retry immediately |
+| M / speaker icon | Mute |
+
+```bash
+npm test
+npm run build
+```
 
 ### Play Store export (Android)
 
@@ -45,10 +51,11 @@ Then in Android Studio: generate a signed **AAB** (`Build > Generate Signed App 
 
 - `src/game.ts` — cling rails, coast physics, motes, deaths, juice, HUD
 - `src/audio.ts` — Web Audio synth (no sound files)
-- `src/math.ts` — Kepler speed + gravity helper
+- `src/math.ts` — Kepler speed, cling/coast steppers, difficulty radii
 - `src/main.ts` — canvas fit, input, rAF loop
+- `test/math.test.ts` — orbit stability + camping-is-lethal regression
 
-Difficulty is endless: flame radius grows, light radius shrinks, hot motes spawn on the inner and outer rims for 2× score. Near-missing the flame while coasting awards **SEARED**. Combos chain if you collect within 1.15s. Hold locks you onto a circular rail at your current altitude — release is the only way to change height.
+Difficulty is endless: the flame grows, the light shrinks, and **holding slowly spirals you inward** so camping is death. Hot motes on the inner/outer rims are worth 2×. Ash motes snuff you out. Near-missing the flame while coasting awards **SEARED**. Combos chain if you collect within 1.15s. Release is the only way to climb to a higher rail.
 
 ## License
 
