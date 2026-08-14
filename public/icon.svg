@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="POPDRAW">
+  <rect width="512" height="512" rx="108" fill="#f4d7c8"/>
+  <rect x="86" y="78" width="88" height="88" rx="22" fill="#ff5a7a"/>
+  <rect x="186" y="78" width="88" height="88" rx="22" fill="#2fd39a"/>
+  <rect x="286" y="78" width="88" height="88" rx="22" fill="#ffc43a"/>
+  <rect x="136" y="178" width="88" height="88" rx="22" fill="#4d9fff"/>
+  <rect x="236" y="178" width="88" height="88" rx="22" fill="#d07cff"/>
+  <rect x="186" y="278" width="88" height="88" rx="22" fill="#ff5a7a"/>
+  <path d="M256 390c-28 0-52 14-62 34h124c-10-20-34-34-62-34z" fill="#4a2712"/>
+  <circle cx="256" cy="372" r="22" fill="#ffc43a"/>
+</svg>
