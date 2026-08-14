@@ -16,8 +16,10 @@ npm run icons
 npm run build
 ```
 
-Gizlilik politikası dosyası: `public/privacy.html`  
-App Store / Play Console bir **https URL** ister. Bu dosyayı GitHub Pages, kendi siten veya netlify’a koy. Örnek:
+Gizlilik: `public/privacy.html`  
+Şartlar: `public/terms.html`  
+Hakkında: `public/about.html`  
+App Store / Play Console bir **https URL** ister. Bu dosyaları GitHub Pages, kendi siten veya netlify’a koy. Örnek:
 
 `https://javidalishov700-blip.github.io/game/privacy.html`
 
@@ -62,20 +64,22 @@ Sonra App Store Connect’te build’in işlemesini bekle (10–30 dk).
 
 **Name:** FLINCH
 
-**Subtitle (30 char):** Wait. Then tap.
+**Subtitle (30 char):** Six lanes. Don't flinch.
 
 **Description:**
 ```
-A spike flies at a glass core. Wait until it turns gold. Then tap.
+Six spikes. Six lanes. A glass core.
 
-Too early is a flinch — you live, but the combo dies.
-Gold is a perfect — 2x, 3x, 4x…
-Too late and the core shatters in slow motion.
+Tap the right wedge when it turns gold. Too early is a flinch — you live, the combo dies. Too late costs a life.
 
-One thumb. No menus. Tap to play.
+Ghosts must be left alone. Gold pays double. Later waves overlap, and some spikes switch lanes mid-flight.
+
+3 lives. Wave bonuses. 2x 3x 4x combos. Slow-mo shatter.
+
+Settings: sound, BGM, vibration. Share your score.
 ```
 
-**Keywords (100 char):** timing,reflex,arcade,one tap,slow motion,combo,minimal,reaction,skill
+**Keywords (100 char):** timing,reflex,arcade,lanes,combo,slow motion,reaction,skill,one thumb
 
 **Category:** Games → Arcade (Secondary: Action)
 
@@ -109,7 +113,7 @@ Paket adı: `com.javidalishov.flinch`
 
 Play listing kısa açıklama:
 ```
-Wait until it turns gold. Then tap. 2x 3x 4x combos. Slow-mo if you're late.
+Six lanes. Wait for gold. Let ghosts pass. 2x 3x 4x. Don't flinch.
 ```
 
 ---

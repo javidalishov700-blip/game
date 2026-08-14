@@ -1,7 +1,7 @@
 {
   "name": "FLINCH",
   "short_name": "FLINCH",
-  "description": "Wait. Then tap.",
+  "description": "Six lanes. Wait for gold. Let ghosts pass.",
   "start_url": ".",
   "display": "standalone",
   "background_color": "#09090b",

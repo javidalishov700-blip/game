@@ -10,7 +10,10 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="mobile-web-app-capable" content="yes" />
-    <meta name="description" content="FLINCH — Wait. Then tap." />
+    <meta
+      name="description"
+      content="FLINCH — Six lanes. Wait for gold. Let ghosts pass."
+    />
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="icon" type="image/svg+xml" href="./icon.svg" />
     <link rel="apple-touch-icon" href="./apple-touch-icon.png" />
@@ -18,6 +21,76 @@
   </head>
   <body>
     <canvas id="game" aria-label="FLINCH"></canvas>
+
+    <div id="hud" class="hud hidden" aria-hidden="true">
+      <button type="button" id="btn-pause" class="icon-btn" aria-label="Pause">II</button>
+      <div class="hud-col hud-left">
+        <div id="hud-lives" class="lives">♥ ♥ ♥</div>
+        <div id="hud-wave" class="hud-sub">WAVE 1  WAIT</div>
+      </div>
+      <div class="hud-col hud-right">
+        <div id="hud-score" class="hud-score">0</div>
+        <div id="hud-combo" class="hud-combo">1x</div>
+      </div>
+    </div>
+
+    <section id="screen-home" class="screen" data-screen="home">
+      <div class="brand">FLINCH</div>
+      <p class="tag">Six lanes. Wait. Then strike.</p>
+      <p class="best">BEST <span id="home-best">0</span></p>
+      <button type="button" id="btn-play" class="cta">PLAY</button>
+      <button type="button" id="btn-settings" class="ghost">SETTINGS</button>
+    </section>
+
+    <section id="screen-pause" class="screen hidden" data-screen="pause">
+      <h2>PAUSED</h2>
+      <button type="button" id="btn-resume" class="cta">RESUME</button>
+      <button type="button" id="btn-replay" class="ghost">REPLAY</button>
+      <button type="button" id="btn-home" class="ghost">HOME</button>
+      <button type="button" id="btn-pause-settings" class="ghost">SETTINGS</button>
+    </section>
+
+    <section id="screen-over" class="screen hidden" data-screen="over">
+      <h2>SHATTERED</h2>
+      <p class="over-score"><span id="over-score">0</span></p>
+      <p class="best">BEST <span id="over-best">0</span></p>
+      <button type="button" id="btn-over-replay" class="cta">REPLAY</button>
+      <button type="button" id="btn-over-home" class="ghost">HOME</button>
+      <button type="button" id="btn-share" class="ghost">SHARE WITH FRIENDS</button>
+    </section>
+
+    <section id="screen-settings" class="screen hidden sheet" data-screen="settings">
+      <h2>SETTINGS</h2>
+      <div class="rows">
+        <button type="button" class="row toggle" data-toggle="sfx">
+          <span>Sound</span><span class="sw" id="sw-sfx"></span>
+        </button>
+        <button type="button" class="row toggle" data-toggle="bgm">
+          <span>BGM</span><span class="sw" id="sw-bgm"></span>
+        </button>
+        <button type="button" class="row toggle" data-toggle="vibration">
+          <span>Vibration</span><span class="sw" id="sw-vibration"></span>
+        </button>
+      </div>
+      <p class="more-label">MORE</p>
+      <div class="rows">
+        <button type="button" class="row link" data-legal="contact">Contact us</button>
+        <button type="button" id="btn-settings-share" class="row link">Share with friends</button>
+        <button type="button" class="row link" data-legal="terms">Terms of service</button>
+        <button type="button" class="row link" data-legal="about">About us</button>
+        <button type="button" class="row link" data-legal="privacy">Privacy policy</button>
+      </div>
+      <button type="button" id="btn-settings-back" class="ghost">BACK</button>
+    </section>
+
+    <section id="screen-legal" class="screen hidden sheet" data-screen="legal">
+      <h2 id="legal-title">About</h2>
+      <div id="legal-body" class="legal-body"></div>
+      <button type="button" id="btn-legal-back" class="ghost">BACK</button>
+    </section>
+
+    <div id="toast" class="toast hidden" role="status"></div>
+
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
