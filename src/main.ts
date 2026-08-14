@@ -1,5 +1,5 @@
 import { AudioBus } from "./audio";
-import { WickGame } from "./game";
+import { PopDrawGame } from "./game";
 import "./style.css";
 
 const canvasEl = document.querySelector("#game");
@@ -9,7 +9,7 @@ if (!(canvasEl instanceof HTMLCanvasElement)) {
 const canvas = canvasEl;
 
 const audio = new AudioBus();
-const game = new WickGame(canvas, audio);
+const game = new PopDrawGame(canvas, audio);
 
 function fit(): void {
   const vv = window.visualViewport;
@@ -30,25 +30,15 @@ function canvasPoint(event: PointerEvent): { x: number; y: number } {
   return { x: event.clientX - r.left, y: event.clientY - r.top };
 }
 
-let holdPointer: number | null = null;
-
 canvas.addEventListener("pointerdown", (event) => {
   event.preventDefault();
   const p = canvasPoint(event);
-  if (game.tapHud(p.x, p.y)) return;
-  if (holdPointer !== null) return;
-  holdPointer = event.pointerId;
-  game.setHolding(true);
+  game.tap(p.x, p.y);
 });
-
-const releasePointer = (event: PointerEvent): void => {
-  if (holdPointer !== null && event.pointerId !== holdPointer) return;
-  holdPointer = null;
-  game.setHolding(false);
-};
-
-window.addEventListener("pointerup", releasePointer);
-window.addEventListener("pointercancel", releasePointer);
+canvas.addEventListener("pointermove", (event) => {
+  const p = canvasPoint(event);
+  game.hover(p.x, p.y);
+});
 canvas.addEventListener("contextmenu", (e) => e.preventDefault());
 
 window.addEventListener("keydown", (e) => {
@@ -57,15 +47,37 @@ window.addEventListener("keydown", (e) => {
     audio.toggleMute();
     return;
   }
-  if (e.code === "Space" || e.code === "Enter") {
+  if (e.code === "KeyS" || e.code === "ShiftLeft" || e.code === "ShiftRight") {
     e.preventDefault();
-    if (!e.repeat) game.setHolding(true);
+    game.swapAmmo();
+    return;
   }
-});
-window.addEventListener("keyup", (e) => {
+  const colKeys: Record<string, number> = {
+    Digit1: 0,
+    Digit2: 1,
+    Digit3: 2,
+    Digit4: 3,
+    Digit5: 4,
+    Numpad1: 0,
+    Numpad2: 1,
+    Numpad3: 2,
+    Numpad4: 3,
+    Numpad5: 4,
+  };
+  if (e.code in colKeys && !e.repeat) {
+    e.preventDefault();
+    const col = colKeys[e.code]!;
+    const x = (col + 0.5) / 5 * canvas.getBoundingClientRect().width;
+    const y = canvas.getBoundingClientRect().height * 0.55;
+    game.hover(x, y);
+    game.tap(x, y);
+  }
   if (e.code === "Space" || e.code === "Enter") {
     e.preventDefault();
-    game.setHolding(false);
+    if (!e.repeat) {
+      const r = canvas.getBoundingClientRect();
+      game.tap(r.width * 0.5, r.height * 0.55);
+    }
   }
 });
 
@@ -77,11 +89,8 @@ const loop = (t: number): void => {
 raf = requestAnimationFrame(loop);
 
 document.addEventListener("visibilitychange", () => {
-  if (document.hidden) {
-    cancelAnimationFrame(raf);
-    holdPointer = null;
-    game.setHolding(false);
-  } else {
+  if (document.hidden) cancelAnimationFrame(raf);
+  else {
     game.skipClock();
     raf = requestAnimationFrame(loop);
   }

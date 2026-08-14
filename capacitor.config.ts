@@ -1,12 +1,12 @@
 import type { CapacitorConfig } from "@capacitor/cli";
 
 const config: CapacitorConfig = {
-  appId: "com.javidalishov.wick",
-  appName: "WICK",
+  appId: "com.javidalishov.popdraw",
+  appName: "POPDRAW",
   webDir: "dist",
-  backgroundColor: "#0a0608",
+  backgroundColor: "#f3d5e4",
   android: {
-    backgroundColor: "#0a0608",
+    backgroundColor: "#f3d5e4",
     allowMixedContent: false,
   },
 };

@@ -1,11 +1,11 @@
 {
-  "name": "WICK",
-  "short_name": "WICK",
-  "description": "Hold to orbit the flame. Release to fly. Don't burn. Don't fade.",
+  "name": "POPDRAW",
+  "short_name": "POPDRAW",
+  "description": "Shoot matching blocks, stack like Tetris, snipe pips, win the draw.",
   "start_url": ".",
   "display": "standalone",
-  "background_color": "#0a0608",
-  "theme_color": "#0a0608",
+  "background_color": "#f3d5e4",
+  "theme_color": "#f3d5e4",
   "orientation": "portrait",
   "icons": [
     {

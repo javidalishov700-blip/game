@@ -1,29 +1,25 @@
 import type { AudioBus } from "./audio";
 import {
-  arenaRadii,
-  circularSpeed,
-  clamp,
-  clingSpiralRate,
-  inSafeRing,
-  len,
-  lerp,
-  rand,
-  runDifficulty,
-  stepCling,
-  stepCoast,
-} from "./math";
+  COLS,
+  Color,
+  applyGravity,
+  dropBlock,
+  duelWindow,
+  fairColor,
+  Grid,
+  PALETTE,
+  popScore,
+  resolveShot,
+  ROWS,
+  seedTutorial,
+  ShotKind,
+  spawnInterval,
+  stackPeak,
+  unlockedColors,
+} from "./board";
+import { clamp, lerp, rand } from "./math";
 
-type Mode = "title" | "play" | "death";
-type DeathKind = "burn" | "fade" | "ash";
-
-type Mote = {
-  x: number;
-  y: number;
-  phase: number;
-  worth: number;
-  hot: boolean;
-  ash: boolean;
-};
+type Mode = "title" | "play" | "duel" | "death";
 
 type Particle = {
   x: number;
@@ -36,80 +32,63 @@ type Particle = {
   r: number;
   g: number;
   b: number;
-  drag: number;
 };
 
-type Floater = {
-  x: number;
-  y: number;
-  text: string;
-  life: number;
-  color: string;
-};
+type Floater = { x: number; y: number; text: string; life: number; color: string };
+type Pest = { x: number; y: number; vx: number; phase: number; r: number };
+type ShotFx = { col: number; kind: ShotKind; color: Color; t: number };
+type DropFx = { col: number; color: Color; t: number };
 
-type Trail = { x: number; y: number; a: number };
+const STORAGE_KEY = "popdraw-best";
+const MAX_PARTICLES = 180;
 
-const MAX_PARTICLES = 160;
-const STORAGE_KEY = "wick-best";
-const COLLECT_NOTES_RESET = 1.15;
-
-export class WickGame {
+export class PopDrawGame {
   readonly canvas: HTMLCanvasElement;
   private readonly ctx: CanvasRenderingContext2D;
   private readonly audio: AudioBus;
 
   private w = 390;
   private h = 844;
-  private time = 0;
   private lastT = 0;
+  private time = 0;
   private mode: Mode = "title";
-  private holding = false;
-  private wasHolding = false;
-  private allowRestart = false;
-  private deathKind: DeathKind = "burn";
-  private deathAge = 0;
-  private hitStop = 0;
 
-  private cx = 0;
-  private cy = 0;
-  private px = 0;
-  private py = 0;
-  private vx = 0;
-  private vy = 0;
-  private flameR = 40;
-  private lightR = 180;
-  private gm = 1;
-  private flameLeanX = 0;
-  private flameLeanY = 0;
-
+  private grid: Grid = seedTutorial();
+  private ammo = 0;
+  private next = 1;
+  private special: ShotKind = "color";
   private score = 0;
   private best = 0;
   private combo = 0;
-  private comboTimer = 0;
-  private motes: Mote[] = [];
-  private spawnTimer = 0;
-  private collected = 0;
-  private hint = "HOLD TO ORBIT";
-  private hintLife = 2.8;
-  private taughtRelease = false;
-  private seared = false;
-  private invuln = 0;
-  private pointerDown = false;
-  private titleHold = 0;
-  private flyArmed = false;
-  private runHold = 0;
+  private comboT = 0;
+  private spawnT = 2;
+  private pestT = 4;
+  private duelT = 18;
+  private pests: Pest[] = [];
+  private shot: ShotFx | null = null;
+  private drops: DropFx[] = [];
+  private hoverCol = 2;
+
+  private duelNeedle = 0;
+  private duelDir = 1;
+  private duelLo = 0.3;
+  private duelHi = 0.7;
 
   private particles: Particle[] = [];
   private particleAt = 0;
   private floaters: Floater[] = [];
-  private trail: Trail[] = [];
-  private stars: { x: number; y: number; a: number; s: number }[] = [];
-
   private shake = 0;
   private flash = 0;
-  private zoomPunch = 1;
-  private ambientT = 0;
-  private lastRecapture = 0;
+  private punch = 1;
+  private hint = "TAP A COLUMN TO SHOOT";
+  private hintT = 3;
+
+  private cell = 48;
+  private gx = 0;
+  private gy = 0;
+  private skyY = 0;
+  private skyH = 80;
+  private trayY = 0;
 
   constructor(canvas: HTMLCanvasElement, audio: AudioBus) {
     this.canvas = canvas;
@@ -118,8 +97,6 @@ export class WickGame {
     this.ctx = ctx;
     this.audio = audio;
     this.best = readBest();
-    this.seedStars();
-    this.resetSpark(true);
   }
 
   resize(cssW: number, cssH: number, dpr: number): void {
@@ -128,50 +105,48 @@ export class WickGame {
     this.canvas.width = Math.max(1, Math.floor(cssW * dpr));
     this.canvas.height = Math.max(1, Math.floor(cssH * dpr));
     this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    this.cx = this.w * 0.5;
-    this.cy = this.h * 0.48;
-    this.seedStars();
-    if (this.mode === "title") this.resetSpark(true);
-  }
-
-  /** Returns true if the tap was consumed by HUD (mute), so gameplay should ignore it. */
-  tapHud(x: number, y: number): boolean {
-    const m = this.muteHit();
-    if (x >= m.x && x <= m.x + m.s && y >= m.y && y <= m.y + m.s) {
-      this.audio.unlock();
-      this.audio.toggleMute();
-      return true;
-    }
-    return false;
-  }
-
-  setHolding(down: boolean): void {
-    this.pointerDown = down;
-    if (down) this.audio.unlock();
-
-    if (this.mode === "title") {
-      if (!down) this.titleHold = 0;
-      return;
-    }
-
-    if (this.mode === "death") {
-      if (down && this.allowRestart) this.startRun();
-      else this.holding = down;
-      return;
-    }
-
-    if (!this.flyArmed) {
-      this.holding = true;
-      this.audio.setHolding(true);
-      return;
-    }
-
-    this.holding = down;
-    this.audio.setHolding(down);
+    this.layout();
   }
 
   skipClock(): void {
     this.lastT = 0;
+  }
+
+  hover(x: number, y: number): void {
+    const col = this.colAt(x, y);
+    if (col !== null) this.hoverCol = col;
+  }
+
+  tap(x: number, y: number): void {
+    this.audio.unlock();
+    if (this.hitMute(x, y)) {
+      this.audio.toggleMute();
+      return;
+    }
+    if (this.mode === "title") {
+      this.startRun();
+      return;
+    }
+    if (this.mode === "death") {
+      this.startRun();
+      return;
+    }
+    if (this.mode === "duel") {
+      this.resolveDuel();
+      return;
+    }
+    if (this.hitSwap(x, y)) {
+      this.swap();
+      return;
+    }
+    if (this.hitPest(x, y)) return;
+    const col = this.colAt(x, y);
+    if (col !== null) this.fire(col);
+  }
+
+  swapAmmo(): void {
+    if (this.mode !== "play") return;
+    this.swap();
   }
 
   tick(nowMs: number): void {
@@ -179,382 +154,303 @@ export class WickGame {
     let dt = (nowMs - this.lastT) / 1000;
     this.lastT = nowMs;
     if (dt > 0.05) dt = 0.05;
-    const rawDt = dt;
 
-    if (this.mode === "title" && this.pointerDown) {
-      this.titleHold += rawDt;
-      if (this.titleHold >= 0.14) this.startRun();
+    this.time += dt;
+    this.shake = Math.max(0, this.shake - dt * 8);
+    this.flash = Math.max(0, this.flash - dt * 3);
+    this.punch = lerp(this.punch, 1, 1 - Math.pow(0.001, dt));
+    this.hintT = Math.max(0, this.hintT - dt);
+    this.comboT = Math.max(0, this.comboT - dt);
+    if (this.comboT <= 0) this.combo = 0;
+
+    this.updateShot(dt);
+    this.updateDrops(dt);
+    this.updatePests(dt);
+    this.updateParticles(dt);
+    this.updateFloaters(dt);
+
+    if (this.mode === "play") {
+      this.spawnT -= dt;
+      this.pestT -= dt;
+      this.duelT -= dt;
+      if (this.spawnT <= 0 && !this.shot) {
+        this.garbageDrop();
+        this.spawnT = spawnInterval(this.score);
+      }
+      if (this.pestT <= 0 && this.score >= 10) {
+        this.spawnPest();
+        this.pestT = lerp(5.5, 3.2, clamp(this.score / 180, 0, 1));
+      }
+      if (this.duelT <= 0 && this.score >= 35) this.beginDuel();
     }
 
-    if (this.mode === "play" && !this.flyArmed) {
-      this.holding = true;
-      if (this.pointerDown) this.runHold += rawDt;
-      if (this.runHold >= 0.18) {
-        this.flyArmed = true;
-        this.holding = this.pointerDown;
-        this.audio.setHolding(this.holding);
+    if (this.mode === "duel") {
+      this.duelNeedle += this.duelDir * dt * (this.score < 80 ? 0.85 : 1.15);
+      if (this.duelNeedle > 1) {
+        this.duelNeedle = 1;
+        this.duelDir = -1;
+      }
+      if (this.duelNeedle < 0) {
+        this.duelNeedle = 0;
+        this.duelDir = 1;
       }
     }
 
-    if (this.mode === "death") {
-      this.deathAge += rawDt;
-      if (!this.pointerDown && this.deathAge > 0.4) this.allowRestart = true;
-      dt *= this.deathAge < 0.55 ? 0.22 : 0;
-    }
-    if (this.hitStop > 0) {
-      this.hitStop -= rawDt;
-      dt *= 0.12;
-    }
-
-    this.time += dt;
-    this.ambientT += dt;
-    this.shake = Math.max(0, this.shake - dt * 7);
-    this.flash = Math.max(0, this.flash - dt * 3.2);
-    this.zoomPunch = lerp(this.zoomPunch, 1, 1 - Math.pow(0.001, dt));
-    this.hintLife = Math.max(0, this.hintLife - dt);
-    this.invuln = Math.max(0, this.invuln - dt);
-    this.comboTimer = Math.max(0, this.comboTimer - dt);
-    if (this.comboTimer <= 0) this.combo = 0;
-
-    this.updateRadii();
-    this.updatePhysics(dt);
-    this.updateMotes(dt);
-    this.updateParticles(dt);
-    this.updateFloaters(dt);
     this.draw();
   }
 
-  private get difficulty(): number {
-    if (this.mode === "title") return 0;
-    return runDifficulty(this.time, this.score);
-  }
-
-  private minDim(): number {
-    return Math.min(this.w, this.h);
-  }
-
-  private updateRadii(): void {
-    const arena = arenaRadii(this.minDim(), this.difficulty);
-    this.flameR = arena.flameR;
-    this.lightR = arena.lightR;
-    this.gm = arena.gm;
-  }
-
-  private resetSpark(orbit: boolean): void {
-    this.cx = this.w * 0.5;
-    this.cy = this.h * 0.48;
-    this.updateRadii();
-    const r = arenaRadii(this.minDim(), 0).startR;
-    const ang = -Math.PI * 0.25;
-    this.px = this.cx + Math.cos(ang) * r;
-    this.py = this.cy + Math.sin(ang) * r;
-    const speed = circularSpeed(this.gm, r);
-    this.vx = -Math.sin(ang) * speed;
-    this.vy = Math.cos(ang) * speed;
-    this.trail = [];
-    this.seared = false;
-    if (!orbit) {
-      this.vx = 0;
-      this.vy = 0;
-    }
+  private layout(): void {
+    const top = Math.max(56, this.h * 0.08);
+    this.skyH = Math.max(64, this.h * 0.13);
+    const tray = Math.max(96, this.h * 0.2);
+    const availH = this.h - top - this.skyH - tray;
+    const availW = this.w - 24;
+    this.cell = Math.min(availW / COLS, availH / ROWS);
+    const gridW = this.cell * COLS;
+    const gridH = this.cell * ROWS;
+    this.gx = (this.w - gridW) / 2;
+    this.gy = top + this.skyH;
+    this.skyY = top;
+    this.trayY = this.gy + gridH + 8;
   }
 
   private startRun(): void {
     this.mode = "play";
+    this.grid = seedTutorial();
+    this.ammo = 0;
+    this.next = 1;
+    this.special = "color";
     this.score = 0;
     this.combo = 0;
-    this.comboTimer = 0;
-    this.collected = 0;
+    this.comboT = 0;
     this.time = 0;
-    this.motes = [];
-    this.floaters = [];
-    this.spawnTimer = 0.15;
-    this.hint = "HOLD TO ORBIT";
-    this.hintLife = 2.4;
-    this.taughtRelease = false;
-    this.allowRestart = false;
-    this.deathAge = 0;
-    this.flash = 0.35;
-    this.zoomPunch = 1.04;
-    this.wasHolding = true;
-    this.lastT = 0;
-    this.invuln = 1.05;
-    this.flyArmed = false;
-    this.runHold = 0;
-    this.holding = true;
-    this.titleHold = 0;
-    this.resetSpark(true);
-    this.placeRailMote(0.85);
-    this.audio.setHolding(true);
-    this.buzz(12);
+    this.spawnT = 2.4;
+    this.pestT = 6;
+    this.duelT = 22;
+    this.pests = [];
+    this.shot = null;
+    this.drops = [];
+    this.hint = "TAP A COLUMN TO SHOOT";
+    this.hintT = 3.2;
+    this.flash = 0.25;
+    this.punch = 1.04;
+    this.buzz(10);
   }
 
-  private die(kind: DeathKind): void {
-    if (this.mode !== "play") return;
+  private die(): void {
+    if (this.mode === "death") return;
     this.mode = "death";
-    this.deathKind = kind;
-    this.deathAge = 0;
-    this.allowRestart = false;
-    this.hitStop = 0.08;
-    this.shake = kind === "burn" ? 1 : 0.55;
-    this.flash = kind === "burn" ? 0.9 : 0.45;
-    this.audio.setHolding(false);
-    if (kind === "burn") {
-      this.audio.burn();
-      this.burst(this.px, this.py, 70, 255, 90, 20, 420);
-      this.buzz(40);
-    } else if (kind === "ash") {
-      this.audio.ash();
-      this.burst(this.px, this.py, 56, 80, 80, 90, 260);
-      this.buzz(35);
-    } else {
-      this.audio.fade();
-      this.burst(this.px, this.py, 48, 140, 210, 255, 80, true);
-      this.buzz(25);
-    }
+    this.audio.lose();
+    this.shake = 1;
+    this.flash = 0.6;
+    this.burst(this.w * 0.5, this.gy + 20, 50, 255, 90, 90, 280);
     if (this.score > this.best) {
       this.best = this.score;
       writeBest(this.best);
     }
+    this.buzz(40);
   }
 
-  private updatePhysics(dt: number): void {
-    if (this.mode === "title") {
-      this.cling(dt);
-      this.rememberTrail();
-      return;
-    }
-    if (this.mode === "death" && dt <= 0) return;
+  private fire(col: number): void {
+    if (this.shot || this.mode !== "play") return;
+    this.hoverCol = col;
+    this.shot = { col, kind: this.special, color: this.ammo, t: 0 };
+    this.audio.shot();
+    this.special = "color";
+  }
 
-    const justHeld = this.holding && !this.wasHolding;
-    this.wasHolding = this.holding;
-
-    if (this.holding) {
-      if (justHeld && this.mode === "play") this.snapRecapture();
-      const next = stepCling(
-        { px: this.px, py: this.py, vx: this.vx, vy: this.vy },
-        this.cx,
-        this.cy,
-        this.gm,
-        dt,
-        this.mode === "play" ? clingSpiralRate(this.minDim(), this.difficulty) : 0,
-      );
-      this.px = next.px;
-      this.py = next.py;
-      this.vx = next.vx;
-      this.vy = next.vy;
-    } else {
-      const next = stepCoast(
-        { px: this.px, py: this.py, vx: this.vx, vy: this.vy },
-        dt,
-        0.04,
-        this.minDim() * 2.4,
-      );
-      this.px = next.px;
-      this.py = next.py;
-      this.vx = next.vx;
-      this.vy = next.vy;
-    }
-
-    this.rememberTrail();
-
-    const dx = this.px - this.cx;
-    const dy = this.py - this.cy;
-    const dist = Math.hypot(dx, dy);
-    this.flameLeanX = lerp(this.flameLeanX, clamp(dx / this.lightR, -1, 1) * 10, 0.12);
-    this.flameLeanY = lerp(this.flameLeanY, clamp(dy / this.lightR, -1, 1) * 10, 0.12);
-
-    if (this.mode !== "play") return;
-    if (this.invuln > 0) return;
-
-    const distSafe = inSafeRing(dist, this.flameR, this.lightR);
-    if (!distSafe) this.die(dist < this.flameR + 7 ? "burn" : "fade");
-
-    if (dist < this.flameR + 18) {
-      if (!this.seared && dist > this.flameR + 8) {
-        const receding = dx * this.vx + dy * this.vy > 0;
-        if (receding) {
-          this.seared = true;
-          this.audio.nearMiss();
-          this.addFloater(this.px, this.py - 18, "SEARED", "#ffb089");
-          this.bumpScore(1);
-          this.shake = Math.max(this.shake, 0.28);
-          this.buzz(8);
-        }
+  private updateShot(dt: number): void {
+    if (!this.shot) return;
+    this.shot.t += dt / 0.12;
+    if (this.shot.t < 1) return;
+    const { col, kind, color } = this.shot;
+    this.shot = null;
+    const res = resolveShot(this.grid, col, kind, color);
+    if (res.popped.length) {
+      this.combo = this.comboT > 0 ? this.combo + 1 : 1;
+      this.comboT = 2.4;
+      const gain = popScore(res.popped.length, this.combo, res.chains);
+      this.score += gain;
+      this.audio.pop(res.popped.length);
+      if (res.chains) this.audio.chain();
+      this.punch = 1.05 + Math.min(0.06, res.popped.length * 0.008);
+      this.shake = Math.min(1, 0.16 + res.popped.length * 0.04);
+      this.flash = 0.18;
+      for (const p of res.popped) {
+        const { x, y } = this.cellCenter(p.c, p.r);
+        const rgb = rgbOf(PALETTE[(p.c + p.r) % PALETTE.length]!);
+        this.burst(x, y, 10, rgb[0], rgb[1], rgb[2], 180);
       }
-    } else if (dist > this.flameR + 28) {
-      this.seared = false;
-    }
-  }
-
-  /**
-   * Title-screen idle uses the same rail with no spiral.
-   */
-  private cling(dt: number): void {
-    const next = stepCling(
-      { px: this.px, py: this.py, vx: this.vx, vy: this.vy },
-      this.cx,
-      this.cy,
-      this.gm,
-      dt,
-      0,
-    );
-    this.px = next.px;
-    this.py = next.py;
-    this.vx = next.vx;
-    this.vy = next.vy;
-  }
-
-  private snapRecapture(): void {
-    const now = this.time;
-    if (now - this.lastRecapture <= 0.18) return;
-    this.lastRecapture = now;
-    const dist = Math.max(12, Math.hypot(this.px - this.cx, this.py - this.cy));
-    const rx = (this.px - this.cx) / dist;
-    const ry = (this.py - this.cy) / dist;
-    const radial = Math.abs(this.vx * rx + this.vy * ry);
-    this.audio.recapture();
-    this.burst(this.px, this.py, radial > 90 ? 18 : 10, 255, 200, 80, 90);
-    if (radial > 90) {
-      this.shake = Math.max(this.shake, 0.22);
-      this.zoomPunch = 1.03;
-    }
-  }
-
-  private rememberTrail(): void {
-    this.trail.push({ x: this.px, y: this.py, a: 1 });
-    if (this.trail.length > 22) this.trail.shift();
-  }
-
-  private updateMotes(dt: number): void {
-    if (this.mode !== "play") return;
-    const maxMotes = 2 + Math.floor(this.difficulty * 3);
-    this.spawnTimer -= dt;
-    if (this.spawnTimer <= 0 && this.motes.length < maxMotes) {
-      this.spawnMote();
-      this.spawnTimer = lerp(1.15, 0.55, this.difficulty);
-    }
-
-    for (let i = this.motes.length - 1; i >= 0; i--) {
-      const mote = this.motes[i]!;
-      mote.phase += dt * 3;
-      if (len(mote.x - this.px, mote.y - this.py) < 16) {
-        if (mote.ash) {
-          if (this.invuln <= 0) {
-            this.die("ash");
-            this.motes.splice(i, 1);
-          }
-        } else {
-          this.collect(mote);
-          this.motes.splice(i, 1);
-        }
+      const word =
+        res.popped.length >= 8
+          ? "UNREAL"
+          : res.popped.length >= 5
+            ? "CRAZY"
+            : this.combo > 1
+              ? `x${this.combo}`
+              : "POP";
+      this.addFloater(this.gx + this.cell * (col + 0.5), this.gy + 24, `+${gain}  ${word}`, "#5b3a14");
+      this.buzz(12);
+      if (this.score >= 8 && this.hintT > 0) {
+        this.hint = "MATCH COLORS · SWAP THE NEXT BALL";
+        this.hintT = 2.8;
       }
+    } else if (res.placed) {
+      this.combo = 0;
+    }
+    this.cycleAmmo();
+    if (res.lose) this.die();
+  }
+
+  private cycleAmmo(): void {
+    const n = unlockedColors(this.score);
+    this.ammo = this.next;
+    this.next = fairColor(this.grid, n);
+  }
+
+  private swap(): void {
+    if (this.special !== "color") return;
+    const a = this.ammo;
+    this.ammo = this.next;
+    this.next = a;
+    this.audio.swap();
+  }
+
+  private garbageDrop(): void {
+    const n = unlockedColors(this.score);
+    const count = this.score > 90 && Math.random() < 0.35 ? 2 : 1;
+    for (let i = 0; i < count; i++) {
+      const col = Math.floor(rand(0, COLS));
+      const color = fairColor(this.grid, n);
+      this.drops.push({ col, color, t: 0 });
     }
   }
 
-  private spawnMote(): void {
-    const d = this.difficulty;
-    const ash =
-      this.collected >= 6 && Math.random() < 0.12 + d * 0.22 && this.motes.filter((m) => m.ash).length < 2;
-    for (let i = 0; i < 16; i++) {
-      const hot = !ash && this.collected >= 2 && Math.random() < 0.28 + d * 0.35;
-      if (hot && !this.taughtRelease) {
-        this.hint = "RELEASE TO FLY";
-        this.hintLife = 2.6;
-        this.taughtRelease = true;
-      }
-      const u = ash
-        ? rand(0.22, 0.78)
-        : hot
-          ? Math.random() < 0.5
-            ? rand(0.06, 0.2)
-            : rand(0.8, 0.94)
-          : rand(0.32, 0.68);
-      const dist = lerp(this.flameR + 22, this.lightR - 18, u);
-      const ang = rand(0, Math.PI * 2);
-      const x = this.cx + Math.cos(ang) * dist;
-      const y = this.cy + Math.sin(ang) * dist;
-      if (len(x - this.px, y - this.py) > this.minDim() * 0.16) {
-        this.motes.push({
-          x,
-          y,
-          phase: rand(0, 6),
-          worth: hot ? 2 : 1,
-          hot,
-          ash,
-        });
-        return;
-      }
+  private updateDrops(dt: number): void {
+    for (let i = this.drops.length - 1; i >= 0; i--) {
+      const d = this.drops[i]!;
+      d.t += dt / 0.28;
+      if (d.t < 1) continue;
+      this.drops.splice(i, 1);
+      const ok = dropBlock(this.grid, d.col, d.color);
+      this.audio.drop();
+      if (!ok) this.die();
     }
   }
 
-  private placeRailMote(ahead: number): void {
-    const dx = this.px - this.cx;
-    const dy = this.py - this.cy;
-    const dist = Math.max(8, Math.hypot(dx, dy));
-    const ang = Math.atan2(dy, dx) + ahead;
-    this.motes.push({
-      x: this.cx + Math.cos(ang) * dist,
-      y: this.cy + Math.sin(ang) * dist,
-      phase: 0,
-      worth: 1,
-      hot: false,
-      ash: false,
+  private spawnPest(): void {
+    const fromLeft = Math.random() < 0.5;
+    this.pests.push({
+      x: fromLeft ? -20 : this.w + 20,
+      y: this.skyY + this.skyH * rand(0.3, 0.75),
+      vx: (fromLeft ? 1 : -1) * lerp(70, 130, clamp(this.score / 200, 0, 1)),
+      phase: rand(0, 6),
+      r: 18,
     });
   }
 
-  private collect(mote: Mote): void {
-    this.combo = this.comboTimer > 0 ? this.combo + 1 : 1;
-    this.comboTimer = COLLECT_NOTES_RESET;
-    const gain = mote.worth * this.combo;
-    this.bumpScore(gain);
-    this.collected += 1;
-    this.audio.collect(this.combo);
-    this.zoomPunch = 1.045;
-    this.flash = Math.max(this.flash, 0.2);
-    this.shake = Math.max(this.shake, 0.18);
-    this.hitStop = 0.03;
-    this.burst(mote.x, mote.y, 18, 255, 220, 120, 140);
-    const label = this.combo > 1 ? `+${gain}  x${this.combo}` : `+${gain}`;
-    this.addFloater(mote.x, mote.y - 12, label, mote.hot ? "#ffd18a" : "#fff4d2");
-    this.buzz(10);
-    if (this.collected === 1) {
-      this.hint = "RELEASE TO FLY";
-      this.hintLife = 2.5;
+  private updatePests(dt: number): void {
+    for (let i = this.pests.length - 1; i >= 0; i--) {
+      const p = this.pests[i]!;
+      p.x += p.vx * dt;
+      p.phase += dt * 8;
+      p.y += Math.sin(p.phase) * 12 * dt;
+      if (p.x < -40 || p.x > this.w + 40) this.pests.splice(i, 1);
     }
   }
 
-  private bumpScore(n: number): void {
-    this.score += n;
+  private hitPest(x: number, y: number): boolean {
+    for (let i = this.pests.length - 1; i >= 0; i--) {
+      const p = this.pests[i]!;
+      if (Math.hypot(p.x - x, p.y - y) < p.r + 14) {
+        this.pests.splice(i, 1);
+        this.score += 6;
+        this.audio.pest();
+        this.burst(p.x, p.y, 16, 255, 210, 80, 160);
+        this.addFloater(p.x, p.y, "+6  PIP", "#8a5a00");
+        this.special = Math.random() < 0.5 ? "rainbow" : "bomb";
+        this.hint = this.special === "bomb" ? "BOMB SHOT READY" : "RAINBOW SHOT READY";
+        this.hintT = 2;
+        this.buzz(10);
+        return true;
+      }
+    }
+    return false;
+  }
+
+  private beginDuel(): void {
+    this.mode = "duel";
+    this.duelNeedle = 0;
+    this.duelDir = 1;
+    const w = duelWindow(this.score);
+    this.duelLo = w.lo;
+    this.duelHi = w.hi;
+    this.duelT = lerp(20, 13, clamp(this.score / 220, 0, 1));
+    this.audio.duelStart();
+    this.hint = "TAP IN THE GREEN — DRAW!";
+    this.hintT = 2;
+  }
+
+  private resolveDuel(): void {
+    const hit = this.duelNeedle >= this.duelLo && this.duelNeedle <= this.duelHi;
+    this.mode = "play";
+    if (hit) {
+      this.audio.duelWin();
+      this.score += 20;
+      this.punch = 1.08;
+      this.shake = 0.5;
+      this.flash = 0.3;
+      this.addFloater(this.w * 0.5, this.skyY + 28, "+20  QUICK DRAW", "#5b3a14");
+      for (let c = 0; c < COLS; c++) {
+        const peak = stackPeak(this.grid, c);
+        if (peak < ROWS) this.grid[c]![peak] = null;
+      }
+      applyGravity(this.grid);
+      this.burst(this.w * 0.5, this.gy, 28, 255, 200, 60, 220);
+      this.buzz(18);
+    } else {
+      this.audio.duelLose();
+      this.shake = 0.35;
+      const n = unlockedColors(this.score);
+      dropBlock(this.grid, Math.floor(rand(0, COLS)), fairColor(this.grid, n));
+      dropBlock(this.grid, Math.floor(rand(0, COLS)), fairColor(this.grid, n));
+      this.addFloater(this.w * 0.5, this.skyY + 28, "TOO SLOW", "#8a2038");
+    }
+  }
+
+  private colAt(x: number, y: number): number | null {
+    if (x < this.gx || x > this.gx + this.cell * COLS) return null;
+    if (y < this.skyY) return null;
+    const col = Math.floor((x - this.gx) / this.cell);
+    if (col < 0 || col >= COLS) return null;
+    return col;
+  }
+
+  private cellCenter(c: number, r: number): { x: number; y: number } {
+    return {
+      x: this.gx + (c + 0.5) * this.cell,
+      y: this.gy + (r + 0.5) * this.cell,
+    };
+  }
+
+  private hitSwap(x: number, y: number): boolean {
+    const nx = this.w * 0.5 + 48;
+    const ny = this.trayY + 36;
+    return Math.hypot(x - nx, y - ny) < 28;
+  }
+
+  private hitMute(x: number, y: number): boolean {
+    return x > this.w - 52 && y < 52;
   }
 
   private updateParticles(dt: number): void {
     for (const p of this.particles) {
       if (p.life <= 0) continue;
       p.life -= dt;
-      p.vx *= 1 - p.drag * dt;
-      p.vy *= 1 - p.drag * dt;
+      p.vx *= 0.98;
+      p.vy += 420 * dt;
       p.x += p.vx * dt;
       p.y += p.vy * dt;
-    }
-    if (this.mode !== "death") {
-      // Candle embers
-      if (Math.random() < 0.6) {
-        const a = rand(0, Math.PI * 2);
-        const r = rand(0, this.flameR * 0.45);
-        this.spawnParticle(
-          this.cx + this.flameLeanX + Math.cos(a) * r,
-          this.cy + this.flameLeanY + Math.sin(a) * r - this.flameR * 0.15,
-          rand(-18, 18),
-          rand(-70, -20),
-          rand(0.4, 1.1),
-          rand(2, 5),
-          255,
-          rand(140, 210),
-          40,
-          0.6,
-        );
-      }
     }
   }
 
@@ -562,28 +458,9 @@ export class WickGame {
     for (let i = this.floaters.length - 1; i >= 0; i--) {
       const f = this.floaters[i]!;
       f.life -= dt;
-      f.y -= 28 * dt;
+      f.y -= 26 * dt;
       if (f.life <= 0) this.floaters.splice(i, 1);
     }
-  }
-
-  private spawnParticle(
-    x: number,
-    y: number,
-    vx: number,
-    vy: number,
-    life: number,
-    size: number,
-    r: number,
-    g: number,
-    b: number,
-    drag: number,
-  ): void {
-    const p = this.particles[this.particleAt];
-    const next: Particle = { x, y, vx, vy, life, max: life, size, r, g, b, drag };
-    if (this.particles.length < MAX_PARTICLES) this.particles.push(next);
-    else if (p) this.particles[this.particleAt] = next;
-    this.particleAt = (this.particleAt + 1) % MAX_PARTICLES;
   }
 
   private burst(
@@ -594,42 +471,32 @@ export class WickGame {
     g: number,
     b: number,
     speed: number,
-    freeze = false,
   ): void {
     for (let i = 0; i < n; i++) {
       const a = rand(0, Math.PI * 2);
-      const s = rand(0.2, 1) * speed;
-      this.spawnParticle(
+      const s = rand(0.25, 1) * speed;
+      const next: Particle = {
         x,
         y,
-        Math.cos(a) * s,
-        Math.sin(a) * s + (freeze ? 40 : 0),
-        rand(0.25, 0.7),
-        rand(2, 6),
+        vx: Math.cos(a) * s,
+        vy: Math.sin(a) * s - 40,
+        life: rand(0.25, 0.6),
+        max: 0.6,
+        size: rand(3, 7),
         r,
         g,
         b,
-        freeze ? 2.4 : 1.2,
-      );
+      };
+      next.max = next.life;
+      if (this.particles.length < MAX_PARTICLES) this.particles.push(next);
+      else this.particles[this.particleAt] = next;
+      this.particleAt = (this.particleAt + 1) % MAX_PARTICLES;
     }
   }
 
   private addFloater(x: number, y: number, text: string, color: string): void {
-    this.floaters.push({ x, y, text, life: 0.7, color });
-    if (this.floaters.length > 8) this.floaters.shift();
-  }
-
-  private seedStars(): void {
-    this.stars = [];
-    const n = 48;
-    for (let i = 0; i < n; i++) {
-      this.stars.push({
-        x: Math.random(),
-        y: Math.random(),
-        a: rand(0.15, 0.5),
-        s: rand(0.6, 1.8),
-      });
-    }
+    this.floaters.push({ x, y, text, life: 0.8, color });
+    if (this.floaters.length > 10) this.floaters.shift();
   }
 
   private buzz(ms: number): void {
@@ -643,28 +510,28 @@ export class WickGame {
   private draw(): void {
     const { ctx, w, h } = this;
     ctx.save();
-    const sx = this.shake ? (Math.random() - 0.5) * 18 * this.shake : 0;
-    const sy = this.shake ? (Math.random() - 0.5) * 18 * this.shake : 0;
-    ctx.translate(sx, sy);
-
-    const z = this.zoomPunch;
-    ctx.translate(this.cx, this.cy);
-    ctx.scale(z, z);
-    ctx.translate(-this.cx, -this.cy);
+    if (this.shake) {
+      ctx.translate((Math.random() - 0.5) * 12 * this.shake, (Math.random() - 0.5) * 12 * this.shake);
+    }
+    ctx.translate(w * 0.5, h * 0.5);
+    ctx.scale(this.punch, this.punch);
+    ctx.translate(-w * 0.5, -h * 0.5);
 
     this.drawBackdrop();
-    this.drawLight();
-    this.drawBounds();
-    this.drawGhost();
-    this.drawMotes();
-    this.drawTrail();
-    this.drawSpark();
-    this.drawFlame();
+    this.drawSky();
+    this.drawGrid();
+    this.drawShot();
+    this.drawDrops();
+    this.drawTray();
+    this.drawPests();
     this.drawParticles();
     this.drawFloaters();
     this.drawHud();
+    if (this.mode === "duel") this.drawDuel();
+    if (this.mode === "title") this.drawTitle();
+    if (this.mode === "death") this.drawDeath();
     if (this.flash > 0) {
-      ctx.fillStyle = `rgba(255, 236, 210, ${this.flash * 0.55})`;
+      ctx.fillStyle = `rgba(255,255,255,${this.flash * 0.45})`;
       ctx.fillRect(0, 0, w, h);
     }
     ctx.restore();
@@ -672,282 +539,186 @@ export class WickGame {
 
   private drawBackdrop(): void {
     const { ctx, w, h } = this;
-    const g = ctx.createRadialGradient(
-      this.cx,
-      this.cy,
-      this.flameR,
-      this.cx,
-      this.cy,
-      this.lightR * 1.55,
-    );
-    g.addColorStop(0, "#2a120c");
-    g.addColorStop(0.35, "#14080c");
-    g.addColorStop(1, "#07040a");
+    const g = ctx.createLinearGradient(0, 0, 0, h);
+    g.addColorStop(0, "#f7e9d2");
+    g.addColorStop(0.45, "#f3d5e4");
+    g.addColorStop(1, "#c9d8ff");
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, w, h);
-
-    // Cold void beyond the lantern light
-    const ice = ctx.createRadialGradient(
-      this.cx,
-      this.cy,
-      this.lightR * 0.92,
-      this.cx,
-      this.cy,
-      Math.max(w, h),
-    );
-    ice.addColorStop(0, "rgba(0,0,0,0)");
-    ice.addColorStop(1, "rgba(30, 70, 120, 0.22)");
-    ctx.fillStyle = ice;
-    ctx.fillRect(0, 0, w, h);
-
-    ctx.fillStyle = "#dce8ff";
-    for (const s of this.stars) {
-      ctx.globalAlpha = s.a * (0.6 + 0.4 * Math.sin(this.ambientT * 1.3 + s.x * 12));
-      ctx.beginPath();
-      ctx.arc(s.x * w, s.y * h, s.s, 0, Math.PI * 2);
-      ctx.fill();
-    }
-    ctx.globalAlpha = 1;
   }
 
-  private drawLight(): void {
+  private drawSky(): void {
     const { ctx } = this;
-    const g = ctx.createRadialGradient(
-      this.cx,
-      this.cy,
-      0,
-      this.cx,
-      this.cy,
-      this.lightR,
-    );
-    const pulse = 0.5 + 0.5 * Math.sin(this.ambientT * 3.2);
-    g.addColorStop(0, `rgba(255, 170, 70, ${0.22 + pulse * 0.05})`);
-    g.addColorStop(0.45, "rgba(255, 110, 40, 0.07)");
-    g.addColorStop(1, "rgba(0,0,0,0)");
-    ctx.fillStyle = g;
-    ctx.beginPath();
-    ctx.arc(this.cx, this.cy, this.lightR, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(255,255,255,0.28)";
+    roundRect(ctx, this.gx, this.skyY, this.cell * COLS, this.skyH - 8, 16);
+    ctx.fill();
+    ctx.fillStyle = "rgba(90, 50, 30, 0.45)";
+    ctx.font = "700 12px system-ui, sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText("TAP THE PIPS  ·  DRAW WHEN THEY APPEAR", this.w * 0.5, this.skyY + 16);
+  }
+
+  private drawGrid(): void {
+    const { ctx } = this;
+    ctx.fillStyle = "rgba(255,255,255,0.7)";
+    roundRect(ctx, this.gx - 8, this.gy - 8, this.cell * COLS + 16, this.cell * ROWS + 16, 18);
     ctx.fill();
 
-    if (this.holding && this.mode === "play") {
-      ctx.strokeStyle = "rgba(255, 180, 80, 0.18)";
-      ctx.lineWidth = 1.5;
-      for (let i = 0; i < 3; i++) {
-        const t = (this.ambientT * 0.7 + i * 0.33) % 1;
-        ctx.beginPath();
-        ctx.arc(this.cx, this.cy, lerp(this.lightR, this.flameR * 1.4, t), 0, Math.PI * 2);
-        ctx.globalAlpha = 0.35 * (1 - t);
-        ctx.stroke();
+    for (let c = 0; c < COLS; c++) {
+      if (c === this.hoverCol && this.mode === "play") {
+        ctx.fillStyle = "rgba(255, 180, 70, 0.16)";
+        ctx.fillRect(this.gx + c * this.cell, this.gy, this.cell, this.cell * ROWS);
       }
-      ctx.globalAlpha = 1;
+      for (let r = 0; r < ROWS; r++) {
+        const x = this.gx + c * this.cell;
+        const y = this.gy + r * this.cell;
+        ctx.strokeStyle = "rgba(80, 40, 20, 0.06)";
+        ctx.strokeRect(x + 0.5, y + 0.5, this.cell, this.cell);
+        const color = this.grid[c]![r];
+        if (color === null) continue;
+        this.drawBlock(x, y, this.cell, color, 1);
+      }
     }
+
+    ctx.fillStyle = "rgba(255, 70, 90, 0.55)";
+    ctx.fillRect(this.gx, this.gy + 3, this.cell * COLS, 3);
+    ctx.font = "800 10px system-ui, sans-serif";
+    ctx.fillStyle = "rgba(180, 40, 60, 0.7)";
+    ctx.textAlign = "left";
+    ctx.fillText("CEILING", this.gx + 6, this.gy - 10);
   }
 
-  private drawBounds(): void {
+  private drawBlock(x: number, y: number, cell: number, color: Color, scale: number): void {
     const { ctx } = this;
+    const m = cell * 0.08;
+    const s = (cell - m * 2) * scale;
+    const bx = x + (cell - s) / 2;
+    const by = y + (cell - s) / 2;
+    const hex = PALETTE[color] ?? PALETTE[0]!;
     ctx.save();
-    ctx.setLineDash([6, 10]);
-    ctx.strokeStyle = "rgba(255, 92, 40, 0.35)";
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.arc(this.cx, this.cy, this.flameR + 8, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.strokeStyle = "rgba(140, 200, 255, 0.32)";
-    ctx.beginPath();
-    ctx.arc(this.cx, this.cy, this.lightR - 6, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.restore();
-  }
-
-  private drawFlame(): void {
-    const { ctx } = this;
-    const fx = this.cx + this.flameLeanX * 0.15;
-    const fy = this.cy + this.flameLeanY * 0.15;
-    const t = this.ambientT;
-
-    // Wick
-    ctx.strokeStyle = "#2a1a12";
-    ctx.lineWidth = 3;
-    ctx.lineCap = "round";
-    ctx.beginPath();
-    ctx.moveTo(this.cx, this.cy + this.flameR * 0.15);
-    ctx.lineTo(this.cx, this.cy + this.flameR * 0.55);
-    ctx.stroke();
-
-    ctx.save();
-    ctx.globalCompositeOperation = "lighter";
-    for (let i = 0; i < 6; i++) {
-      const wobble = Math.sin(t * 7 + i) * this.flameR * 0.06;
-      const rx = this.flameR * (0.38 + i * 0.09);
-      const ry = this.flameR * (0.55 + i * 0.12);
-      const grd = ctx.createRadialGradient(fx, fy, 0, fx, fy, ry);
-      const alpha = 0.22 - i * 0.028;
-      grd.addColorStop(0, `rgba(255, 245, 210, ${alpha + 0.15})`);
-      grd.addColorStop(0.35, `rgba(255, 150, 40, ${alpha})`);
-      grd.addColorStop(1, "rgba(180, 20, 0, 0)");
-      ctx.fillStyle = grd;
-      ctx.beginPath();
-      ctx.ellipse(fx + wobble, fy - this.flameR * 0.08, rx, ry, wobble * 0.02, 0, Math.PI * 2);
-      ctx.fill();
-    }
-    ctx.fillStyle = "#fff8e0";
-    ctx.beginPath();
-    ctx.ellipse(fx, fy, this.flameR * 0.16, this.flameR * 0.22, 0, 0, Math.PI * 2);
+    ctx.fillStyle = hex;
+    ctx.shadowColor = "rgba(80, 40, 20, 0.18)";
+    ctx.shadowBlur = 8;
+    ctx.shadowOffsetY = 3;
+    roundRect(ctx, bx, by, s, s, s * 0.28);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = "rgba(255,255,255,0.38)";
+    roundRect(ctx, bx + s * 0.12, by + s * 0.1, s * 0.5, s * 0.28, s * 0.2);
     ctx.fill();
     ctx.restore();
   }
 
-  private drawMotes(): void {
+  private drawShot(): void {
+    if (!this.shot) return;
+    const peak = stackPeak(this.grid, this.shot.col);
+    const targetR = peak === ROWS ? ROWS - 1 : peak;
+    const startY = this.trayY;
+    const endY = this.gy + (targetR + 0.5) * this.cell;
+    const y = lerp(startY, endY, clamp(this.shot.t, 0, 1));
+    const x = this.gx + (this.shot.col + 0.5) * this.cell;
+    if (this.shot.kind === "bomb") this.drawSpecialOrb(x, y, "#3a3a3a", "B");
+    else if (this.shot.kind === "rainbow") this.drawSpecialOrb(x, y, "#fff", "R");
+    else this.drawBlock(x - this.cell / 2, y - this.cell / 2, this.cell * 0.85, this.shot.color, 1);
+  }
+
+  private drawDrops(): void {
+    for (const d of this.drops) {
+      const x = this.gx + (d.col + 0.5) * this.cell;
+      const y = lerp(this.skyY, this.gy + this.cell * 0.5, clamp(d.t, 0, 1));
+      this.drawBlock(x - this.cell / 2, y - this.cell / 2, this.cell, d.color, 0.9);
+    }
+  }
+
+  private drawTray(): void {
+    const { ctx, w } = this;
+    const y = this.trayY + 8;
+    ctx.fillStyle = "rgba(255,255,255,0.55)";
+    roundRect(ctx, this.gx - 8, y, this.cell * COLS + 16, 78, 20);
+    ctx.fill();
+
+    ctx.textAlign = "center";
+    ctx.fillStyle = "rgba(90,50,30,0.5)";
+    ctx.font = "700 11px system-ui, sans-serif";
+    ctx.fillText("NOW", w * 0.5 - 48, y + 16);
+    ctx.fillText("NEXT  TAP TO SWAP", w * 0.5 + 48, y + 16);
+
+    this.drawBlock(w * 0.5 - 48 - this.cell * 0.42, y + 22, this.cell * 0.84, this.ammo, 1);
+    this.drawBlock(w * 0.5 + 48 - this.cell * 0.32, y + 28, this.cell * 0.64, this.next, 1);
+
+    if (this.special === "bomb") {
+      ctx.fillStyle = "#3a3a3a";
+      ctx.font = "700 12px system-ui, sans-serif";
+      ctx.fillText("BOMB", w * 0.5 - 48, y + 74);
+    } else if (this.special === "rainbow") {
+      ctx.fillStyle = "#7a40c8";
+      ctx.font = "700 12px system-ui, sans-serif";
+      ctx.fillText("RAINBOW", w * 0.5 - 48, y + 74);
+    }
+  }
+
+  private drawSpecialOrb(x: number, y: number, fill: string, glyph: string): void {
     const { ctx } = this;
-    for (const mote of this.motes) {
-      const s = 5 + Math.sin(mote.phase) * 1.4;
+    ctx.fillStyle = fill;
+    ctx.beginPath();
+    ctx.arc(x, y, this.cell * 0.28, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = fill === "#fff" ? "#7a40c8" : "#fff";
+    ctx.font = "700 16px system-ui, sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(glyph, x, y + 1);
+    ctx.textBaseline = "alphabetic";
+  }
+
+  private drawPests(): void {
+    const { ctx } = this;
+    for (const p of this.pests) {
       ctx.save();
-      ctx.translate(mote.x, mote.y);
-      ctx.rotate(mote.phase * 0.4);
-      if (mote.ash) {
-        ctx.shadowColor = "#6a7a88";
-        ctx.shadowBlur = 8;
-        ctx.fillStyle = "#1b2228";
-        ctx.strokeStyle = "rgba(180, 210, 230, 0.55)";
-        ctx.lineWidth = 1.2;
-        ctx.beginPath();
-        for (let i = 0; i < 5; i++) {
-          const a = (i / 5) * Math.PI * 2 - Math.PI / 2;
-          const r = i % 2 === 0 ? s + 3 : s * 0.45;
-          const x = Math.cos(a) * r;
-          const y = Math.sin(a) * r;
-          if (i === 0) ctx.moveTo(x, y);
-          else ctx.lineTo(x, y);
-        }
-        ctx.closePath();
-        ctx.fill();
-        ctx.stroke();
-      } else {
-        ctx.shadowColor = mote.hot ? "#ffb060" : "#ffe9a8";
-        ctx.shadowBlur = 12;
-        ctx.fillStyle = mote.hot ? "#ffd19a" : "#fff6d2";
-        ctx.beginPath();
-        ctx.moveTo(0, -s);
-        ctx.lineTo(s * 0.7, 0);
-        ctx.lineTo(0, s);
-        ctx.lineTo(-s * 0.7, 0);
-        ctx.closePath();
-        ctx.fill();
-      }
+      ctx.translate(p.x, p.y);
+      ctx.fillStyle = "#6b4b2a";
+      ctx.beginPath();
+      ctx.ellipse(0, 0, p.r, p.r * 0.72, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "#ffd56a";
+      ctx.beginPath();
+      ctx.ellipse(-4, -2, 5, 4, 0, 0, Math.PI * 2);
+      ctx.ellipse(6, -2, 5, 4, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "#1a120c";
+      ctx.beginPath();
+      ctx.arc(-3, -2, 1.5, 0, Math.PI * 2);
+      ctx.arc(7, -2, 1.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "#ff8a3a";
+      ctx.beginPath();
+      ctx.moveTo(2, 2);
+      ctx.lineTo(12, 5);
+      ctx.lineTo(2, 7);
+      ctx.closePath();
+      ctx.fill();
       ctx.restore();
     }
   }
 
-  private drawGhost(): void {
-    if (this.holding || this.mode !== "play") return;
-    const { ctx } = this;
-    let s = { px: this.px, py: this.py, vx: this.vx, vy: this.vy };
-    const dt = 1 / 60;
-    ctx.save();
-    for (let i = 0; i < 18; i++) {
-      s = stepCoast(s, dt, 0.04, this.minDim() * 2.4);
-      const dist = Math.hypot(s.px - this.cx, s.py - this.cy);
-      const lethal = !inSafeRing(dist, this.flameR, this.lightR);
-      ctx.fillStyle = lethal
-        ? `rgba(255, 90, 70, ${0.45 - i * 0.02})`
-        : `rgba(210, 230, 255, ${0.4 - i * 0.018})`;
-      ctx.beginPath();
-      ctx.arc(s.px, s.py, i % 3 === 0 ? 2.4 : 1.4, 0, Math.PI * 2);
-      ctx.fill();
-    }
-    ctx.restore();
-  }
-
-  private drawTrail(): void {
-    const { ctx } = this;
-    if (this.trail.length < 2) return;
-    ctx.lineCap = "round";
-    ctx.lineJoin = "round";
-    for (let i = 1; i < this.trail.length; i++) {
-      const a = this.trail[i - 1]!;
-      const b = this.trail[i]!;
-      const u = i / this.trail.length;
-      ctx.strokeStyle = this.holding
-        ? `rgba(255, 190, 90, ${u * 0.55})`
-        : `rgba(160, 220, 255, ${u * 0.5})`;
-      ctx.lineWidth = lerp(1, 7, u);
-      ctx.beginPath();
-      ctx.moveTo(a.x, a.y);
-      ctx.lineTo(b.x, b.y);
-      ctx.stroke();
-    }
-  }
-
-  private drawSpark(): void {
-    const { ctx } = this;
-    const spd = len(this.vx, this.vy);
-    const ang = Math.atan2(this.vy, this.vx);
-    const streaks = spd > this.minDim() * 0.35;
-    const heat = clamp(
-      1 - (Math.hypot(this.px - this.cx, this.py - this.cy) - this.flameR) /
-        Math.max(1, this.lightR - this.flameR),
-      0,
-      1,
-    );
-
-    if (!this.holding && this.mode === "play" && streaks) {
-      ctx.strokeStyle = "rgba(180, 220, 255, 0.18)";
-      ctx.lineWidth = 1;
-      for (let i = 0; i < 5; i++) {
-        const back = 12 + i * 10;
-        ctx.beginPath();
-        ctx.moveTo(
-          this.px - Math.cos(ang) * back + Math.sin(ang) * 6,
-          this.py - Math.sin(ang) * back - Math.cos(ang) * 6,
-        );
-        ctx.lineTo(
-          this.px - Math.cos(ang) * (back + 8),
-          this.py - Math.sin(ang) * (back + 8),
-        );
-        ctx.stroke();
-      }
-    }
-
-    ctx.save();
-    ctx.translate(this.px, this.py);
-    ctx.rotate(ang);
-    if (this.invuln > 0 && Math.floor(this.invuln * 12) % 2 === 0) {
-      ctx.globalAlpha = 0.35;
-    }
-    ctx.shadowColor = `rgba(${lerp(140, 255, heat)|0}, ${lerp(200, 140, heat)|0}, ${lerp(255, 60, heat)|0}, 0.9)`;
-    ctx.shadowBlur = 16;
-    ctx.fillStyle = `rgb(${lerp(210, 255, heat)|0}, ${lerp(240, 210, heat)|0}, ${lerp(255, 180, heat)|0})`;
-    ctx.beginPath();
-    ctx.moveTo(8, 0);
-    ctx.lineTo(-6, 4.5);
-    ctx.lineTo(-3.5, 0);
-    ctx.lineTo(-6, -4.5);
-    ctx.closePath();
-    ctx.fill();
-    ctx.restore();
-  }
-
   private drawParticles(): void {
     const { ctx } = this;
-    ctx.save();
-    ctx.globalCompositeOperation = "lighter";
     for (const p of this.particles) {
       if (p.life <= 0) continue;
       const u = p.life / p.max;
-      ctx.fillStyle = `rgba(${p.r|0},${p.g|0},${p.b|0},${u * 0.85})`;
+      ctx.fillStyle = `rgba(${p.r|0},${p.g|0},${p.b|0},${u})`;
       ctx.beginPath();
       ctx.arc(p.x, p.y, p.size * u, 0, Math.PI * 2);
       ctx.fill();
     }
-    ctx.restore();
   }
 
   private drawFloaters(): void {
     const { ctx } = this;
-    ctx.font = "700 14px system-ui, sans-serif";
     ctx.textAlign = "center";
+    ctx.font = "800 16px system-ui, sans-serif";
     for (const f of this.floaters) {
-      ctx.globalAlpha = clamp(f.life * 2, 0, 1);
+      ctx.globalAlpha = clamp(f.life * 1.6, 0, 1);
       ctx.fillStyle = f.color;
       ctx.fillText(f.text, f.x, f.y);
     }
@@ -955,121 +726,109 @@ export class WickGame {
   }
 
   private drawHud(): void {
-    const { ctx, w, h } = this;
-    const pad = Math.max(18, w * 0.06);
-    const top = Math.max(36, h * 0.06);
-
+    const { ctx, w } = this;
+    ctx.fillStyle = "rgba(70, 35, 20, 0.72)";
+    ctx.font = "700 13px system-ui, sans-serif";
     ctx.textAlign = "left";
-    ctx.fillStyle = "rgba(255,255,255,0.38)";
-    ctx.font = "600 12px system-ui, sans-serif";
-    ctx.fillText("BEST  " + this.best, pad, top);
+    ctx.fillText("BEST  " + this.best, 18, 28);
+    ctx.textAlign = "right";
+    ctx.fillText(this.audio.isMuted ? "MUTE" : "SOUND", w - 18, 28);
     ctx.textAlign = "center";
-    ctx.fillStyle = "rgba(255,255,255,0.4)";
-    ctx.fillText(this.holding ? "CLINGING" : "DRIFTING", w * 0.5, top);
-    this.drawMute();
+    ctx.font = "800 34px system-ui, sans-serif";
+    ctx.fillStyle = "#4a2712";
+    ctx.fillText(this.mode === "play" || this.mode === "duel" ? String(this.score) : "POPDRAW", w * 0.5, 36);
+    if (this.hintT > 0 && this.mode === "play") {
+      ctx.globalAlpha = clamp(this.hintT, 0, 1);
+      ctx.font = "700 14px system-ui, sans-serif";
+      ctx.fillStyle = "#6a3a18";
+      ctx.fillText(this.hint, w * 0.5, this.h - 18);
+      ctx.globalAlpha = 1;
+    }
+  }
 
+  private drawTitle(): void {
+    const { ctx, w, h } = this;
     ctx.textAlign = "center";
+    ctx.font = "600 14px system-ui, sans-serif";
+    ctx.fillStyle = "#6a3a18";
+    ctx.fillText("Match  ·  Stack  ·  Snipe  ·  Draw", w * 0.5, h - 44);
+    ctx.font = "800 18px system-ui, sans-serif";
+    ctx.fillStyle = "#c44b1a";
+    ctx.globalAlpha = 0.55 + 0.45 * Math.sin(this.time * 4);
+    ctx.fillText("TAP TO PLAY", w * 0.5, h - 20);
+    ctx.globalAlpha = 1;
+  }
+
+  private drawDeath(): void {
+    const { ctx, w, h } = this;
+    ctx.fillStyle = "rgba(40, 16, 20, 0.28)";
+    ctx.fillRect(0, 0, w, h);
+    ctx.fillStyle = "#4a2712";
+    ctx.textAlign = "center";
+    ctx.font = "800 28px system-ui, sans-serif";
+    ctx.fillText("STACKED OUT", w * 0.5, h * 0.22);
+    ctx.font = "800 56px system-ui, sans-serif";
+    ctx.fillText(String(this.score), w * 0.5, h * 0.22 + 64);
+    ctx.font = "700 16px system-ui, sans-serif";
+    ctx.fillStyle = this.score >= this.best && this.score > 0 ? "#c44b1a" : "#6a3a18";
+    ctx.fillText(
+      this.score >= this.best && this.score > 0 ? "NEW BEST" : "BEST  " + this.best,
+      w * 0.5,
+      h * 0.22 + 92,
+    );
+    ctx.fillStyle = "#c44b1a";
+    ctx.fillText("TAP TO RETRY", w * 0.5, h * 0.88);
+  }
+
+  private drawDuel(): void {
+    const { ctx, w, h } = this;
+    ctx.fillStyle = "rgba(40, 12, 20, 0.35)";
+    ctx.fillRect(0, 0, w, h);
     ctx.fillStyle = "#fff6e8";
-    ctx.font = `800 ${Math.round(this.minDim() * 0.11)}px system-ui, sans-serif`;
-    if (this.mode === "play") {
-      ctx.fillText(String(this.score), w * 0.5, top + Math.round(this.minDim() * 0.1));
-    }
+    ctx.textAlign = "center";
+    ctx.font = "800 42px system-ui, sans-serif";
+    ctx.fillText("DRAW!", w * 0.5, h * 0.28);
+    ctx.font = "700 14px system-ui, sans-serif";
+    ctx.fillText("Tap when the needle is in the green", w * 0.5, h * 0.28 + 28);
 
-    if (this.hintLife > 0 && this.mode === "play") {
-      ctx.globalAlpha = clamp(this.hintLife, 0, 1) * 0.9;
-      ctx.font = "700 15px system-ui, sans-serif";
-      ctx.fillStyle = "#ffe0b0";
-      ctx.fillText(this.hint, w * 0.5, h * 0.82);
-      ctx.globalAlpha = 1;
-    }
-
-    if (this.mode === "title") {
-      ctx.fillStyle = "#fff3d8";
-      ctx.font = `800 ${Math.round(this.minDim() * 0.16)}px system-ui, sans-serif`;
-      ctx.fillText("W I C K", w * 0.5, h * 0.2);
-      ctx.font = "600 14px system-ui, sans-serif";
-      ctx.fillStyle = "rgba(255, 214, 160, 0.85)";
-      ctx.fillText("HOLD TO ORBIT   ·   RELEASE TO FLY", w * 0.5, h * 0.2 + 28);
-      ctx.fillStyle = "rgba(255,255,255,0.55)";
-      ctx.font = "600 13px system-ui, sans-serif";
-      ctx.fillText("Don't burn. Don't fade. Don't eat the ash.", w * 0.5, h * 0.2 + 50);
-      const pulse = 0.55 + 0.45 * Math.sin(this.ambientT * 3);
-      ctx.globalAlpha = pulse;
-      ctx.font = "700 16px system-ui, sans-serif";
-      ctx.fillStyle = "#ffd9a0";
-      ctx.fillText("HOLD TO BEGIN", w * 0.5, h * 0.88);
-      ctx.globalAlpha = 1;
-    }
-
-    if (this.mode === "death") {
-      ctx.fillStyle = "rgba(6, 3, 8, 0.28)";
-      ctx.fillRect(0, 0, w, h);
-      ctx.fillStyle = "#fff3d8";
-      ctx.font = `800 ${Math.round(this.minDim() * 0.09)}px system-ui, sans-serif`;
-      ctx.fillText(
-        this.deathKind === "burn"
-          ? "BURNED"
-          : this.deathKind === "ash"
-            ? "SNUFFED"
-            : "FADED",
-        w * 0.5,
-        h * 0.2,
-      );
-      ctx.font = `800 ${Math.round(this.minDim() * 0.16)}px system-ui, sans-serif`;
-      ctx.fillText(String(this.score), w * 0.5, h * 0.2 + this.minDim() * 0.16);
-      ctx.font = "600 14px system-ui, sans-serif";
-      ctx.fillStyle = "rgba(255,214,160,0.8)";
-      ctx.fillText(
-        this.score >= this.best && this.score > 0 ? "NEW BEST" : "BEST  " + this.best,
-        w * 0.5,
-        h * 0.2 + this.minDim() * 0.2,
-      );
-      if (this.allowRestart) {
-        const pulse = 0.55 + 0.45 * Math.sin(this.ambientT * 3);
-        ctx.globalAlpha = pulse;
-        ctx.font = "700 16px system-ui, sans-serif";
-        ctx.fillStyle = "#ffd9a0";
-        ctx.fillText("HOLD TO RETRY", w * 0.5, h * 0.88);
-        ctx.globalAlpha = 1;
-      }
-    }
+    const barW = Math.min(280, w - 64);
+    const barX = (w - barW) / 2;
+    const barY = h * 0.42;
+    ctx.fillStyle = "#2a1820";
+    roundRect(ctx, barX, barY, barW, 28, 14);
+    ctx.fill();
+    ctx.fillStyle = "#3ddc84";
+    const gx = barX + this.duelLo * barW;
+    const gw = (this.duelHi - this.duelLo) * barW;
+    roundRect(ctx, gx, barY, gw, 28, 14);
+    ctx.fill();
+    const nx = barX + this.duelNeedle * barW;
+    ctx.fillStyle = "#fff";
+    ctx.fillRect(nx - 3, barY - 6, 6, 40);
   }
+}
 
-  private muteHit(): { x: number; y: number; s: number } {
-    const s = 36;
-    return { x: this.w - Math.max(18, this.w * 0.06) - s, y: Math.max(20, this.h * 0.04) - 8, s };
-  }
+function roundRect(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  r: number,
+): void {
+  const rr = Math.min(r, w / 2, h / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + rr, y);
+  ctx.arcTo(x + w, y, x + w, y + h, rr);
+  ctx.arcTo(x + w, y + h, x, y + h, rr);
+  ctx.arcTo(x, y + h, x, y, rr);
+  ctx.arcTo(x, y, x + w, y, rr);
+  ctx.closePath();
+}
 
-  private drawMute(): void {
-    const { ctx } = this;
-    const m = this.muteHit();
-    const cx = m.x + m.s * 0.5;
-    const cy = m.y + m.s * 0.5;
-    ctx.save();
-    ctx.strokeStyle = "rgba(255,255,255,0.45)";
-    ctx.fillStyle = "rgba(255,255,255,0.45)";
-    ctx.lineWidth = 1.6;
-    ctx.beginPath();
-    ctx.moveTo(cx - 8, cy - 3);
-    ctx.lineTo(cx - 3, cy - 3);
-    ctx.lineTo(cx + 3, cy - 8);
-    ctx.lineTo(cx + 3, cy + 8);
-    ctx.lineTo(cx - 3, cy + 3);
-    ctx.lineTo(cx - 8, cy + 3);
-    ctx.closePath();
-    ctx.stroke();
-    if (this.audio.isMuted) {
-      ctx.beginPath();
-      ctx.moveTo(cx - 10, cy - 10);
-      ctx.lineTo(cx + 10, cy + 10);
-      ctx.stroke();
-    } else {
-      ctx.beginPath();
-      ctx.arc(cx + 5, cy, 6, -0.6, 0.6);
-      ctx.stroke();
-    }
-    ctx.restore();
-  }
+function rgbOf(hex: string): [number, number, number] {
+  const n = parseInt(hex.slice(1), 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
 }
 
 function readBest(): number {
@@ -1084,6 +843,6 @@ function writeBest(n: number): void {
   try {
     localStorage.setItem(STORAGE_KEY, String(n));
   } catch {
-    /* private mode / blocked storage */
+    /* ignore */
   }
 }
