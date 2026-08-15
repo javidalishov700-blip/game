@@ -6,24 +6,20 @@ export function haptic(ms: number | number[]): void {
   }
 }
 
-export function hapticInvert(): void {
-  haptic(12);
+export function hapticKick(): void {
+  haptic(11);
 }
 
-export function hapticContagion(): void {
-  haptic(18);
+export function hapticClack(): void {
+  haptic(8);
 }
 
-export function hapticAnnihilate(): void {
-  haptic([24, 28, 42]);
+export function hapticSplit(): void {
+  haptic([12, 18, 22]);
 }
 
 export function hapticCore(): void {
-  haptic(14);
-}
-
-export function hapticSnap(): void {
-  haptic(22);
+  haptic(16);
 }
 
 export function hapticDeath(): void {

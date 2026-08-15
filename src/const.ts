@@ -1,37 +1,28 @@
 export const WORLD_W = 360;
 export const WORLD_H = 640;
 
-export const G = 1080;
-export const LINEAR_DAMP = 0.996;
-export const RESTITUTION = 0.42;
-export const FRICTION = 0.18;
-export const SLOP = 0.4;
-export const CORRECTION = 0.72;
-export const SLEEP_SPEED = 28;
-export const MAX_SPEED = 980;
+export const LINEAR_DAMP = 0.989;
+export const RESTITUTION = 0.78;
+export const WALL_REST = 0.9;
+export const FRICTION = 0.12;
+export const SLOP = 0.35;
+export const CORRECTION = 0.78;
+export const SLEEP_SPEED = 24;
+export const LIVE_SPEED = 55;
+export const MAX_SPEED = 1100;
 
-export const BRICK_R = 22;
+export const STONE_R = 24;
+export const GLASS_R = 20;
 export const CORE_R = 13;
-export const ANCHOR_R = 16;
+export const MIN_SPLIT_R = 12;
 
-export const LAUNCH = 560;
-export const CONTAGION_ENERGY = 165;
-export const ANNIHILATE_ENERGY = 95;
-export const CORE_POP_ENERGY = 70;
-export const WAKE_LIFE = 0.32;
-export const WAKE_G = 2200;
-export const SHOCK_FORCE = 520;
-export const DETONATE_RADIUS = 78;
-export const ANNIHILATE_RADIUS = 108;
+export const KICK = 620;
+export const SPLIT_ENERGY = 95;
+export const CORE_POP_ENERGY = 55;
+export const SPLIT_SPREAD = 220;
 
-export const RIFT_INVERT = 3;
-export const RIFT_ESCAPE = 16;
-export const RIFT_DECAY = 7;
-export const RIFT_CORE_RELIEF = 10;
-export const RIFT_MAX = 100;
-
-export const COMBO_WINDOW = 1.35;
-export const MAX_BODIES = 72;
+export const JAM_COUNT = 34;
+export const MAX_BODIES = 48;
 export const MAX_PARTICLES = 240;
 export const PALETTE_N = 4;
 

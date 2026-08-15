@@ -68,7 +68,7 @@ export class FxBus {
       if (p.life <= 0) continue;
       p.life -= dt;
       p.vx *= 0.985;
-      p.vy += (p.spark ? 80 : 420) * dt;
+      p.vy += (p.spark ? 12 : 40) * dt;
       p.x += p.vx * dt;
       p.y += p.vy * dt;
     }

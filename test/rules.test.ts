@@ -1,203 +1,144 @@
 import { describe, expect, it } from "vitest";
-import { ANNIHILATE_ENERGY, CONTAGION_ENERGY, CORE_POP_ENERGY } from "../src/const";
-import { Body, collidePair, makeBody, resetIds, well } from "../src/physics";
+import { CORE_POP_ENERGY, JAM_COUNT, KICK, MIN_SPLIT_R, SPLIT_ENERGY } from "../src/const";
+import { collidePair, livingCount, makeBody, resetIds, speed, walls, well } from "../src/physics";
 import {
-  annihilateWave,
-  applyShockwave,
-  applyWakes,
-  collectEscapes,
   comboBump,
-  detonate,
-  invertBody,
-  isOverflow,
+  isJammed,
+  kickBody,
   livingCores,
-  riftDelta,
-  scoreFor,
-  snapAnchor,
   resolveImpact,
+  scoreFor,
 } from "../src/rules";
-import { spawnInterval, tutorialPile, wavePile } from "../src/spawn";
+import { spawnInterval, tutorialCluster, waveCluster } from "../src/spawn";
 
-function brick(x: number, y: number, color = 0, extra?: Partial<Body>): Body {
-  return makeBody("brick", x, y, color, extra);
-}
-
-describe("invertBody", () => {
-  it("flips mass sign and launches against gravity", () => {
+describe("kick", () => {
+  it("sends the piece away from the tap, not toward it", () => {
     resetIds();
-    const b = brick(100, 400);
-    const wakes: { x: number; y: number; r: number; life: number; mag: number }[] = [];
-    const ev = invertBody(b, wakes);
-    expect(ev?.type).toBe("invert");
-    expect(b.sign).toBe(-1);
-    expect(b.vy).toBeLessThan(0);
-    expect(wakes).toHaveLength(1);
+    const b = makeBody("glass", 100, 200, 0);
+    kickBody(b, 70, 200);
+    expect(b.vx).toBeGreaterThan(0);
+    expect(Math.abs(b.vx)).toBeGreaterThan(Math.abs(b.vy));
+    expect(speed(b)).toBeCloseTo(KICK, 0);
   });
 
-  it("refuses cores, anchors, and already inverted bricks", () => {
+  it("center taps still launch", () => {
     resetIds();
-    const core = makeBody("core", 0, 0, 0);
-    const anchor = makeBody("anchor", 0, 0, 0);
-    const flipped = brick(0, 0, 0, { sign: -1 });
-    expect(invertBody(core, [])).toBeNull();
-    expect(invertBody(anchor, [])).toBeNull();
-    expect(invertBody(flipped, [])).toBeNull();
+    const b = makeBody("stone", 50, 50, 0);
+    const ev = kickBody(b, 50, 50);
+    expect(ev?.type).toBe("kick");
+    expect(speed(b)).toBeGreaterThan(100);
   });
 });
 
-describe("wakes", () => {
-  it("slams nearby positive-mass bricks downward", () => {
+describe("momentum collisions", () => {
+  it("a moving piece transfers velocity into a sleeper", () => {
     resetIds();
-    const neighbor = brick(120, 400);
-    const vy = neighbor.vy;
-    applyWakes([{ x: 120, y: 400, r: 80, life: 0.32, mag: 4000 }], [neighbor], 0.05);
-    expect(neighbor.vy).toBeGreaterThan(vy);
+    const a = makeBody("glass", 100, 100, 0);
+    const b = makeBody("glass", 135, 100, 0);
+    a.vx = 400;
+    const hit = collidePair(a, b);
+    expect(hit).not.toBeNull();
+    expect(hit!.energy).toBeGreaterThan(0);
+    expect(b.vx).toBeGreaterThan(0);
+  });
+
+  it("walls bounce instead of swallowing velocity", () => {
+    resetIds();
+    const b = makeBody("stone", well.x + 10, well.y + 80, 0);
+    b.vx = -200;
+    walls([b]);
+    expect(b.vx).toBeGreaterThan(0);
+    expect(b.x).toBeGreaterThanOrEqual(well.x + b.r - 0.01);
   });
 });
 
-describe("impact cascade", () => {
-  it("contagion-inverts a brick on a hard antimass hit", () => {
+describe("shatter and pop", () => {
+  it("hard hits split glass into two smaller pieces", () => {
     resetIds();
-    const a = brick(100, 200, 0, { sign: -1 });
-    const b = brick(140, 200, 1);
-    const events = resolveImpact(
-      { a: a.id, b: b.id, energy: CONTAGION_ENERGY + 10, nx: 1, ny: 0, x: 120, y: 200 },
+    const a = makeBody("glass", 100, 200, 1);
+    const b = makeBody("stone", 140, 200, 2);
+    const res = resolveImpact(
+      { a: a.id, b: b.id, energy: SPLIT_ENERGY + 10, nx: 1, ny: 0, x: 120, y: 200 },
       [a, b],
-      [],
-    );
-    expect(b.sign).toBe(-1);
-    expect(events.some((e) => e.type === "invert" && e.contagion)).toBe(true);
-  });
-
-  it("annihilates same-color antimass on contact", () => {
-    resetIds();
-    const a = brick(100, 200, 2, { sign: -1 });
-    const b = brick(140, 200, 2, { sign: -1 });
-    const events = resolveImpact(
-      { a: a.id, b: b.id, energy: ANNIHILATE_ENERGY + 5, nx: 1, ny: 0, x: 120, y: 200 },
-      [a, b],
-      [],
     );
     expect(a.alive).toBe(false);
-    expect(b.alive).toBe(false);
-    expect(events.some((e) => e.type === "annihilate")).toBe(true);
+    expect(res.spawned).toHaveLength(2);
+    expect(res.spawned.every((p) => p.kind === "glass")).toBe(true);
+    expect(res.events.some((e) => e.type === "split")).toBe(true);
   });
 
-  it("pops a core crushed by inverted mass", () => {
+  it("tiny glass does not split again", () => {
     resetIds();
-    const a = brick(100, 200, 0, { sign: -1 });
+    const a = makeBody("glass", 100, 200, 1, { r: MIN_SPLIT_R - 2 });
+    const b = makeBody("stone", 140, 200, 2);
+    const res = resolveImpact(
+      { a: a.id, b: b.id, energy: SPLIT_ENERGY + 40, nx: 1, ny: 0, x: 120, y: 200 },
+      [a, b],
+    );
+    expect(a.alive).toBe(true);
+    expect(res.spawned).toHaveLength(0);
+  });
+
+  it("cores pop only when the hit is hard enough", () => {
+    resetIds();
+    const a = makeBody("glass", 100, 200, 0);
     const core = makeBody("core", 130, 200, 0);
-    const events = resolveImpact(
-      { a: a.id, b: core.id, energy: CORE_POP_ENERGY + 5, nx: 1, ny: 0, x: 115, y: 200 },
+    const weak = resolveImpact(
+      { a: a.id, b: core.id, energy: CORE_POP_ENERGY - 10, nx: 1, ny: 0, x: 115, y: 200 },
       [a, core],
-      [],
+    );
+    expect(core.alive).toBe(true);
+    expect(weak.events.some((e) => e.type === "corePop")).toBe(false);
+    const hard = resolveImpact(
+      { a: a.id, b: core.id, energy: CORE_POP_ENERGY + 10, nx: 1, ny: 0, x: 115, y: 200 },
+      [a, core],
     );
     expect(core.alive).toBe(false);
-    expect(events.some((e) => e.type === "corePop")).toBe(true);
+    expect(hard.events.some((e) => e.type === "corePop")).toBe(true);
   });
 });
 
-describe("shockwave", () => {
-  it("pops cores inside the blast and can invert nearby bricks", () => {
-    resetIds();
-    const core = makeBody("core", 200, 200, 1);
-    const near = brick(230, 200, 0);
-    const far = brick(500, 200, 0);
-    const events = applyShockwave(annihilateWave(200, 200, 1), [core, near, far]);
-    expect(core.alive).toBe(false);
-    expect(events.some((e) => e.type === "corePop")).toBe(true);
-    expect(far.sign).toBe(1);
-  });
-});
-
-describe("detonate and anchors", () => {
-  it("only inverted bricks detonate", () => {
-    resetIds();
-    expect(detonate(brick(0, 0))).toBeNull();
-    const boom = detonate(brick(10, 10, 1, { sign: -1 }));
-    expect(boom?.event.type).toBe("detonate");
-    expect(boom?.wave.r).toBeGreaterThan(20);
-  });
-
-  it("snaps welds off an anchor and kicks the attached brick", () => {
-    resetIds();
-    const anchor = makeBody("anchor", 40, 400, 3);
-    const hung = brick(90, 400, 0);
-    const vx = hung.vx;
-    const welds = [{ a: anchor.id, b: hung.id, rest: 50, broken: false }];
-    const events = snapAnchor(anchor, welds, [anchor, hung]);
-    expect(welds[0]!.broken).toBe(true);
-    expect(events[0]?.type).toBe("snap");
-    expect(hung.vx).not.toBe(vx);
-  });
-});
-
-describe("fail states and scoring", () => {
-  it("detects overflow when a resting brick sits above the danger line", () => {
-    resetIds();
-    const piled = brick(well.x + 80, well.y + 20, 0, { incoming: false, vy: 0, vx: 0 });
-    expect(isOverflow([piled])).toBe(true);
-    piled.incoming = true;
-    expect(isOverflow([piled])).toBe(false);
-  });
-
-  it("collects inverted bricks that leave the well roof", () => {
-    resetIds();
-    const gone = brick(100, well.y - 40, 0, { sign: -1 });
-    const events = collectEscapes([gone], well.y);
-    expect(gone.alive).toBe(false);
-    expect(events[0]?.type).toBe("escape");
-  });
-
-  it("scores annihilations and cores with combo, and charges rift for sloppy inversions", () => {
-    expect(scoreFor([{ type: "corePop", id: 1, x: 0, y: 0, color: 0 }], 2)).toBe(24);
-    expect(scoreFor([{ type: "annihilate", a: 1, b: 2, x: 0, y: 0, color: 0 }], 1)).toBe(28);
+describe("score and jam", () => {
+  it("pays more for pops than splits, and scales with combo", () => {
+    expect(scoreFor([{ type: "corePop", id: 1, x: 0, y: 0, color: 0 }], 2)).toBe(28);
+    expect(scoreFor([{ type: "split", id: 1, x: 0, y: 0, color: 0 }], 1)).toBe(5);
     expect(
       comboBump([
-        { type: "invert", id: 1, contagion: true, x: 0, y: 0, color: 0 },
+        { type: "split", id: 1, x: 0, y: 0, color: 0 },
         { type: "corePop", id: 2, x: 0, y: 0, color: 0 },
       ]),
     ).toBe(2);
-    expect(riftDelta([{ type: "escape", id: 1 }])).toBeGreaterThan(
-      riftDelta([{ type: "corePop", id: 1, x: 0, y: 0, color: 0 }]),
-    );
+  });
+
+  it("jams when the arena is overcrowded", () => {
+    resetIds();
+    const bodies = Array.from({ length: JAM_COUNT }, (_, i) => makeBody("stone", i, 0, 0));
+    expect(isJammed(bodies, JAM_COUNT)).toBe(true);
+    expect(isJammed(bodies.slice(0, 3), JAM_COUNT)).toBe(false);
+    expect(livingCount(bodies)).toBe(JAM_COUNT);
   });
 });
 
 describe("spawn", () => {
-  it("tutorial is a playable keystone: hinted brick plus a core", () => {
+  it("tutorial is a readable bank-shot: hinted glass, a bumper, cores", () => {
     resetIds();
-    const pile = tutorialPile();
-    expect(pile.bodies.some((b) => b.hint && b.kind === "brick")).toBe(true);
-    expect(livingCores(pile.bodies)).toBeGreaterThanOrEqual(1);
-    expect(pile.welds.length).toBeGreaterThan(0);
+    const pile = tutorialCluster();
+    expect(pile.some((b) => b.hint && b.kind === "glass")).toBe(true);
+    expect(pile.some((b) => b.kind === "stone")).toBe(true);
+    expect(livingCores(pile)).toBeGreaterThanOrEqual(2);
   });
 
-  it("wave piles always include a core and stay inside the well", () => {
+  it("waves always add at least one core and stay in the well", () => {
     resetIds();
-    const pile = wavePile(50, 7, []);
-    expect(livingCores(pile.bodies)).toBeGreaterThanOrEqual(1);
-    for (const b of pile.bodies) {
+    const pile = waveCluster(40, 9, []);
+    expect(livingCores(pile)).toBeGreaterThanOrEqual(1);
+    for (const b of pile) {
       expect(b.x).toBeGreaterThan(well.x);
       expect(b.x).toBeLessThan(well.x + well.w);
     }
   });
 
   it("spawns faster as score climbs", () => {
-    expect(spawnInterval(200, 1)).toBeLessThan(spawnInterval(10, 1));
-  });
-});
-
-describe("physics contact", () => {
-  it("separates overlapping bricks and reports impact energy", () => {
-    resetIds();
-    const a = brick(100, 100);
-    const b = brick(110, 100);
-    b.vx = -80;
-    a.vx = 80;
-    const hit = collidePair(a, b);
-    expect(hit).not.toBeNull();
-    for (let i = 0; i < 6; i++) collidePair(a, b);
-    expect(Math.hypot(b.x - a.x, b.y - a.y)).toBeGreaterThanOrEqual(a.r + b.r - 1.5);
+    expect(spawnInterval(120, 1)).toBeLessThan(spawnInterval(10, 1));
   });
 });

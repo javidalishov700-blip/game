@@ -1,7 +1,7 @@
 {
-  "name": "ANTIMASS",
-  "short_name": "ANTIMASS",
-  "description": "Invert a brick's mass and weaponize the collapse.",
+  "name": "CLACK",
+  "short_name": "CLACK",
+  "description": "Kick a piece. Bank the bounce. Shatter glass into the stars.",
   "start_url": ".",
   "display": "standalone",
   "background_color": "#05040c",

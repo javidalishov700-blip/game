@@ -26,20 +26,19 @@ export class AudioBus {
     return this.muted;
   }
 
-  invert(): void {
-    this.sweep(180, 640, 0.14, "sawtooth", 0.11);
+  kick(): void {
+    this.blip(140, 0.08, "sine", 0.12);
     this.blip(90, 0.1, "triangle", 0.08);
   }
 
-  contagion(): void {
-    this.blip(520, 0.08, "square", 0.09);
-    this.blip(780, 0.07, "sine", 0.06);
+  clack(energy: number): void {
+    const f = 180 + Math.min(420, energy * 1.6);
+    this.blip(f, 0.05, "square", 0.07);
   }
 
-  annihilate(): void {
-    this.sweep(140, 40, 0.22, "sawtooth", 0.16);
-    this.blip(880, 0.12, "triangle", 0.12);
-    this.blip(1320, 0.08, "sine", 0.07);
+  split(): void {
+    this.blip(720, 0.09, "triangle", 0.11);
+    this.blip(1100, 0.07, "sine", 0.06);
   }
 
   core(): void {
@@ -47,20 +46,8 @@ export class AudioBus {
     this.blip(990, 0.12, "triangle", 0.08);
   }
 
-  snap(): void {
-    this.blip(210, 0.07, "square", 0.1);
-  }
-
-  detonate(): void {
-    this.sweep(300, 70, 0.16, "triangle", 0.12);
-  }
-
-  rift(): void {
-    this.blip(70, 0.18, "sine", 0.1);
-  }
-
   spawn(): void {
-    this.blip(240, 0.08, "sine", 0.05);
+    this.blip(260, 0.08, "sine", 0.05);
   }
 
   lose(): void {

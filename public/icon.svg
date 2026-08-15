@@ -1,11 +1,8 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="ANTIMASS">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="CLACK">
   <rect width="512" height="512" rx="108" fill="#090814"/>
-  <rect x="86" y="268" width="110" height="110" rx="32" fill="#ff2bd6"/>
-  <rect x="208" y="268" width="110" height="110" rx="32" fill="#00e7ff"/>
-  <rect x="330" y="268" width="110" height="110" rx="32" fill="#ffd21a"/>
-  <rect x="208" y="148" width="110" height="110" rx="32" fill="#00e7ff"/>
-  <circle cx="263" cy="203" r="22" fill="#05040c"/>
-  <path d="M263 112l22 44h-44z" fill="#8af6ff"/>
-  <circle cx="256" cy="392" r="16" fill="#fff"/>
-  <circle cx="256" cy="392" r="28" fill="none" stroke="#7dff4a" stroke-width="8"/>
+  <rect x="86" y="198" width="120" height="120" rx="28" fill="#ffd21a"/>
+  <polygon points="320,160 400,256 320,352 240,256" fill="#00e7ff"/>
+  <circle cx="392" cy="360" r="28" fill="#fff"/>
+  <circle cx="392" cy="360" r="42" fill="none" stroke="#ff2bd6" stroke-width="10"/>
+  <circle cx="148" cy="360" r="18" fill="#7dff4a"/>
 </svg>

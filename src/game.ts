@@ -1,61 +1,28 @@
 import type { AudioBus } from "./audio";
-import {
-  COLOR,
-  COMBO_WINDOW,
-  PALETTE_N,
-  RIFT_DECAY,
-  RIFT_MAX,
-  WORLD_H,
-  WORLD_W,
-} from "./const";
+import { COLOR, JAM_COUNT, LIVE_SPEED, PALETTE_N, WORLD_H, WORLD_W } from "./const";
 import { FxBus } from "./fx";
-import {
-  hapticAnnihilate,
-  hapticContagion,
-  hapticCore,
-  hapticDeath,
-  hapticInvert,
-  hapticSnap,
-} from "./haptics";
+import { hapticClack, hapticCore, hapticDeath, hapticKick, hapticSplit } from "./haptics";
 import { clamp } from "./math";
 import {
   Body,
-  Weld,
+  anyLive,
   collideAll,
-  dangerY,
   hitTest,
   integrate,
+  livingCount,
   resetIds,
-  solveWelds,
+  speed,
   walls,
   well,
 } from "./physics";
-import {
-  Shockwave,
-  SimEvent,
-  Wake,
-  annihilateWave,
-  applyShockwave,
-  applyWakes,
-  collectEscapes,
-  comboBump,
-  detonate,
-  invertBody,
-  isOverflow,
-  livingCores,
-  markSettledIncoming,
-  riftDelta,
-  scoreFor,
-  snapAnchor,
-  resolveImpact,
-} from "./rules";
-import { spawnInterval, tutorialPile, wavePile } from "./spawn";
+import { SimEvent, comboBump, isJammed, kickBody, livingCores, resolveImpact, scoreFor } from "./rules";
+import { spawnInterval, tutorialCluster, waveCluster } from "./spawn";
 
 type Mode = "title" | "play" | "death";
 
-const STORAGE_KEY = "antimass-best";
+const STORAGE_KEY = "clack-best";
 
-export class AntimassGame {
+export class ClackGame {
   readonly canvas: HTMLCanvasElement;
   private readonly ctx: CanvasRenderingContext2D;
   private readonly audio: AudioBus;
@@ -71,21 +38,18 @@ export class AntimassGame {
   private mode: Mode = "title";
 
   private bodies: Body[] = [];
-  private welds: Weld[] = [];
-  private wakes: Wake[] = [];
-  private waves: { wave: Shockwave; t: number }[] = [];
   private trails = new Map<number, { x: number; y: number }[]>();
 
   private score = 0;
   private best = 0;
   private combo = 0;
   private comboT = 0;
-  private rift = 0;
   private spawnT = 7;
   private waveSeed = 1;
-  private hint = "TAP THE GLOWING BRICK";
+  private hint = "TAP A PIECE — IT FLIES THE OTHER WAY";
   private hintT = 4;
   private hover: Body | null = null;
+  private clackMute = 0;
 
   constructor(canvas: HTMLCanvasElement, audio: AudioBus) {
     this.canvas = canvas;
@@ -94,7 +58,7 @@ export class AntimassGame {
     this.ctx = ctx;
     this.audio = audio;
     this.best = readBest();
-    this.loadTitlePile();
+    this.loadTitle();
   }
 
   resize(cssW: number, cssH: number, dpr: number): void {
@@ -130,7 +94,8 @@ export class AntimassGame {
     }
     const body = hitTest(this.bodies, p.x, p.y, 16);
     if (!body) return;
-    this.actOn(body);
+    const ev = kickBody(body, p.x, p.y);
+    if (ev) this.consume([ev]);
   }
 
   tick(nowMs: number): void {
@@ -141,56 +106,47 @@ export class AntimassGame {
     dt *= this.fx.slow;
     this.time += dt;
     this.hintT = Math.max(0, this.hintT - dt);
-    this.comboT = Math.max(0, this.comboT - dt);
+    this.clackMute = Math.max(0, this.clackMute - dt);
+    if (anyLive(this.bodies, LIVE_SPEED)) this.comboT = Math.max(this.comboT, 0.35);
+    else this.comboT = Math.max(0, this.comboT - dt);
     if (this.comboT <= 0) this.combo = 0;
 
     this.fx.tick(dt);
-    if (this.mode === "play" || this.mode === "title") this.simulate(dt);
+    this.simulate(dt);
     if (this.mode === "play") this.progress(dt);
     this.draw();
   }
 
   private toWorld(x: number, y: number): { x: number; y: number } {
-    return {
-      x: (x - this.ox) / this.scale,
-      y: (y - this.oy) / this.scale,
-    };
+    return { x: (x - this.ox) / this.scale, y: (y - this.oy) / this.scale };
   }
 
   private hitMute(x: number, y: number): boolean {
     return x > this.cssW - 56 && y < 52;
   }
 
-  private loadTitlePile(): void {
+  private loadTitle(): void {
     resetIds();
-    const pile = tutorialPile();
-    this.bodies = pile.bodies;
-    this.welds = pile.welds;
-    this.wakes = [];
+    this.bodies = tutorialCluster();
   }
 
   private startRun(): void {
     resetIds();
     this.fx.reset();
     this.trails.clear();
-    const pile = tutorialPile();
-    this.bodies = pile.bodies;
-    this.welds = pile.welds;
-    this.wakes = [];
-    this.waves = [];
+    this.bodies = tutorialCluster();
     this.score = 0;
     this.combo = 0;
     this.comboT = 0;
-    this.rift = 0;
-    this.spawnT = 7.2;
+    this.spawnT = 7.5;
     this.waveSeed = 2;
     this.time = 0;
     this.mode = "play";
-    this.hint = "TAP THE GLOWING BRICK — INVERT MASS";
-    this.hintT = 4.2;
-    this.fx.flash = 0.2;
+    this.hint = "TAP THE GLOWING PIECE ON ITS LEFT SIDE";
+    this.hintT = 4.4;
+    this.fx.flash = 0.18;
     this.fx.punch = 1.04;
-    hapticInvert();
+    hapticKick();
   }
 
   private die(): void {
@@ -198,159 +154,103 @@ export class AntimassGame {
     this.mode = "death";
     this.audio.lose();
     hapticDeath();
-    this.fx.impact(1.1);
-    this.fx.hitStop(0.55);
-    this.fx.burst(WORLD_W * 0.5, well.y + 40, 48, 255, 70, 110, 280, true);
+    this.fx.impact(1.05);
+    this.fx.hitStop(0.5);
+    this.fx.burst(WORLD_W * 0.5, well.y + well.h * 0.4, 44, 255, 80, 140, 260, true);
     if (this.score > this.best) {
       this.best = this.score;
       writeBest(this.best);
     }
   }
 
-  private actOn(body: Body): void {
-    const events: SimEvent[] = [];
-    if (body.kind === "brick" && body.sign > 0) {
-      const ev = invertBody(body, this.wakes);
-      if (ev) events.push(ev);
-    } else if (body.kind === "brick" && body.sign < 0) {
-      const boom = detonate(body);
-      if (boom) {
-        events.push(boom.event);
-        this.queueWave(boom.wave);
-        events.push(...applyShockwave(boom.wave, this.bodies));
-      }
-    } else if (body.kind === "anchor") {
-      events.push(...snapAnchor(body, this.welds, this.bodies));
-    }
-    this.consume(events);
-  }
-
-  private queueWave(wave: Shockwave): void {
-    this.waves.push({ wave, t: 0 });
-    const c = COLOR[wave.color % PALETTE_N]!;
-    this.fx.ring(wave.x, wave.y, wave.r, c.glow, 0.5);
-  }
-
   private simulate(dt: number): void {
     const steps = dt > 0.02 ? 2 : 1;
     const h = dt / steps;
     for (let s = 0; s < steps; s++) {
-      applyWakes(this.wakes, this.bodies, h);
       integrate(this.bodies, h);
       const contacts = collideAll(this.bodies);
       collideAll(this.bodies);
-      collideAll(this.bodies);
-      const snaps = solveWelds(this.welds, this.bodies);
       walls(this.bodies);
       if (this.mode !== "play") continue;
       const events: SimEvent[] = [];
-      for (const c of contacts) events.push(...resolveImpact(c, this.bodies, this.wakes));
-      for (const snap of snaps) events.push({ type: "snap", x: snap.x, y: snap.y });
-      const extra: SimEvent[] = [];
-      for (const e of events) {
-        if (e.type !== "annihilate") continue;
-        const wave = annihilateWave(e.x, e.y, e.color);
-        this.queueWave(wave);
-        extra.push(...applyShockwave(wave, this.bodies));
+      for (const c of contacts) {
+        const res = resolveImpact(c, this.bodies);
+        events.push(...res.events);
+        if (res.spawned.length) this.bodies.push(...res.spawned);
       }
-      events.push(...extra);
-      events.push(...collectEscapes(this.bodies, well.y));
-      markSettledIncoming(this.bodies);
       this.consume(events);
-      if (isOverflow(this.bodies) || this.rift >= RIFT_MAX) this.die();
+      if (isJammed(this.bodies, JAM_COUNT)) this.die();
     }
     this.updateTrails();
     this.prune();
   }
 
   private progress(dt: number): void {
-    this.rift = clamp(this.rift - RIFT_DECAY * dt, 0, RIFT_MAX);
     this.spawnT -= dt;
     const cores = livingCores(this.bodies);
-    if (cores === 0) this.spawnT = Math.min(this.spawnT, 0.45);
+    if (cores === 0) this.spawnT = Math.min(this.spawnT, 0.4);
     if (this.spawnT <= 0) {
-      this.dropWave();
+      const extra = waveCluster(this.score, this.waveSeed++, this.bodies);
+      if (extra.length) {
+        this.bodies.push(...extra);
+        this.audio.spawn();
+        this.fx.floater(WORLD_W * 0.5, well.y + 26, "MORE IN", "#8af6ff");
+      }
       this.spawnT = spawnInterval(this.score, livingCores(this.bodies));
     }
-  }
-
-  private dropWave(): void {
-    const pile = wavePile(this.score, this.waveSeed++, this.bodies);
-    if (!pile.bodies.length) return;
-    this.bodies.push(...pile.bodies);
-    this.welds.push(...pile.welds);
-    this.audio.spawn();
-    this.fx.floater(WORLD_W * 0.5, well.y + 28, "PAYLOAD", "#8af6ff");
   }
 
   private consume(events: SimEvent[]): void {
     if (!events.length) return;
     const bump = comboBump(events);
     if (bump) {
-      this.combo = this.comboT > 0 ? this.combo + bump : bump;
-      this.comboT = COMBO_WINDOW;
+      this.combo = this.comboT > 0 || anyLive(this.bodies, LIVE_SPEED) ? this.combo + bump : bump;
+      this.comboT = 1.1;
     }
-    const gain = scoreFor(events, Math.max(1, this.combo));
-    this.score += gain;
-    this.rift = clamp(this.rift + riftDelta(events), 0, RIFT_MAX);
+    this.score += scoreFor(events, Math.max(1, this.combo));
 
     for (const e of events) {
-      if (e.type === "invert") {
+      if (e.type === "kick") {
         const c = COLOR[e.color % PALETTE_N]!;
-        this.fx.burst(e.x, e.y, e.contagion ? 14 : 10, c.rgb[0], c.rgb[1], c.rgb[2], 220, true);
-        this.fx.ring(e.x, e.y, 46, c.fill, 0.28);
-        if (e.contagion) {
-          this.audio.contagion();
-          hapticContagion();
-          this.fx.impact(0.22);
-        } else {
-          this.audio.invert();
-          hapticInvert();
-          this.fx.impact(0.16);
-          this.hint = "IMPACTS SPREAD INVERSION · SAME COLOR ANNIHILATES";
-          this.hintT = 3.2;
+        this.fx.burst(e.x, e.y, 12, c.rgb[0], c.rgb[1], c.rgb[2], 240, true);
+        this.fx.ring(e.x, e.y, 42, c.fill, 0.26);
+        this.audio.kick();
+        hapticKick();
+        this.fx.impact(0.18);
+        this.hint = "BANK OFF STONE · SHATTER GLASS INTO THE STARS";
+        this.hintT = 3;
+      } else if (e.type === "clack") {
+        if (this.clackMute <= 0) {
+          this.audio.clack(e.energy);
+          hapticClack();
+          this.clackMute = 0.04;
         }
-      } else if (e.type === "annihilate") {
+        this.fx.impact(Math.min(0.22, e.energy / 500));
+      } else if (e.type === "split") {
         const c = COLOR[e.color % PALETTE_N]!;
-        this.fx.burst(e.x, e.y, 36, c.rgb[0], c.rgb[1], c.rgb[2], 360, true);
-        this.fx.impact(0.7);
-        this.fx.hitStop(0.42);
-        this.audio.annihilate();
-        hapticAnnihilate();
-        this.fx.floater(e.x, e.y, comboWord(this.combo), c.glow, 1.25);
+        this.fx.burst(e.x, e.y, 22, c.rgb[0], c.rgb[1], c.rgb[2], 300, true);
+        this.fx.ring(e.x, e.y, 56, c.glow, 0.32);
+        this.audio.split();
+        hapticSplit();
+        this.fx.impact(0.38);
+        this.fx.hitStop(0.18);
+        this.fx.floater(e.x, e.y, comboWord(this.combo), c.glow);
       } else if (e.type === "corePop") {
         const c = COLOR[e.color % PALETTE_N]!;
-        this.fx.burst(e.x, e.y, 18, 255, 255, 255, 240, true);
+        this.fx.burst(e.x, e.y, 20, 255, 255, 255, 260, true);
         this.fx.burst(e.x, e.y, 10, c.rgb[0], c.rgb[1], c.rgb[2], 180);
         this.audio.core();
         hapticCore();
-        this.fx.impact(0.28);
-        this.fx.floater(e.x, e.y - 8, `+${12 * Math.max(1, this.combo)}`, "#fff");
-        this.hint = "ANCHORS SNAP CABLES · TAP AN INVERTED BRICK TO DETONATE";
-        this.hintT = Math.max(this.hintT, 2.6);
-      } else if (e.type === "snap") {
-        this.audio.snap();
-        hapticSnap();
-        this.fx.burst(e.x, e.y, 12, 255, 210, 80, 160, true);
-        this.fx.impact(0.2);
-      } else if (e.type === "detonate") {
-        this.audio.detonate();
-        this.fx.impact(0.4);
-        this.fx.hitStop(0.22);
-      } else if (e.type === "escape") {
-        this.audio.rift();
-        this.fx.impact(0.12);
+        this.fx.impact(0.3);
+        this.fx.floater(e.x, e.y - 8, `+${14 * Math.max(1, this.combo)}`, "#fff");
       }
-    }
-    if (gain > 0 && events.some((e) => e.type === "annihilate" || e.type === "corePop")) {
-      this.fx.floater(WORLD_W * 0.5, 58, this.combo > 1 ? `x${this.combo}` : `+${gain}`, "#ffe97a");
     }
   }
 
   private updateTrails(): void {
     const live = new Set<number>();
     for (const b of this.bodies) {
-      if (!b.alive || b.sign > 0) continue;
+      if (!b.alive || speed(b) < 80) continue;
       live.add(b.id);
       let t = this.trails.get(b.id);
       if (!t) {
@@ -358,7 +258,7 @@ export class AntimassGame {
         this.trails.set(b.id, t);
       }
       t.push({ x: b.x, y: b.y });
-      if (t.length > 9) t.shift();
+      if (t.length > 8) t.shift();
     }
     for (const id of [...this.trails.keys()]) {
       if (!live.has(id)) this.trails.delete(id);
@@ -366,9 +266,8 @@ export class AntimassGame {
   }
 
   private prune(): void {
-    if (this.bodies.length < 50) return;
+    if (this.bodies.length < 40) return;
     this.bodies = this.bodies.filter((b) => b.alive);
-    this.welds = this.welds.filter((w) => !w.broken);
   }
 
   private draw(): void {
@@ -376,8 +275,8 @@ export class AntimassGame {
     ctx.save();
     if (this.fx.shake) {
       ctx.translate(
-        (Math.random() - 0.5) * 14 * this.fx.shake,
-        (Math.random() - 0.5) * 14 * this.fx.shake,
+        (Math.random() - 0.5) * 12 * this.fx.shake,
+        (Math.random() - 0.5) * 12 * this.fx.shake,
       );
     }
     ctx.translate(w * 0.5, h * 0.5);
@@ -389,7 +288,6 @@ export class AntimassGame {
     ctx.translate(this.ox, this.oy);
     ctx.scale(this.scale, this.scale);
     this.drawWell();
-    this.drawWelds();
     this.drawTrails();
     this.drawBodies();
     this.fx.draw(ctx);
@@ -426,53 +324,9 @@ export class AntimassGame {
     ctx.fillStyle = "rgba(12, 10, 28, 0.92)";
     roundRect(ctx, well.x, well.y, well.w, well.h, 22);
     ctx.fill();
-    ctx.strokeStyle = "rgba(0, 231, 255, 0.22)";
+    ctx.strokeStyle = "rgba(0, 231, 255, 0.25)";
     ctx.lineWidth = 2;
     ctx.stroke();
-
-    ctx.save();
-    ctx.beginPath();
-    roundRect(ctx, well.x, well.y, well.w, well.h, 22);
-    ctx.clip();
-    ctx.strokeStyle = "rgba(255,255,255,0.035)";
-    ctx.lineWidth = 1;
-    for (let y = well.y + 24; y < well.y + well.h; y += 28) {
-      ctx.beginPath();
-      ctx.moveTo(well.x, y);
-      ctx.lineTo(well.x + well.w, y);
-      ctx.stroke();
-    }
-    ctx.strokeStyle = "rgba(255, 70, 110, 0.7)";
-    ctx.setLineDash([6, 7]);
-    ctx.beginPath();
-    ctx.moveTo(well.x + 8, dangerY);
-    ctx.lineTo(well.x + well.w - 8, dangerY);
-    ctx.stroke();
-    ctx.setLineDash([]);
-    ctx.fillStyle = "rgba(255, 70, 110, 0.72)";
-    ctx.font = "800 10px system-ui, sans-serif";
-    ctx.textAlign = "left";
-    ctx.fillText("OVERFLOW", well.x + 10, dangerY - 6);
-    ctx.restore();
-  }
-
-  private drawWelds(): void {
-    const { ctx } = this;
-    const map = new Map(this.bodies.map((b) => [b.id, b]));
-    ctx.lineCap = "round";
-    for (const w of this.welds) {
-      if (w.broken) continue;
-      const a = map.get(w.a);
-      const b = map.get(w.b);
-      if (!a?.alive || !b?.alive) continue;
-      const pulse = 0.45 + 0.25 * Math.sin(this.time * 6 + a.id);
-      ctx.strokeStyle = `rgba(255, 210, 80, ${pulse})`;
-      ctx.lineWidth = 3;
-      ctx.beginPath();
-      ctx.moveTo(a.x, a.y);
-      ctx.lineTo(b.x, b.y);
-      ctx.stroke();
-    }
   }
 
   private drawTrails(): void {
@@ -483,8 +337,8 @@ export class AntimassGame {
       if (!body) continue;
       const c = COLOR[body.color % PALETTE_N]!;
       ctx.strokeStyle = c.fill;
-      ctx.lineWidth = 4;
-      ctx.globalAlpha = 0.35;
+      ctx.lineWidth = 3.5;
+      ctx.globalAlpha = 0.4;
       ctx.beginPath();
       ctx.moveTo(pts[0]!.x, pts[0]!.y);
       for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i]!.x, pts[i]!.y);
@@ -497,66 +351,68 @@ export class AntimassGame {
     for (const b of this.bodies) {
       if (!b.alive) continue;
       if (b.kind === "core") this.drawCore(b);
-      else if (b.kind === "anchor") this.drawAnchor(b);
-      else this.drawBrick(b);
+      else if (b.kind === "glass") this.drawGlass(b);
+      else this.drawStone(b);
     }
   }
 
-  private drawBrick(b: Body): void {
+  private drawStone(b: Body): void {
     const { ctx } = this;
     const c = COLOR[b.color % PALETTE_N]!;
     const hover = this.hover?.id === b.id && this.mode === "play";
     ctx.save();
     ctx.translate(b.x, b.y);
-    ctx.rotate(b.spin * 0.15);
-    if (b.sign < 0 || b.heat > 0.2) {
+    ctx.rotate(b.spin * 0.12);
+    if (b.heat > 0.15) {
       ctx.shadowColor = c.fill;
-      ctx.shadowBlur = 16 + b.heat * 18;
+      ctx.shadowBlur = 14 + b.heat * 12;
     }
-    const g = ctx.createRadialGradient(-b.r * 0.3, -b.r * 0.35, 2, 0, 0, b.r);
-    if (b.sign < 0) {
-      g.addColorStop(0, "#fff");
-      g.addColorStop(0.22, c.glow);
-      g.addColorStop(0.7, c.fill);
-      g.addColorStop(1, "#05040c");
-    } else {
-      g.addColorStop(0, c.glow);
-      g.addColorStop(0.55, c.fill);
-      g.addColorStop(1, c.dim);
-    }
+    const g = ctx.createRadialGradient(-b.r * 0.3, -b.r * 0.3, 2, 0, 0, b.r);
+    g.addColorStop(0, c.glow);
+    g.addColorStop(0.55, c.fill);
+    g.addColorStop(1, c.dim);
     ctx.fillStyle = g;
-    roundRect(ctx, -b.r, -b.r, b.r * 2, b.r * 2, b.r * 0.42);
+    roundRect(ctx, -b.r, -b.r, b.r * 2, b.r * 2, b.r * 0.34);
     ctx.fill();
     ctx.shadowBlur = 0;
-    if (b.sign > 0) {
-      ctx.fillStyle = "rgba(255,255,255,0.28)";
-      roundRect(ctx, -b.r * 0.55, -b.r * 0.62, b.r * 0.9, b.r * 0.38, b.r * 0.2);
-      ctx.fill();
-    } else {
-      ctx.fillStyle = "#05040c";
+    ctx.fillStyle = "rgba(255,255,255,0.22)";
+    roundRect(ctx, -b.r * 0.5, -b.r * 0.58, b.r * 0.85, b.r * 0.34, b.r * 0.16);
+    ctx.fill();
+    this.drawHint(b, hover);
+    ctx.restore();
+  }
+
+  private drawGlass(b: Body): void {
+    const { ctx } = this;
+    const c = COLOR[b.color % PALETTE_N]!;
+    const hover = this.hover?.id === b.id && this.mode === "play";
+    ctx.save();
+    ctx.translate(b.x, b.y);
+    ctx.rotate(b.spin * 0.2 + Math.PI / 4);
+    ctx.shadowColor = c.fill;
+    ctx.shadowBlur = 12 + b.heat * 16;
+    ctx.fillStyle = c.fill;
+    ctx.globalAlpha = 0.92;
+    roundRect(ctx, -b.r * 0.78, -b.r * 0.78, b.r * 1.56, b.r * 1.56, b.r * 0.18);
+    ctx.fill();
+    ctx.globalAlpha = 0.35;
+    ctx.fillStyle = "#fff";
+    roundRect(ctx, -b.r * 0.4, -b.r * 0.55, b.r * 0.55, b.r * 0.28, 6);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+    ctx.shadowBlur = 0;
+    ctx.restore();
+    ctx.save();
+    ctx.translate(b.x, b.y);
+    this.drawHint(b, hover);
+    if (b.hint && this.mode === "play") {
+      ctx.fillStyle = `rgba(255,255,255,${0.45 + 0.4 * Math.sin(this.time * 6)})`;
       ctx.beginPath();
-      ctx.arc(0, 0, b.r * 0.34, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = c.glow;
-      ctx.beginPath();
-      ctx.moveTo(0, -b.r * 0.72);
-      ctx.lineTo(b.r * 0.22, -b.r * 0.28);
-      ctx.lineTo(-b.r * 0.22, -b.r * 0.28);
+      ctx.moveTo(b.r + 10, 0);
+      ctx.lineTo(b.r + 2, -7);
+      ctx.lineTo(b.r + 2, 7);
       ctx.closePath();
       ctx.fill();
-    }
-    if (b.hint && this.mode !== "death") {
-      ctx.strokeStyle = `rgba(255,255,255,${0.4 + 0.4 * Math.sin(this.time * 6)})`;
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.arc(0, 0, b.r + 6, 0, Math.PI * 2);
-      ctx.stroke();
-    }
-    if (hover) {
-      ctx.strokeStyle = "rgba(255,255,255,0.7)";
-      ctx.lineWidth = 2;
-      roundRect(ctx, -b.r - 3, -b.r - 3, b.r * 2 + 6, b.r * 2 + 6, b.r * 0.48);
-      ctx.stroke();
     }
     ctx.restore();
   }
@@ -568,24 +424,23 @@ export class AntimassGame {
     ctx.save();
     ctx.translate(b.x, b.y);
     ctx.shadowColor = c.fill;
-    ctx.shadowBlur = 18;
+    ctx.shadowBlur = 16;
     ctx.fillStyle = "#fff";
     ctx.beginPath();
-    ctx.arc(0, 0, b.r * 0.45 * pulse, 0, Math.PI * 2);
+    ctx.arc(0, 0, b.r * 0.42 * pulse, 0, Math.PI * 2);
     ctx.fill();
     ctx.shadowBlur = 0;
     ctx.strokeStyle = c.glow;
-    ctx.lineWidth = 2.5;
+    ctx.lineWidth = 2.4;
     ctx.beginPath();
     ctx.arc(0, 0, b.r * pulse, 0, Math.PI * 2);
     ctx.stroke();
-    const spikes = 6;
     ctx.fillStyle = c.fill;
     ctx.globalAlpha = 0.85;
     ctx.beginPath();
-    for (let i = 0; i < spikes; i++) {
-      const a = (i / spikes) * Math.PI * 2 + this.time * 1.4;
-      const r = i % 2 === 0 ? b.r * 0.95 : b.r * 0.42;
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2 + this.time * 1.5;
+      const r = i % 2 === 0 ? b.r * 0.95 : b.r * 0.4;
       const x = Math.cos(a) * r;
       const y = Math.sin(a) * r;
       if (i === 0) ctx.moveTo(x, y);
@@ -597,22 +452,22 @@ export class AntimassGame {
     ctx.restore();
   }
 
-  private drawAnchor(b: Body): void {
+  private drawHint(b: Body, hover: boolean): void {
     const { ctx } = this;
-    const hover = this.hover?.id === b.id && this.mode === "play";
-    ctx.save();
-    ctx.translate(b.x, b.y);
-    ctx.fillStyle = "#2a2438";
-    ctx.strokeStyle = hover ? "#ffe97a" : "#ffd21a";
-    ctx.lineWidth = 2.5;
-    hex(ctx, b.r);
-    ctx.fill();
-    ctx.stroke();
-    ctx.fillStyle = "#ffd21a";
-    ctx.beginPath();
-    ctx.arc(0, 0, 4, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
+    if (b.hint && this.mode !== "death") {
+      ctx.strokeStyle = `rgba(255,255,255,${0.4 + 0.4 * Math.sin(this.time * 6)})`;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(0, 0, b.r + 6, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    if (hover) {
+      ctx.strokeStyle = "rgba(255,255,255,0.7)";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(0, 0, b.r + 4, 0, Math.PI * 2);
+      ctx.stroke();
+    }
   }
 
   private drawHud(): void {
@@ -626,23 +481,22 @@ export class AntimassGame {
     ctx.textAlign = "center";
     ctx.font = "800 34px system-ui, sans-serif";
     ctx.fillStyle = "#f4f7ff";
-    const title =
-      this.mode === "play" || this.mode === "death" ? String(this.score) : "ANTIMASS";
+    const title = this.mode === "play" || this.mode === "death" ? String(this.score) : "CLACK";
     ctx.fillText(title, w * 0.5, 36);
 
+    const jam = livingCount(this.bodies) / JAM_COUNT;
     const barW = Math.min(220, w * 0.5);
     const bx = (w - barW) / 2;
     const by = 48;
     ctx.fillStyle = "rgba(255,255,255,0.08)";
     roundRect(ctx, bx, by, barW, 7, 4);
     ctx.fill();
-    const riftU = this.rift / RIFT_MAX;
-    ctx.fillStyle = riftU > 0.72 ? "#ff4d7a" : "#00e7ff";
-    roundRect(ctx, bx, by, Math.max(2, barW * riftU), 7, 4);
+    ctx.fillStyle = jam > 0.72 ? "#ff4d7a" : "#00e7ff";
+    roundRect(ctx, bx, by, Math.max(2, barW * clamp(jam, 0, 1)), 7, 4);
     ctx.fill();
     ctx.fillStyle = "rgba(220,230,255,0.4)";
     ctx.font = "700 9px system-ui, sans-serif";
-    ctx.fillText("RIFT", w * 0.5, by + 18);
+    ctx.fillText("JAM", w * 0.5, by + 18);
 
     if (this.hintT > 0 && this.mode === "play") {
       ctx.globalAlpha = clamp(this.hintT, 0, 1);
@@ -665,7 +519,7 @@ export class AntimassGame {
     ctx.fillRect(0, h * 0.72, w, h * 0.28);
     ctx.font = "600 13px system-ui, sans-serif";
     ctx.fillStyle = "#9fdfff";
-    ctx.fillText("Invert mass. Weaponize the collapse.", w * 0.5, h - 58);
+    ctx.fillText("Kick one. Bank the rest. Shatter the glass.", w * 0.5, h - 58);
     ctx.font = "800 18px system-ui, sans-serif";
     ctx.fillStyle = "#00e7ff";
     ctx.globalAlpha = 0.55 + 0.45 * Math.sin(this.time * 4);
@@ -680,7 +534,7 @@ export class AntimassGame {
     ctx.textAlign = "center";
     ctx.fillStyle = "#ff6b9a";
     ctx.font = "800 26px system-ui, sans-serif";
-    ctx.fillText(this.rift >= RIFT_MAX ? "WELL RUPTURED" : "OVERFLOW", w * 0.5, h * 0.24);
+    ctx.fillText("JAMMED", w * 0.5, h * 0.24);
     ctx.fillStyle = "#f4f7ff";
     ctx.font = "800 58px system-ui, sans-serif";
     ctx.fillText(String(this.score), w * 0.5, h * 0.24 + 70);
@@ -697,11 +551,10 @@ export class AntimassGame {
 }
 
 function comboWord(combo: number): string {
-  if (combo >= 12) return "GODFLIP";
-  if (combo >= 8) return "WELLBREAK";
-  if (combo >= 5) return "ANNIHILATE";
-  if (combo >= 3) return "CHAIN";
-  return "RIFT";
+  if (combo >= 10) return "BANKRUPT";
+  if (combo >= 6) return "SHATTER";
+  if (combo >= 3) return "CLACK";
+  return "SPLIT";
 }
 
 function roundRect(
@@ -719,18 +572,6 @@ function roundRect(
   ctx.arcTo(x + w, y + h, x, y + h, rr);
   ctx.arcTo(x, y + h, x, y, rr);
   ctx.arcTo(x, y, x + w, y, rr);
-  ctx.closePath();
-}
-
-function hex(ctx: CanvasRenderingContext2D, r: number): void {
-  ctx.beginPath();
-  for (let i = 0; i < 6; i++) {
-    const a = (Math.PI / 3) * i - Math.PI / 6;
-    const x = Math.cos(a) * r;
-    const y = Math.sin(a) * r;
-    if (i === 0) ctx.moveTo(x, y);
-    else ctx.lineTo(x, y);
-  }
   ctx.closePath();
 }
 

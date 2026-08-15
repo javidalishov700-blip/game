@@ -1,5 +1,5 @@
 import { AudioBus } from "./audio";
-import { AntimassGame } from "./game";
+import { ClackGame } from "./game";
 import "./style.css";
 
 const canvasEl = document.querySelector("#game");
@@ -9,7 +9,7 @@ if (!(canvasEl instanceof HTMLCanvasElement)) {
 const canvas = canvasEl;
 
 const audio = new AudioBus();
-const game = new AntimassGame(canvas, audio);
+const game = new ClackGame(canvas, audio);
 
 function fit(): void {
   const vv = window.visualViewport;
