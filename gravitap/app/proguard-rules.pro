@@ -1,0 +1,2 @@
+-keep class com.gravitap.** { *; }
+-dontwarn kotlin.**
