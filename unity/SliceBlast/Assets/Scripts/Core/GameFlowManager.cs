@@ -54,6 +54,9 @@ namespace SliceBlast.Core
         [Header("Scoring")]
         [SerializeField] private int perfectBonus = 2;
 
+        // Onboarding grace: the very first block can never kill the run.
+        [SerializeField] private bool forgiveFirstBlock = true;
+
         [Header("Feel")]
         [SerializeField] private CameraRig cameraRig;
         [SerializeField] private float perfectShake = 0.18f;
@@ -306,13 +309,22 @@ namespace SliceBlast.Core
                 return;
             }
 
-            Vector3 position = block.CachedTransform.position;
-
             if (kind == PlacementKind.Missed)
             {
-                EndRun(block);
-                return;
+                MovingBlock top = TopBlock;
+
+                if (!forgiveFirstBlock || _stack.Count != 1 || top == null)
+                {
+                    EndRun(block);
+                    return;
+                }
+
+                Vector3 topPosition = top.CachedTransform.position;
+                block.SnapAxis(block.MovingAxisX ? topPosition.x : topPosition.z);
+                kind = PlacementKind.Perfect;
             }
+
+            Vector3 position = block.CachedTransform.position;
 
             block.Freeze();
             _stack.Add(block);

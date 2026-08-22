@@ -25,11 +25,14 @@ namespace SliceBlast.Bootstrap
 
         [Header("HUD")]
         [SerializeField] private bool showHud = true;
+        [SerializeField] private bool showDiagnostics = true;
         [SerializeField] private float restartDelay = 0.6f;
 
         private GameFlowManager _flow;
         private GUIStyle _scoreStyle;
         private GUIStyle _hintStyle;
+        private GUIStyle _debugStyle;
+        private Texture2D _panelTexture;
         private int _score;
         private int _streak;
         private bool _gameOver;
@@ -66,6 +69,12 @@ namespace SliceBlast.Bootstrap
 
         private void OnDestroy()
         {
+            if (_panelTexture != null)
+            {
+                Destroy(_panelTexture);
+                _panelTexture = null;
+            }
+
             if (_flow == null)
             {
                 return;
@@ -229,34 +238,99 @@ namespace SliceBlast.Bootstrap
                 return;
             }
 
+            EnsureStyles();
+
+            float width = Screen.width;
+            float height = Screen.height;
+
+            DrawShadowed(new Rect(0f, height * 0.05f, width, height * 0.12f), _score.ToString(), _scoreStyle);
+
+            if (_streak > 0)
+            {
+                DrawShadowed(new Rect(0f, height * 0.17f, width, height * 0.06f), "PERFECT x" + _streak, _hintStyle);
+            }
+
+            if (!_gameOver && _flow != null && _flow.StackHeight <= 1)
+            {
+                DrawShadowed(new Rect(0f, height * 0.78f, width, height * 0.08f), "TAP TO DROP", _hintStyle);
+            }
+
+            if (_gameOver)
+            {
+                Rect panel = new Rect(width * 0.12f, height * 0.34f, width * 0.76f, height * 0.3f);
+                GUI.DrawTexture(panel, PanelTexture);
+
+                DrawShadowed(new Rect(panel.x, panel.y + panel.height * 0.1f, panel.width, panel.height * 0.3f), "GAME OVER", _hintStyle);
+                DrawShadowed(new Rect(panel.x, panel.y + panel.height * 0.36f, panel.width, panel.height * 0.34f), _score.ToString(), _scoreStyle);
+                DrawShadowed(new Rect(panel.x, panel.y + panel.height * 0.74f, panel.width, panel.height * 0.24f), "TAP TO RESTART", _hintStyle);
+            }
+
+            if (showDiagnostics && _flow != null)
+            {
+                string state = _gameOver ? "OVER" : "PLAY";
+                string line = string.Concat(
+                    state,
+                    "  stack ", _flow.StackHeight.ToString(),
+                    "  active ", _flow.ActiveBlock != null ? "1" : "0",
+                    "  speed ", _flow.CurrentSpeed.ToString("0.00"));
+
+                DrawShadowed(new Rect(width * 0.02f, height - _debugStyle.fontSize * 2f, width, _debugStyle.fontSize * 1.8f), line, _debugStyle);
+            }
+        }
+
+        private void EnsureStyles()
+        {
             if (_scoreStyle == null)
             {
                 _scoreStyle = new GUIStyle(GUI.skin.label)
                 {
-                    alignment = TextAnchor.UpperCenter,
+                    alignment = TextAnchor.MiddleCenter,
                     fontStyle = FontStyle.Bold
                 };
 
                 _hintStyle = new GUIStyle(GUI.skin.label)
                 {
-                    alignment = TextAnchor.MiddleCenter
+                    alignment = TextAnchor.MiddleCenter,
+                    fontStyle = FontStyle.Bold
+                };
+
+                _debugStyle = new GUIStyle(GUI.skin.label)
+                {
+                    alignment = TextAnchor.MiddleLeft
                 };
             }
 
             _scoreStyle.fontSize = Mathf.RoundToInt(Screen.height * 0.07f);
             _hintStyle.fontSize = Mathf.RoundToInt(Screen.height * 0.032f);
+            _debugStyle.fontSize = Mathf.Max(11, Mathf.RoundToInt(Screen.height * 0.022f));
+        }
 
-            float width = Screen.width;
-            GUI.Label(new Rect(0f, Screen.height * 0.06f, width, Screen.height * 0.12f), _score.ToString(), _scoreStyle);
+        // White text over a bright block is unreadable; a one-pixel black pass fixes it everywhere.
+        private static void DrawShadowed(Rect rect, string text, GUIStyle style)
+        {
+            Color previous = GUI.color;
 
-            if (_streak > 0)
+            GUI.color = new Color(0f, 0f, 0f, 0.65f);
+            GUI.Label(new Rect(rect.x + 2f, rect.y + 2f, rect.width, rect.height), text, style);
+
+            GUI.color = Color.white;
+            GUI.Label(rect, text, style);
+
+            GUI.color = previous;
+        }
+
+        private Texture2D PanelTexture
+        {
+            get
             {
-                GUI.Label(new Rect(0f, Screen.height * 0.18f, width, Screen.height * 0.06f), "PERFECT x" + _streak, _hintStyle);
-            }
+                if (_panelTexture == null)
+                {
+                    _panelTexture = new Texture2D(1, 1);
+                    _panelTexture.SetPixel(0, 0, new Color(0.04f, 0.05f, 0.08f, 0.82f));
+                    _panelTexture.Apply();
+                }
 
-            if (_gameOver)
-            {
-                GUI.Label(new Rect(0f, Screen.height * 0.45f, width, Screen.height * 0.1f), "TAP TO RESTART", _hintStyle);
+                return _panelTexture;
             }
         }
     }

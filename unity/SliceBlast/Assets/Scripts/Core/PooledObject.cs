@@ -79,9 +79,14 @@ namespace SliceBlast.Core
         {
             Tint = color;
 
-            if (ReferenceEquals(tintTarget, null))
+            if (tintTarget == null)
             {
-                return;
+                tintTarget = GetComponentInChildren<Renderer>(true);
+
+                if (tintTarget == null)
+                {
+                    return;
+                }
             }
 
             if (s_propertyBlock == null)
