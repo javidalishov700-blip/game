@@ -22,12 +22,12 @@ workflows:
         UNITY_PROJECT: unity/SliceBlast
         XCODE_PROJECT: unity/SliceBlast/ios/Unity-iPhone.xcodeproj
         XCODE_SCHEME: Unity-iPhone
-        BUNDLE_ID: com.sliceblast.game
+        BUNDLE_ID: com.javidalishov.sliceblast
         APP_VERSION: 1.0.0
         IOS_MIN_VERSION: "13.0"
       ios_signing:
         distribution_type: app_store
-        bundle_identifier: com.sliceblast.game
+        bundle_identifier: com.javidalishov.sliceblast
       xcode: latest
 
     triggering:
@@ -41,8 +41,17 @@ workflows:
     scripts:
       - name: Activate Unity licence
         script: |
-          "$UNITY_BIN" -batchmode -quit -nographics -logFile - \
-            -serial "$UNITY_SERIAL" -username "$UNITY_EMAIL" -password "$UNITY_PASSWORD"
+          # Plus/Pro: set UNITY_SERIAL. Personal: paste the .ulf contents into UNITY_LICENSE.
+          if [ -n "$UNITY_SERIAL" ]; then
+            "$UNITY_BIN" -batchmode -quit -nographics -logFile - \
+              -serial "$UNITY_SERIAL" -username "$UNITY_EMAIL" -password "$UNITY_PASSWORD"
+          elif [ -n "$UNITY_LICENSE" ]; then
+            printf '%s' "$UNITY_LICENSE" > /tmp/unity.ulf
+            "$UNITY_BIN" -batchmode -quit -nographics -logFile - -manualLicenseFile /tmp/unity.ulf || true
+          else
+            echo "No Unity licence configured: set UNITY_SERIAL (Plus/Pro) or UNITY_LICENSE (Personal .ulf)."
+            exit 1
+          fi
 
       - name: Generate the Xcode project with Unity
         script: |
@@ -88,14 +97,23 @@ workflows:
       vars:
         UNITY_BIN: $UNITY_HOME/Contents/MacOS/Unity
         UNITY_PROJECT: unity/SliceBlast
-        BUNDLE_ID: com.sliceblast.game
+        BUNDLE_ID: com.javidalishov.sliceblast
         APP_VERSION: 1.0.0
 
     scripts:
       - name: Activate Unity licence
         script: |
-          "$UNITY_BIN" -batchmode -quit -nographics -logFile - \
-            -serial "$UNITY_SERIAL" -username "$UNITY_EMAIL" -password "$UNITY_PASSWORD"
+          # Plus/Pro: set UNITY_SERIAL. Personal: paste the .ulf contents into UNITY_LICENSE.
+          if [ -n "$UNITY_SERIAL" ]; then
+            "$UNITY_BIN" -batchmode -quit -nographics -logFile - \
+              -serial "$UNITY_SERIAL" -username "$UNITY_EMAIL" -password "$UNITY_PASSWORD"
+          elif [ -n "$UNITY_LICENSE" ]; then
+            printf '%s' "$UNITY_LICENSE" > /tmp/unity.ulf
+            "$UNITY_BIN" -batchmode -quit -nographics -logFile - -manualLicenseFile /tmp/unity.ulf || true
+          else
+            echo "No Unity licence configured: set UNITY_SERIAL (Plus/Pro) or UNITY_LICENSE (Personal .ulf)."
+            exit 1
+          fi
 
       - name: Build the APK
         script: |
