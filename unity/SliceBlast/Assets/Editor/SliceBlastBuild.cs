@@ -5,6 +5,7 @@ using System;
 using System.IO;
 using SliceBlast.Bootstrap;
 using UnityEditor;
+using UnityEditor.Build;
 using UnityEditor.Build.Reporting;
 using UnityEditor.SceneManagement;
 using UnityEngine;
@@ -104,10 +105,11 @@ namespace SliceBlast.EditorTools
         private static void ApplyPlayerSettings(BuildTarget target, BuildTargetGroup group)
         {
             string bundleId = EnvOr("BUNDLE_ID", DefaultBundleId);
+            NamedBuildTarget named = NamedBuildTarget.FromBuildTargetGroup(group);
 
             PlayerSettings.companyName = EnvOr("COMPANY_NAME", "Slice Blast Games");
             PlayerSettings.productName = ProductName;
-            PlayerSettings.SetApplicationIdentifier(group, bundleId);
+            PlayerSettings.SetApplicationIdentifier(named, bundleId);
             PlayerSettings.bundleVersion = EnvOr("APP_VERSION", "1.0.0");
 
             PlayerSettings.defaultInterfaceOrientation = UIOrientation.Portrait;
@@ -116,8 +118,7 @@ namespace SliceBlast.EditorTools
             PlayerSettings.allowedAutorotateToLandscapeLeft = false;
             PlayerSettings.allowedAutorotateToLandscapeRight = false;
 
-            PlayerSettings.SetScriptingBackend(group, ScriptingImplementation.IL2CPP);
-            PlayerSettings.stripEngineCode = true;
+            PlayerSettings.SetScriptingBackend(named, ScriptingImplementation.IL2CPP);
             QualitySettings.vSyncCount = 0;
 
             if (target != BuildTarget.iOS)

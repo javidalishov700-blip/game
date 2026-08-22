@@ -12,7 +12,8 @@ workflows:
     environment:
       groups:
         # Codemagic UI → Environment variables. Group "unity" must contain:
-        #   UNITY_HOME     e.g. /Applications/Unity/Hub/Editor/2022.3.21f1/Unity.app
+        #   UNITY_HOME     e.g. /Applications/Unity/Hub/Editor/6000.3.22f1/Unity.app
+        #                  (must match a version installed on the Codemagic macOS image)
         #   UNITY_EMAIL, UNITY_PASSWORD   (Unity account)
         #   UNITY_SERIAL   (Plus/Pro serial — Personal licences use the .ulf flow, see README)
         - unity

@@ -4,9 +4,9 @@ Hyper-casual blok yığma oyununun çekirdek döngüsü. Tek dokunuş, ego-boost
 
 ## 1. Unity'de açmak (yerel)
 
-1. Unity Hub → **Add** → `unity/SliceBlast` klasörünü seç. Unity 2021.3 / 2022.3 LTS önerilir
-   (proje `ProjectSettings/ProjectVersion.txt` içindeki sürümü kullanır; farklı bir editörle açarsan
-   Unity sessizce yükseltir).
+1. Unity Hub → **Add** → `unity/SliceBlast` klasörünü seç. **Unity 6 LTS (6000.3.x)** hedefleniyor;
+   Unity 2021.3 / 2022.3 LTS de çalışır. Farklı bir sürümle açarsan Unity projeyi sessizce yükseltir —
+   projede yalnızca script ve JSON olduğu için bu risksizdir.
 2. Proje açılınca menüden **Slice & Blast → Create Playable Scene** çalıştır.
    Bu, `Assets/Scenes/Main.unity` sahnesini üretir ve içine tek bir `SliceBlastBootstrap` objesi koyar.
 3. **Play**'e bas. Kamera, ışık, havuzlar, blok ve debris prefab'ları çalışma anında kurulur —
