@@ -42,6 +42,22 @@ namespace SliceBlast.Bootstrap
         private bool _gameOver;
         private float _gameOverTime;
 
+        /// <summary>
+        /// The shipped scene is deliberately empty — the game builds itself here. That keeps
+        /// the build independent of scene contents, serialized references and CI settings.
+        /// </summary>
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
+        private static void EnsureInstance()
+        {
+            if (FindAnyObjectByType<SliceBlastBootstrap>() != null)
+            {
+                return;
+            }
+
+            GameObject host = new GameObject("SliceBlast");
+            host.AddComponent<SliceBlastBootstrap>();
+        }
+
         private void Awake()
         {
             Material lit = LoadMaterial("Materials/BlockLit", "Standard");
