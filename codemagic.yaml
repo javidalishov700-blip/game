@@ -18,7 +18,8 @@ workflows:
         #   UNITY_SERIAL   (Plus/Pro serial — Personal licences use the .ulf flow, see README)
         - unity
       vars:
-        UNITY_BIN: $UNITY_HOME/Contents/MacOS/Unity
+        # UNITY_BIN is resolved at runtime by ci/find-unity.sh — group variables
+        # are not expanded inside this block.
         UNITY_PROJECT: unity/SliceBlast
         XCODE_PROJECT: unity/SliceBlast/ios/Unity-iPhone.xcodeproj
         XCODE_SCHEME: Unity-iPhone
@@ -38,23 +39,19 @@ workflows:
     scripts:
       - name: Activate Unity licence
         script: |
-          if [ ! -x "$UNITY_BIN" ]; then
-            echo "UNITY_BIN not found at: $UNITY_BIN"
-            echo "Editors installed on this machine:"
-            ls -1 /Applications/Unity/Hub/Editor 2>/dev/null || echo "(none under /Applications/Unity/Hub/Editor)"
-            ls -1d /Applications/Unity* 2>/dev/null || true
-            exit 1
-          fi
+          UNITY_BIN="$(bash ci/find-unity.sh)" || exit 1
+          echo "Unity: $UNITY_BIN"
+          echo "UNITY_BIN=$UNITY_BIN" >> "$CM_ENV"
 
           # Plus/Pro -> UNITY_SERIAL. Personal -> UNITY_EMAIL + UNITY_PASSWORD (Unity
           # discontinued manual .ulf activation for Personal; UNITY_LICENSE is legacy only).
-          if [ -n "$UNITY_SERIAL" ]; then
+          if [ -n "${UNITY_SERIAL:-}" ]; then
             "$UNITY_BIN" -batchmode -quit -nographics -logFile - \
-              -serial "$UNITY_SERIAL" -username "$UNITY_EMAIL" -password "$UNITY_PASSWORD"
-          elif [ -n "$UNITY_EMAIL" ] && [ -n "$UNITY_PASSWORD" ]; then
+              -serial "$UNITY_SERIAL" -username "${UNITY_EMAIL:-}" -password "${UNITY_PASSWORD:-}"
+          elif [ -n "${UNITY_EMAIL:-}" ] && [ -n "${UNITY_PASSWORD:-}" ]; then
             "$UNITY_BIN" -batchmode -quit -nographics -logFile - \
               -username "$UNITY_EMAIL" -password "$UNITY_PASSWORD"
-          elif [ -n "$UNITY_LICENSE" ]; then
+          elif [ -n "${UNITY_LICENSE:-}" ]; then
             printf '%s' "$UNITY_LICENSE" > /tmp/unity.ulf
             "$UNITY_BIN" -batchmode -quit -nographics -logFile - -manualLicenseFile /tmp/unity.ulf || true
           else
@@ -64,6 +61,7 @@ workflows:
 
       - name: Generate the Xcode project with Unity
         script: |
+          UNITY_BIN="${UNITY_BIN:-$(bash ci/find-unity.sh)}"
           "$UNITY_BIN" -batchmode -quit -nographics -logFile - \
             -projectPath "$UNITY_PROJECT" \
             -buildTarget iOS \
@@ -103,7 +101,9 @@ workflows:
         submit_to_testflight: true
       scripts:
         - name: Return the Unity licence
-          script: '"$UNITY_BIN" -batchmode -quit -nographics -logFile - -returnlicense'
+          script: |
+            UNITY_BIN="${UNITY_BIN:-$(bash ci/find-unity.sh)}" || exit 0
+            "$UNITY_BIN" -batchmode -quit -nographics -logFile - -returnlicense || true
 
   slice-blast-android:
     name: Slice & Blast — Android APK
@@ -114,7 +114,8 @@ workflows:
       groups:
         - unity
       vars:
-        UNITY_BIN: $UNITY_HOME/Contents/MacOS/Unity
+        # UNITY_BIN is resolved at runtime by ci/find-unity.sh — group variables
+        # are not expanded inside this block.
         UNITY_PROJECT: unity/SliceBlast
         BUNDLE_ID: com.javidalishov.sliceblast
         APP_VERSION: 1.0.0
@@ -122,23 +123,19 @@ workflows:
     scripts:
       - name: Activate Unity licence
         script: |
-          if [ ! -x "$UNITY_BIN" ]; then
-            echo "UNITY_BIN not found at: $UNITY_BIN"
-            echo "Editors installed on this machine:"
-            ls -1 /Applications/Unity/Hub/Editor 2>/dev/null || echo "(none under /Applications/Unity/Hub/Editor)"
-            ls -1d /Applications/Unity* 2>/dev/null || true
-            exit 1
-          fi
+          UNITY_BIN="$(bash ci/find-unity.sh)" || exit 1
+          echo "Unity: $UNITY_BIN"
+          echo "UNITY_BIN=$UNITY_BIN" >> "$CM_ENV"
 
           # Plus/Pro -> UNITY_SERIAL. Personal -> UNITY_EMAIL + UNITY_PASSWORD (Unity
           # discontinued manual .ulf activation for Personal; UNITY_LICENSE is legacy only).
-          if [ -n "$UNITY_SERIAL" ]; then
+          if [ -n "${UNITY_SERIAL:-}" ]; then
             "$UNITY_BIN" -batchmode -quit -nographics -logFile - \
-              -serial "$UNITY_SERIAL" -username "$UNITY_EMAIL" -password "$UNITY_PASSWORD"
-          elif [ -n "$UNITY_EMAIL" ] && [ -n "$UNITY_PASSWORD" ]; then
+              -serial "$UNITY_SERIAL" -username "${UNITY_EMAIL:-}" -password "${UNITY_PASSWORD:-}"
+          elif [ -n "${UNITY_EMAIL:-}" ] && [ -n "${UNITY_PASSWORD:-}" ]; then
             "$UNITY_BIN" -batchmode -quit -nographics -logFile - \
               -username "$UNITY_EMAIL" -password "$UNITY_PASSWORD"
-          elif [ -n "$UNITY_LICENSE" ]; then
+          elif [ -n "${UNITY_LICENSE:-}" ]; then
             printf '%s' "$UNITY_LICENSE" > /tmp/unity.ulf
             "$UNITY_BIN" -batchmode -quit -nographics -logFile - -manualLicenseFile /tmp/unity.ulf || true
           else
@@ -148,6 +145,7 @@ workflows:
 
       - name: Build the APK
         script: |
+          UNITY_BIN="${UNITY_BIN:-$(bash ci/find-unity.sh)}"
           "$UNITY_BIN" -batchmode -quit -nographics -logFile - \
             -projectPath "$UNITY_PROJECT" \
             -buildTarget Android \
@@ -159,4 +157,6 @@ workflows:
     publishing:
       scripts:
         - name: Return the Unity licence
-          script: '"$UNITY_BIN" -batchmode -quit -nographics -logFile - -returnlicense'
+          script: |
+            UNITY_BIN="${UNITY_BIN:-$(bash ci/find-unity.sh)}" || exit 0
+            "$UNITY_BIN" -batchmode -quit -nographics -logFile - -returnlicense || true
