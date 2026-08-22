@@ -169,3 +169,53 @@ workflows:
           script: |
             UNITY_BIN="${UNITY_BIN:-$(bash ci/find-unity.sh)}" || exit 0
             "$UNITY_BIN" -batchmode -quit -nographics -logFile - -returnlicense || true
+
+  # Takes an .ipa built elsewhere (Unity Build Automation) and ships it to TestFlight.
+  # Windows cannot upload to App Store Connect — Apple only ships Transporter for macOS —
+  # so this workflow exists purely to be that macOS uploader.
+  deliver-ipa:
+    name: Slice & Blast — Deliver IPA to TestFlight
+    max_build_duration: 30
+    instance_type: mac_mini_m2
+
+    integrations:
+      app_store_connect: SliceBlast ASC Key
+
+    environment:
+      groups:
+        # Codemagic UI → Environment variables, group "delivery":
+        #   IPA_URL  the direct download link of the Unity Build Automation artifact
+        - delivery
+
+    scripts:
+      - name: Download the build
+        script: |
+          if [ -z "${IPA_URL:-}" ]; then
+            echo "IPA_URL is not set. Copy the Download link from the Unity build page."
+            exit 1
+          fi
+
+          curl -fL --retry 3 "$IPA_URL" -o payload.bin
+          ls -lh payload.bin
+
+          # Unity hands back either the .ipa itself or a zip containing it.
+          if unzip -l payload.bin | grep -q "Payload/"; then
+            mv payload.bin app.ipa
+          else
+            unzip -o payload.bin -d extracted
+            FOUND="$(find extracted -name '*.ipa' | head -1)"
+            if [ -z "$FOUND" ]; then
+              echo "No .ipa found in the downloaded archive:"
+              find extracted -maxdepth 3 | head -40
+              exit 1
+            fi
+            mv "$FOUND" app.ipa
+          fi
+
+          ls -lh app.ipa
+
+      - name: Upload to App Store Connect
+        script: app-store-connect publish --path app.ipa
+
+    artifacts:
+      - app.ipa
