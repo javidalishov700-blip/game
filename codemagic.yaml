@@ -183,9 +183,8 @@ workflows:
 
     environment:
       groups:
-        # Codemagic UI → Environment variables, group "delivery":
-        #   IPA_URL  the direct download link of the Unity Build Automation artifact
-        - delivery
+        # IPA_URL — the direct download link of the Unity Build Automation artifact.
+        - unity
 
     scripts:
       - name: Download the build
