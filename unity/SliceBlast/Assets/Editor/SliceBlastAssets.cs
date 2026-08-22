@@ -87,28 +87,22 @@ namespace SliceBlast.EditorTools
 
         private static void ApplyIcon(Texture2D icon)
         {
+#if UNITY_IOS || UNITY_ANDROID
 #if UNITY_IOS
-            UnityEditor.Build.NamedBuildTarget target = UnityEditor.Build.NamedBuildTarget.iOS;
-            UnityEditor.iOS.iOSPlatformIconKind kind = UnityEditor.iOS.iOSPlatformIconKind.Application;
+            BuildTargetGroup group = BuildTargetGroup.iOS;
+            PlatformIconKind kind = UnityEditor.iOS.iOSPlatformIconKind.Application;
+#else
+            BuildTargetGroup group = BuildTargetGroup.Android;
+            PlatformIconKind kind = UnityEditor.Android.AndroidPlatformIconKind.Legacy;
+#endif
+            PlatformIcon[] icons = PlayerSettings.GetPlatformIcons(group, kind);
 
-            PlatformIcon[] icons = PlayerSettings.GetPlatformIcons(target, kind);
             for (int i = 0; i < icons.Length; i++)
             {
                 icons[i].SetTexture(icon, 0);
             }
 
-            PlayerSettings.SetPlatformIcons(target, kind, icons);
-#elif UNITY_ANDROID
-            UnityEditor.Build.NamedBuildTarget target = UnityEditor.Build.NamedBuildTarget.Android;
-            UnityEditor.Android.AndroidPlatformIconKind kind = UnityEditor.Android.AndroidPlatformIconKind.Legacy;
-
-            PlatformIcon[] icons = PlayerSettings.GetPlatformIcons(target, kind);
-            for (int i = 0; i < icons.Length; i++)
-            {
-                icons[i].SetTexture(icon, 0);
-            }
-
-            PlayerSettings.SetPlatformIcons(target, kind, icons);
+            PlayerSettings.SetPlatformIcons(group, kind, icons);
 #endif
         }
 
