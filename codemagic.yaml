@@ -38,6 +38,14 @@ workflows:
     scripts:
       - name: Activate Unity licence
         script: |
+          if [ ! -x "$UNITY_BIN" ]; then
+            echo "UNITY_BIN not found at: $UNITY_BIN"
+            echo "Editors installed on this machine:"
+            ls -1 /Applications/Unity/Hub/Editor 2>/dev/null || echo "(none under /Applications/Unity/Hub/Editor)"
+            ls -1d /Applications/Unity* 2>/dev/null || true
+            exit 1
+          fi
+
           # Plus/Pro: set UNITY_SERIAL. Personal: paste the .ulf contents into UNITY_LICENSE.
           if [ -n "$UNITY_SERIAL" ]; then
             "$UNITY_BIN" -batchmode -quit -nographics -logFile - \
@@ -110,6 +118,14 @@ workflows:
     scripts:
       - name: Activate Unity licence
         script: |
+          if [ ! -x "$UNITY_BIN" ]; then
+            echo "UNITY_BIN not found at: $UNITY_BIN"
+            echo "Editors installed on this machine:"
+            ls -1 /Applications/Unity/Hub/Editor 2>/dev/null || echo "(none under /Applications/Unity/Hub/Editor)"
+            ls -1d /Applications/Unity* 2>/dev/null || true
+            exit 1
+          fi
+
           # Plus/Pro: set UNITY_SERIAL. Personal: paste the .ulf contents into UNITY_LICENSE.
           if [ -n "$UNITY_SERIAL" ]; then
             "$UNITY_BIN" -batchmode -quit -nographics -logFile - \
