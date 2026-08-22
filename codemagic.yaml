@@ -12,15 +12,16 @@ workflows:
     environment:
       groups:
         # Codemagic UI → Environment variables. Group "unity" must contain:
-        #   UNITY_HOME     e.g. /Applications/Unity/Hub/Editor/6000.3.22f1/Unity.app
-        #                  (must match a version installed on the Codemagic macOS image)
-        #   UNITY_EMAIL, UNITY_PASSWORD   (Unity account)
-        #   UNITY_SERIAL   (Plus/Pro serial — Personal licences use the .ulf flow, see README)
+        #   UNITY_EMAIL, UNITY_PASSWORD   (Unity account — Personal licences)
+        #   UNITY_SERIAL                  (Plus/Pro only)
+        #   UNITY_HOME                    (optional; the editor is located automatically)
         - unity
       vars:
         # UNITY_BIN is resolved at runtime by ci/find-unity.sh — group variables
         # are not expanded inside this block.
         UNITY_PROJECT: unity/SliceBlast
+        UNITY_VERSION: 6000.3.22f1
+        UNITY_MODULES: ios
         XCODE_PROJECT: unity/SliceBlast/ios/Unity-iPhone.xcodeproj
         XCODE_SCHEME: Unity-iPhone
         BUNDLE_ID: com.javidalishov.sliceblast
@@ -37,6 +38,9 @@ workflows:
           source: true
 
     scripts:
+      - name: Install the Unity editor
+        script: bash ci/install-unity.sh
+
       - name: Activate Unity licence
         script: |
           UNITY_BIN="$(bash ci/find-unity.sh)" || exit 1
@@ -117,10 +121,15 @@ workflows:
         # UNITY_BIN is resolved at runtime by ci/find-unity.sh — group variables
         # are not expanded inside this block.
         UNITY_PROJECT: unity/SliceBlast
+        UNITY_VERSION: 6000.3.22f1
+        UNITY_MODULES: android android-sdk-ndk-tools android-open-jdk
         BUNDLE_ID: com.javidalishov.sliceblast
         APP_VERSION: 1.0.0
 
     scripts:
+      - name: Install the Unity editor
+        script: bash ci/install-unity.sh
+
       - name: Activate Unity licence
         script: |
           UNITY_BIN="$(bash ci/find-unity.sh)" || exit 1
