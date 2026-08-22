@@ -12,6 +12,14 @@ namespace SliceBlast.Core
         private float _range;
         private float _direction = 1f;
 
+        private Vector3 _restScale;
+        private Color _restTint;
+        private Color _flashTint;
+        private float _impact;
+        private float _impactStrength;
+        private float _impactSpeed = 4f;
+        private bool _impactFlashes;
+
         public float AxisCenter
         {
             get
@@ -129,6 +137,64 @@ namespace SliceBlast.Core
         public void Freeze()
         {
             IsMoving = false;
+        }
+
+        /// <summary>
+        /// Squash-and-stretch on landing, optionally flashing to a colour and settling back.
+        /// Ticked by the flow manager so nothing needs its own Update.
+        /// </summary>
+        public void PlayImpact(float strength, float speed, bool flash, Color flashColor)
+        {
+            if (_impact <= 0f)
+            {
+                _restScale = CachedTransform.localScale;
+                _restTint = Tint;
+            }
+
+            _impactStrength = strength;
+            _impactSpeed = Mathf.Max(0.5f, speed);
+            _impactFlashes = flash;
+            _flashTint = flashColor;
+            _impact = 1f;
+        }
+
+        /// <summary>Returns false once the impact animation has settled.</summary>
+        public bool TickImpact(float deltaTime)
+        {
+            if (_impact <= 0f)
+            {
+                return false;
+            }
+
+            _impact = Mathf.Max(0f, _impact - deltaTime * _impactSpeed);
+
+            float progress = 1f - _impact;
+            float decay = _impact;
+            float wobble = Mathf.Sin(progress * Mathf.PI * 2.2f) * decay * _impactStrength;
+
+            CachedTransform.localScale = new Vector3(
+                _restScale.x * (1f + wobble * 0.45f),
+                _restScale.y * (1f - wobble),
+                _restScale.z * (1f + wobble * 0.45f));
+
+            if (_impactFlashes)
+            {
+                SetTint(Color.Lerp(_restTint, _flashTint, decay * decay));
+            }
+
+            if (_impact <= 0f)
+            {
+                CachedTransform.localScale = _restScale;
+
+                if (_impactFlashes)
+                {
+                    SetTint(_restTint);
+                }
+
+                return false;
+            }
+
+            return true;
         }
     }
 }

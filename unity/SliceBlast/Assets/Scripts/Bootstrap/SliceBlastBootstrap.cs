@@ -1,7 +1,9 @@
-// Zero-setup entry point: drop this on one empty GameObject in an empty scene and press Play.
-// It builds the camera rig, light, pooled prefabs and the game flow at runtime.
+// Zero-setup entry point: one empty GameObject in an empty scene builds the whole game —
+// camera rig, lighting, backdrop, pooled prefabs, audio, HUD and the flow manager.
+using SliceBlast.Audio;
 using SliceBlast.Core;
 using SliceBlast.Feedback;
+using SliceBlast.UI;
 using UnityEngine;
 using UnityEngine.Rendering;
 
@@ -11,44 +13,62 @@ namespace SliceBlast.Bootstrap
     [DisallowMultipleComponent]
     public sealed class SliceBlastBootstrap : MonoBehaviour
     {
+        private static readonly Color Gold = new Color(1f, 0.79f, 0.29f);
+        private static readonly Color Mint = new Color(0.55f, 1f, 0.9f);
+
         [Header("Camera")]
         [SerializeField] private Vector3 cameraAngles = new Vector3(26f, 45f, 0f);
         [SerializeField] private float cameraDistance = 18f;
         [SerializeField] private float orthographicSize = 5.5f;
-        [SerializeField] private Color background = new Color(0.07f, 0.08f, 0.12f, 1f);
+        [SerializeField] private Color skyTop = new Color(0.10f, 0.11f, 0.22f);
+        [SerializeField] private Color skyBottom = new Color(0.03f, 0.03f, 0.06f);
 
         [Header("Pools")]
         [SerializeField] private int blockPrewarm = 48;
-        [SerializeField] private int blockCap = 200;
+        [SerializeField] private int blockCap = 220;
         [SerializeField] private int debrisPrewarm = 32;
         [SerializeField] private int debrisCap = 120;
+        [SerializeField] private int sparksPerBurst = 16;
 
-        [Header("HUD")]
-        [SerializeField] private bool showHud = true;
-        [SerializeField] private bool showDiagnostics = true;
-        [SerializeField] private float restartDelay = 0.6f;
+        [Header("Flow")]
+        [SerializeField] private float restartDelay = 0.55f;
 
         private GameFlowManager _flow;
-        private GUIStyle _scoreStyle;
-        private GUIStyle _hintStyle;
-        private GUIStyle _debugStyle;
-        private Texture2D _panelTexture;
-        private int _score;
-        private int _streak;
+        private AudioDirector _audio;
+        private GameHud _hud;
+        private BlockPool _sparkPool;
+        private BlockPool _shockwavePool;
+
         private bool _gameOver;
         private float _gameOverTime;
 
         private void Awake()
         {
-            Material shared = CreateMaterial();
-            MovingBlock blockTemplate = CreateBlockTemplate(shared);
-            DebrisChunk debrisTemplate = CreateDebrisTemplate(shared);
+            Material lit = LoadMaterial("Materials/BlockLit", "Standard");
+            Material unlit = LoadMaterial("Materials/BlastUnlit", "Sprites/Default");
+
+            MovingBlock blockTemplate = CreateBlockTemplate(lit);
+            DebrisChunk debrisTemplate = CreateDebrisTemplate(lit);
+            SparkBurst sparkTemplate = CreateSparkTemplate(lit);
+            Shockwave shockwaveTemplate = CreateShockwaveTemplate(unlit);
 
             BlockPool blockPool = CreatePool("BlockPool", blockTemplate, blockPrewarm, blockCap);
             BlockPool debrisPool = CreatePool("DebrisPool", debrisTemplate, debrisPrewarm, debrisCap);
+            _sparkPool = CreatePool("SparkPool", sparkTemplate, 6, 24);
+            _shockwavePool = CreatePool("ShockwavePool", shockwaveTemplate, 4, 12);
 
-            CameraRig rig = CreateCameraRig();
+            CameraRig rig = CreateCameraRig(unlit);
             CreateLighting();
+
+            GameObject audioObject = new GameObject("Audio");
+            audioObject.transform.SetParent(transform, false);
+            _audio = audioObject.AddComponent<AudioDirector>();
+            _audio.Initialize();
+
+            GameObject hudObject = new GameObject("HUD");
+            hudObject.transform.SetParent(transform, false);
+            _hud = hudObject.AddComponent<GameHud>();
+            _hud.Build();
 
             GameObject flowObject = new GameObject("GameFlow");
             flowObject.transform.SetParent(transform, false);
@@ -58,6 +78,7 @@ namespace SliceBlast.Bootstrap
             flowObject.AddComponent<BlockSlicer>();
             _flow.Configure(blockPool, debrisPool, rig);
 
+            _flow.RunStarted += OnRunStarted;
             _flow.ScoreChanged += OnScoreChanged;
             _flow.PerfectSnapped += OnPerfectSnapped;
             _flow.BlockSliced += OnBlockSliced;
@@ -69,17 +90,12 @@ namespace SliceBlast.Bootstrap
 
         private void OnDestroy()
         {
-            if (_panelTexture != null)
-            {
-                Destroy(_panelTexture);
-                _panelTexture = null;
-            }
-
             if (_flow == null)
             {
                 return;
             }
 
+            _flow.RunStarted -= OnRunStarted;
             _flow.ScoreChanged -= OnScoreChanged;
             _flow.PerfectSnapped -= OnPerfectSnapped;
             _flow.BlockSliced -= OnBlockSliced;
@@ -89,7 +105,19 @@ namespace SliceBlast.Bootstrap
 
         private void Update()
         {
-            if (!_gameOver || Time.time - _gameOverTime < restartDelay)
+            float dt = Time.deltaTime;
+
+            if (_sparkPool != null)
+            {
+                _sparkPool.Tick(dt);
+            }
+
+            if (_shockwavePool != null)
+            {
+                _shockwavePool.Tick(dt);
+            }
+
+            if (!_gameOver || Time.unscaledTime - _gameOverTime < restartDelay)
             {
                 return;
             }
@@ -99,40 +127,106 @@ namespace SliceBlast.Bootstrap
                 return;
             }
 
-            _gameOver = false;
-            _streak = 0;
+            _audio.PlayTick();
             _flow.Restart();
         }
 
-        private void OnScoreChanged(int score) => _score = score;
-
-        private void OnPerfectSnapped(int streak, Vector3 position) => _streak = streak;
-
-        private void OnBlockSliced(Vector3 position) => _streak = 0;
-
-        private void OnBlastFired(int layers, Vector3 position) => _streak = 0;
-
-        private void OnGameEnded(int finalScore)
+        private void OnRunStarted()
         {
-            _gameOver = true;
-            _gameOverTime = Time.time;
+            _gameOver = false;
+            _hud.HideGameOver();
+            _hud.ShowHint(true);
         }
 
-        private static Material CreateMaterial()
+        private void OnScoreChanged(int score, int multiplier)
         {
-            Shader shader = Shader.Find("Universal Render Pipeline/Lit");
-            if (shader == null)
+            _hud.SetScore(score);
+            _hud.SetMultiplier(multiplier);
+
+            if (score > 0)
             {
-                shader = Shader.Find("Standard");
+                _hud.ShowHint(false);
             }
+        }
+
+        private void OnPerfectSnapped(int streak, Vector3 position)
+        {
+            _audio.PlayPerfect(streak);
+            _hud.ShowStreak(streak);
+            EmitSparks(position, Mint, 3.2f, 0.09f);
+        }
+
+        private void OnBlockSliced(Vector3 position)
+        {
+            _audio.PlaySlice();
+        }
+
+        private void OnBlastFired(int multiplier, Vector3 position)
+        {
+            _audio.PlayBlast();
+            _hud.ShowBanner("BLAST", Gold);
+            _hud.Flash(0.85f);
+
+            EmitSparks(position, Gold, 7.5f, 0.14f);
+            EmitShockwave(position, Gold);
+        }
+
+        private void OnGameEnded(int score, int best)
+        {
+            _gameOver = true;
+            _gameOverTime = Time.unscaledTime;
+
+            _audio.PlayGameOver();
+            _hud.ShowHint(false);
+            _hud.ShowGameOver(score, best);
+        }
+
+        private void EmitSparks(Vector3 position, Color color, float speed, float scale)
+        {
+            if (_sparkPool == null)
+            {
+                return;
+            }
+
+            SparkBurst burst = _sparkPool.Spawn(position, Vector3.one, Quaternion.identity) as SparkBurst;
+            if (burst != null)
+            {
+                burst.Emit(color, speed, scale);
+            }
+        }
+
+        private void EmitShockwave(Vector3 position, Color color)
+        {
+            if (_shockwavePool == null)
+            {
+                return;
+            }
+
+            Shockwave wave = _shockwavePool.Spawn(position, Vector3.one, Quaternion.identity) as Shockwave;
+            if (wave != null)
+            {
+                wave.Play(color);
+            }
+        }
+
+        private static Material LoadMaterial(string resourcePath, string fallbackShader)
+        {
+            Material material = Resources.Load<Material>(resourcePath);
+
+            if (material != null)
+            {
+                return material;
+            }
+
+            // Editor play mode before the asset pass has run, or a stripped build: fall back.
+            Shader shader = Shader.Find(fallbackShader);
 
             if (shader == null)
             {
                 shader = Shader.Find("Legacy Shaders/Diffuse");
             }
 
-            Material material = new Material(shader) { enableInstancing = true };
-            return material;
+            return new Material(shader) { enableInstancing = true };
         }
 
         private MovingBlock CreateBlockTemplate(Material material)
@@ -174,6 +268,54 @@ namespace SliceBlast.Bootstrap
             return chunk;
         }
 
+        private SparkBurst CreateSparkTemplate(Material material)
+        {
+            GameObject root = new GameObject("SparkTemplate");
+            root.transform.SetParent(transform, false);
+
+            Mesh cubeMesh = null;
+            GameObject sample = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            MeshFilter sampleFilter = sample.GetComponent<MeshFilter>();
+            if (sampleFilter != null)
+            {
+                cubeMesh = sampleFilter.sharedMesh;
+            }
+
+            DestroyImmediate(sample);
+
+            for (int i = 0; i < Mathf.Max(4, sparksPerBurst); i++)
+            {
+                GameObject spark = new GameObject("Spark", typeof(MeshFilter), typeof(MeshRenderer));
+                spark.transform.SetParent(root.transform, false);
+                spark.GetComponent<MeshFilter>().sharedMesh = cubeMesh;
+
+                MeshRenderer renderer = spark.GetComponent<MeshRenderer>();
+                renderer.sharedMaterial = material;
+                renderer.shadowCastingMode = ShadowCastingMode.Off;
+                renderer.receiveShadows = false;
+            }
+
+            SparkBurst burst = root.AddComponent<SparkBurst>();
+            root.SetActive(false);
+            return burst;
+        }
+
+        private Shockwave CreateShockwaveTemplate(Material material)
+        {
+            GameObject go = new GameObject("ShockwaveTemplate", typeof(MeshFilter), typeof(MeshRenderer));
+            go.transform.SetParent(transform, false);
+            go.GetComponent<MeshFilter>().sharedMesh = ProceduralMeshes.Ring(0.62f, 1f, 48);
+
+            MeshRenderer renderer = go.GetComponent<MeshRenderer>();
+            renderer.sharedMaterial = material;
+            renderer.shadowCastingMode = ShadowCastingMode.Off;
+            renderer.receiveShadows = false;
+
+            Shockwave wave = go.AddComponent<Shockwave>();
+            go.SetActive(false);
+            return wave;
+        }
+
         private BlockPool CreatePool(string poolName, PooledObject template, int prewarm, int cap)
         {
             GameObject go = new GameObject(poolName);
@@ -187,7 +329,7 @@ namespace SliceBlast.Bootstrap
             return pool;
         }
 
-        private CameraRig CreateCameraRig()
+        private CameraRig CreateCameraRig(Material unlitMaterial)
         {
             GameObject rigObject = new GameObject("CameraRig");
             rigObject.transform.position = Vector3.zero;
@@ -204,15 +346,56 @@ namespace SliceBlast.Bootstrap
             camera.orthographic = true;
             camera.orthographicSize = orthographicSize;
             camera.clearFlags = CameraClearFlags.SolidColor;
-            camera.backgroundColor = background;
+            camera.backgroundColor = skyBottom;
             camera.nearClipPlane = 0.3f;
-            camera.farClipPlane = 80f;
+            camera.farClipPlane = 90f;
             camera.allowHDR = false;
             camera.allowMSAA = false;
 
             cameraObject.AddComponent<AudioListener>();
+            CreateBackdrop(cameraObject.transform, unlitMaterial);
 
             return rigObject.AddComponent<CameraRig>();
+        }
+
+        // A flat gradient behind everything: costs one quad, kills the "grey test scene" look.
+        private void CreateBackdrop(Transform cameraTransform, Material unlitMaterial)
+        {
+            Texture2D gradient = new Texture2D(1, 64, TextureFormat.RGBA32, false)
+            {
+                name = "SkyGradient",
+                wrapMode = TextureWrapMode.Clamp,
+                filterMode = FilterMode.Bilinear
+            };
+
+            for (int y = 0; y < gradient.height; y++)
+            {
+                float t = y / (float)(gradient.height - 1);
+                gradient.SetPixel(0, y, Color.Lerp(skyBottom, skyTop, t * t));
+            }
+
+            gradient.Apply();
+
+            GameObject quad = GameObject.CreatePrimitive(PrimitiveType.Quad);
+            quad.name = "Backdrop";
+
+            Collider collider = quad.GetComponent<Collider>();
+            if (collider != null)
+            {
+                DestroyImmediate(collider);
+            }
+
+            Material material = new Material(unlitMaterial.shader) { mainTexture = gradient };
+
+            MeshRenderer renderer = quad.GetComponent<MeshRenderer>();
+            renderer.sharedMaterial = material;
+            renderer.shadowCastingMode = ShadowCastingMode.Off;
+            renderer.receiveShadows = false;
+
+            quad.transform.SetParent(cameraTransform, false);
+            quad.transform.localPosition = new Vector3(0f, 0f, 60f);
+            quad.transform.localRotation = Quaternion.identity;
+            quad.transform.localScale = new Vector3(80f, 80f, 1f);
         }
 
         private static void CreateLighting()
@@ -229,109 +412,6 @@ namespace SliceBlast.Bootstrap
 
             RenderSettings.ambientMode = AmbientMode.Flat;
             RenderSettings.ambientLight = new Color(0.32f, 0.34f, 0.42f);
-        }
-
-        private void OnGUI()
-        {
-            if (!showHud)
-            {
-                return;
-            }
-
-            EnsureStyles();
-
-            float width = Screen.width;
-            float height = Screen.height;
-
-            DrawShadowed(new Rect(0f, height * 0.05f, width, height * 0.12f), _score.ToString(), _scoreStyle);
-
-            if (_streak > 0)
-            {
-                DrawShadowed(new Rect(0f, height * 0.17f, width, height * 0.06f), "PERFECT x" + _streak, _hintStyle);
-            }
-
-            if (!_gameOver && _flow != null && _flow.StackHeight <= 1)
-            {
-                DrawShadowed(new Rect(0f, height * 0.78f, width, height * 0.08f), "TAP TO DROP", _hintStyle);
-            }
-
-            if (_gameOver)
-            {
-                Rect panel = new Rect(width * 0.12f, height * 0.34f, width * 0.76f, height * 0.3f);
-                GUI.DrawTexture(panel, PanelTexture);
-
-                DrawShadowed(new Rect(panel.x, panel.y + panel.height * 0.1f, panel.width, panel.height * 0.3f), "GAME OVER", _hintStyle);
-                DrawShadowed(new Rect(panel.x, panel.y + panel.height * 0.36f, panel.width, panel.height * 0.34f), _score.ToString(), _scoreStyle);
-                DrawShadowed(new Rect(panel.x, panel.y + panel.height * 0.74f, panel.width, panel.height * 0.24f), "TAP TO RESTART", _hintStyle);
-            }
-
-            if (showDiagnostics && _flow != null)
-            {
-                string state = _gameOver ? "OVER" : "PLAY";
-                string line = string.Concat(
-                    state,
-                    "  stack ", _flow.StackHeight.ToString(),
-                    "  active ", _flow.ActiveBlock != null ? "1" : "0",
-                    "  speed ", _flow.CurrentSpeed.ToString("0.00"));
-
-                DrawShadowed(new Rect(width * 0.02f, height - _debugStyle.fontSize * 2f, width, _debugStyle.fontSize * 1.8f), line, _debugStyle);
-            }
-        }
-
-        private void EnsureStyles()
-        {
-            if (_scoreStyle == null)
-            {
-                _scoreStyle = new GUIStyle(GUI.skin.label)
-                {
-                    alignment = TextAnchor.MiddleCenter,
-                    fontStyle = FontStyle.Bold
-                };
-
-                _hintStyle = new GUIStyle(GUI.skin.label)
-                {
-                    alignment = TextAnchor.MiddleCenter,
-                    fontStyle = FontStyle.Bold
-                };
-
-                _debugStyle = new GUIStyle(GUI.skin.label)
-                {
-                    alignment = TextAnchor.MiddleLeft
-                };
-            }
-
-            _scoreStyle.fontSize = Mathf.RoundToInt(Screen.height * 0.07f);
-            _hintStyle.fontSize = Mathf.RoundToInt(Screen.height * 0.032f);
-            _debugStyle.fontSize = Mathf.Max(11, Mathf.RoundToInt(Screen.height * 0.022f));
-        }
-
-        // White text over a bright block is unreadable; a one-pixel black pass fixes it everywhere.
-        private static void DrawShadowed(Rect rect, string text, GUIStyle style)
-        {
-            Color previous = GUI.color;
-
-            GUI.color = new Color(0f, 0f, 0f, 0.65f);
-            GUI.Label(new Rect(rect.x + 2f, rect.y + 2f, rect.width, rect.height), text, style);
-
-            GUI.color = Color.white;
-            GUI.Label(rect, text, style);
-
-            GUI.color = previous;
-        }
-
-        private Texture2D PanelTexture
-        {
-            get
-            {
-                if (_panelTexture == null)
-                {
-                    _panelTexture = new Texture2D(1, 1);
-                    _panelTexture.SetPixel(0, 0, new Color(0.04f, 0.05f, 0.08f, 0.82f));
-                    _panelTexture.Apply();
-                }
-
-                return _panelTexture;
-            }
         }
     }
 }

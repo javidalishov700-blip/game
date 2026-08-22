@@ -1,6 +1,6 @@
 // Slice & Blast — core flow controller.
-// Scene setup: BlockPool(prefab = block, NO collider, MeshRenderer with GPU-instanced material),
-// BlockPool(prefab = debris, BoxCollider + Rigidbody[interpolate, continuous-none]), CameraRig on the camera parent.
+// Owns the run: spawning, dynamic speed, the invisible tutorial, streaks, scoring and
+// the blast reward. Presentation (audio, HUD, particles) subscribes to the events below.
 using System;
 using System.Collections.Generic;
 using SliceBlast.Feedback;
@@ -18,6 +18,8 @@ namespace SliceBlast.Core
     [DisallowMultipleComponent]
     public sealed class GameFlowManager : MonoBehaviour
     {
+        private const string BestScoreKey = "sliceblast.best";
+
         public static GameFlowManager Instance { get; private set; }
 
         [Header("Pools")]
@@ -45,11 +47,10 @@ namespace SliceBlast.Core
 
         [Header("Blast Flow State")]
         [SerializeField] private int blastStreak = 3;
-        [SerializeField] private int blastLayers = 3;
+        [SerializeField] private int blastFlashLayers = 3;
         [SerializeField] private float blastGrowth = 0.35f;
-        [SerializeField] private float blastImpulse = 6.5f;
-        [SerializeField] private float blastSpin = 6f;
-        [SerializeField] private float blastShake = 1f;
+        [SerializeField] private int maxMultiplier = 5;
+        [SerializeField] private float blastShake = 0.85f;
 
         [Header("Scoring")]
         [SerializeField] private int perfectBonus = 2;
@@ -59,8 +60,10 @@ namespace SliceBlast.Core
 
         [Header("Feel")]
         [SerializeField] private CameraRig cameraRig;
-        [SerializeField] private float perfectShake = 0.18f;
+        [SerializeField] private float perfectShake = 0.16f;
         [SerializeField] private float sliceShake = 0.07f;
+        [SerializeField] private float deathTimeScale = 0.32f;
+        [SerializeField] private float deathHoldSeconds = 0.45f;
         [SerializeField] private float hueStart = 0.55f;
         [SerializeField] private float hueStep = 0.028f;
         [SerializeField, Range(0f, 1f)] private float saturation = 0.55f;
@@ -70,14 +73,15 @@ namespace SliceBlast.Core
         [SerializeField] private bool autoStart = true;
         [SerializeField] private int targetFrameRate = 60;
 
-        public event Action<int> ScoreChanged;
+        public event Action RunStarted;
+        public event Action<int, int> ScoreChanged;
         public event Action<int, Vector3> PerfectSnapped;
         public event Action<Vector3> BlockSliced;
         public event Action<int, Vector3> BlastFired;
-        public event Action<int> GameEnded;
-        public event Action<float> SpeedNormalizedChanged;
+        public event Action<int, int> GameEnded;
 
-        private readonly List<MovingBlock> _stack = new List<MovingBlock>(96);
+        private readonly List<MovingBlock> _stack = new List<MovingBlock>(128);
+        private readonly List<MovingBlock> _animating = new List<MovingBlock>(16);
 
         private MovingBlock _active;
         private Vector2 _nextSize;
@@ -86,20 +90,25 @@ namespace SliceBlast.Core
         private bool _pendingSpawn;
 
         private int _score;
+        private int _bestScore;
         private int _perfectStreak;
         private int _spawnCount;
+        private int _multiplier = 1;
 
         private float _speed;
         private float _tutorialProgress;
         private float _slowdown;
-        private float _reportedSpeed = -1f;
+        private float _deathHold;
 
         public MovingBlock ActiveBlock => _active;
         public MovingBlock TopBlock => _stack.Count > 0 ? _stack[_stack.Count - 1] : null;
         public bool AcceptsInput => _running && _active != null && _active.IsMoving;
+        public bool IsRunning => _running;
         public int PerfectStreak => _perfectStreak;
         public int BlastStreakRequirement => blastStreak;
         public int Score => _score;
+        public int BestScore => _bestScore;
+        public int Multiplier => _multiplier;
         public float CurrentSpeed => _speed;
         public int StackHeight => _stack.Count;
 
@@ -120,6 +129,9 @@ namespace SliceBlast.Core
             }
 
             Instance = this;
+            _bestScore = PlayerPrefs.GetInt(BestScoreKey, 0);
+
+            Screen.sleepTimeout = SleepTimeout.NeverSleep;
 
             if (targetFrameRate > 0)
             {
@@ -148,13 +160,16 @@ namespace SliceBlast.Core
         {
             ClearBoard();
 
+            Time.timeScale = 1f;
+            _deathHold = 0f;
+
             _score = 0;
             _perfectStreak = 0;
             _spawnCount = 0;
+            _multiplier = 1;
             _slowdown = 0f;
             _tutorialProgress = 0f;
             _speed = baseSpeed * tutorialSpeedScale;
-            _reportedSpeed = -1f;
             _axisX = false;
             _nextSize = new Vector2(basePlatformSize.x, basePlatformSize.z);
 
@@ -169,7 +184,9 @@ namespace SliceBlast.Core
 
             _running = true;
             _pendingSpawn = false;
-            ScoreChanged?.Invoke(_score);
+
+            RunStarted?.Invoke();
+            ScoreChanged?.Invoke(_score, _multiplier);
             SpawnNext();
         }
 
@@ -189,6 +206,7 @@ namespace SliceBlast.Core
             }
 
             _stack.Clear();
+            _animating.Clear();
 
             if (_active != null)
             {
@@ -206,6 +224,9 @@ namespace SliceBlast.Core
                 debrisPool.Tick(dt);
             }
 
+            TickImpacts(dt);
+            RecoverFromDeathSlowMotion();
+
             if (!_running)
             {
                 return;
@@ -219,8 +240,8 @@ namespace SliceBlast.Core
             }
         }
 
-        // Deferred to LateUpdate so a Blast fired from BlockSlicer.Update reshapes the tower
-        // before the next block is placed on top of it.
+        // Deferred to LateUpdate so a blast fired from BlockSlicer.Update reshapes the run
+        // before the next block is placed.
         private void LateUpdate()
         {
             if (_pendingSpawn && _running)
@@ -228,6 +249,37 @@ namespace SliceBlast.Core
                 _pendingSpawn = false;
                 SpawnNext();
             }
+        }
+
+        private void TickImpacts(float deltaTime)
+        {
+            for (int i = _animating.Count - 1; i >= 0; i--)
+            {
+                MovingBlock block = _animating[i];
+
+                if (block == null || !block.TickImpact(deltaTime))
+                {
+                    int last = _animating.Count - 1;
+                    _animating[i] = _animating[last];
+                    _animating.RemoveAt(last);
+                }
+            }
+        }
+
+        private void RecoverFromDeathSlowMotion()
+        {
+            if (_running || Time.timeScale >= 1f)
+            {
+                return;
+            }
+
+            if (_deathHold > 0f)
+            {
+                _deathHold -= Time.unscaledDeltaTime;
+                return;
+            }
+
+            Time.timeScale = Mathf.MoveTowards(Time.timeScale, 1f, Time.unscaledDeltaTime * 1.4f);
         }
 
         private void UpdateDynamicSpeed(float dt)
@@ -242,13 +294,6 @@ namespace SliceBlast.Core
 
             float target = Mathf.Min(baseSpeed + speedPerLayer * _stack.Count, maxSpeed) * tutorialFactor * (1f - _slowdown);
             _speed = Mathf.LerpUnclamped(_speed, target, 1f - Mathf.Exp(-speedSmoothing * dt));
-
-            float normalized = Mathf.InverseLerp(baseSpeed * tutorialSpeedScale, maxSpeed, _speed);
-            if (Mathf.Abs(normalized - _reportedSpeed) > 0.01f)
-            {
-                _reportedSpeed = normalized;
-                SpeedNormalizedChanged?.Invoke(normalized);
-            }
         }
 
         private void SpawnNext()
@@ -336,8 +381,10 @@ namespace SliceBlast.Core
             if (kind == PlacementKind.Perfect)
             {
                 _perfectStreak++;
-                _score += 1 + perfectBonus;
+                _score += (1 + perfectBonus) * _multiplier;
                 _slowdown = Mathf.Max(0f, _slowdown - comboBreakSlowdown * 0.5f);
+
+                PlayImpact(block, 0.22f, 5f, true, new Color(0.6f, 1f, 0.92f));
                 Haptics.Light();
 
                 if (cameraRig != null)
@@ -350,8 +397,11 @@ namespace SliceBlast.Core
             else
             {
                 _perfectStreak = 0;
-                _score += 1;
+                _score += _multiplier;
+                _multiplier = 1;
                 _slowdown = Mathf.Min(_slowdown + comboBreakSlowdown, maxSlowdown);
+
+                PlayImpact(block, 0.16f, 6f, false, Color.white);
                 Haptics.Medium();
 
                 if (cameraRig != null)
@@ -362,76 +412,63 @@ namespace SliceBlast.Core
                 BlockSliced?.Invoke(position);
             }
 
-            ScoreChanged?.Invoke(_score);
+            ScoreChanged?.Invoke(_score, _multiplier);
             _pendingSpawn = true;
         }
 
+        /// <summary>
+        /// Blast: the tower is never destroyed — that would erase the only visible progress
+        /// the player has. Instead the top layers flare gold, the platform widens and the
+        /// score multiplier steps up. All reward, no loss.
+        /// </summary>
         public void TriggerBlast()
         {
-            if (!_running || _stack.Count <= 1)
+            if (!_running || _stack.Count == 0)
             {
                 return;
             }
 
-            int removable = Mathf.Min(blastLayers, _stack.Count - 1);
-            Vector3 epicenter = _stack[_stack.Count - removable].CachedTransform.position;
-
-            for (int i = 0; i < removable; i++)
-            {
-                int last = _stack.Count - 1;
-                MovingBlock layer = _stack[last];
-                _stack.RemoveAt(last);
-                ShatterLayer(layer, epicenter);
-                layer.Release();
-            }
+            _multiplier = Mathf.Min(_multiplier + 1, maxMultiplier);
+            _perfectStreak = 0;
+            _slowdown = 0f;
 
             _nextSize = new Vector2(
                 Mathf.Min(_nextSize.x + blastGrowth, basePlatformSize.x),
                 Mathf.Min(_nextSize.y + blastGrowth, basePlatformSize.z));
 
-            _perfectStreak = 0;
-            _slowdown = 0f;
+            Color gold = new Color(1f, 0.79f, 0.29f);
+            int flashCount = Mathf.Min(blastFlashLayers, _stack.Count);
+
+            for (int i = 0; i < flashCount; i++)
+            {
+                MovingBlock layer = _stack[_stack.Count - 1 - i];
+                PlayImpact(layer, 0.30f - i * 0.06f, 3.2f, true, gold);
+            }
+
+            Vector3 epicenter = _stack[_stack.Count - 1].CachedTransform.position;
 
             if (cameraRig != null)
             {
                 cameraRig.Shake(blastShake);
-
-                MovingBlock top = TopBlock;
-                if (top != null)
-                {
-                    cameraRig.SetTargetHeight(top.CachedTransform.position.y + basePlatformSize.y);
-                }
             }
 
             Haptics.Heavy();
-            BlastFired?.Invoke(removable, epicenter);
+            BlastFired?.Invoke(_multiplier, epicenter);
+            ScoreChanged?.Invoke(_score, _multiplier);
         }
 
-        // Each destroyed layer bursts into four pooled quadrants for a dense, cheap explosion.
-        private void ShatterLayer(MovingBlock layer, Vector3 epicenter)
+        private void PlayImpact(MovingBlock block, float strength, float speed, bool flash, Color flashColor)
         {
-            Transform t = layer.CachedTransform;
-            Vector3 center = t.position;
-            Vector3 scale = t.localScale;
-            Vector3 quadrant = new Vector3(scale.x * 0.5f, scale.y, scale.z * 0.5f);
-            Color tint = layer.Tint;
-
-            for (int i = 0; i < 4; i++)
+            if (block == null)
             {
-                float sx = (i & 1) == 0 ? -1f : 1f;
-                float sz = (i & 2) == 0 ? -1f : 1f;
+                return;
+            }
 
-                Vector3 position = new Vector3(
-                    center.x + sx * quadrant.x * 0.5f,
-                    center.y,
-                    center.z + sz * quadrant.z * 0.5f);
+            block.PlayImpact(strength, speed, flash, flashColor);
 
-                Vector3 outward = new Vector3(sx, 0f, sz).normalized;
-                float height = Mathf.Max(0.2f, position.y - epicenter.y);
-                Vector3 impulse = outward * blastImpulse + Vector3.up * (blastImpulse * 0.35f + height);
-                Vector3 torque = new Vector3(sz, 0f, -sx) * blastSpin;
-
-                EmitDebris(position, quadrant, tint, impulse, torque);
+            if (!_animating.Contains(block))
+            {
+                _animating.Add(block);
             }
         }
 
@@ -457,14 +494,26 @@ namespace SliceBlast.Core
             _running = false;
             _active = null;
             _pendingSpawn = false;
+            _multiplier = 1;
 
             Transform t = block.CachedTransform;
             Vector3 fallDirection = (t.position - TopBlockCenter()).normalized;
             EmitDebris(t.position, t.localScale, block.Tint, fallDirection * 1.5f, Vector3.up * 0.5f);
             block.Release();
 
+            if (_score > _bestScore)
+            {
+                _bestScore = _score;
+                PlayerPrefs.SetInt(BestScoreKey, _bestScore);
+                PlayerPrefs.Save();
+            }
+
+            // A beat of slow motion sells the failure and gives the eye time to follow the fall.
+            Time.timeScale = Mathf.Clamp(deathTimeScale, 0.05f, 1f);
+            _deathHold = deathHoldSeconds;
+
             Haptics.Heavy();
-            GameEnded?.Invoke(_score);
+            GameEnded?.Invoke(_score, _bestScore);
         }
 
         private Vector3 TopBlockCenter()

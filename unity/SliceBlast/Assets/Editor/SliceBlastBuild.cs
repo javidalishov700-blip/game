@@ -23,6 +23,7 @@ namespace SliceBlast.EditorTools
         [MenuItem("Slice & Blast/Create Playable Scene")]
         public static void CreatePlayableScene()
         {
+            SliceBlastAssets.EnsureMaterials();
             EnsureScene(true);
         }
 
@@ -32,6 +33,9 @@ namespace SliceBlast.EditorTools
         /// </summary>
         public static void PrepareForCloudBuild()
         {
+            SliceBlastAssets.EnsureMaterials();
+            SliceBlastAssets.EnsureIcon(false);
+
             string scenePath = EnsureScene(false);
             EditorBuildSettings.scenes = new[] { new EditorBuildSettingsScene(scenePath, true) };
 
@@ -57,6 +61,9 @@ namespace SliceBlast.EditorTools
 
         private static void Run(BuildTarget target, BuildTargetGroup group, string outputPath)
         {
+            SliceBlastAssets.EnsureMaterials();
+            SliceBlastAssets.EnsureIcon(false);
+
             string scenePath = EnsureScene(false);
             ApplyPlayerSettings(target, group);
 
