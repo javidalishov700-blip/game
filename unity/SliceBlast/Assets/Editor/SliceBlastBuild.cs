@@ -17,13 +17,30 @@ namespace SliceBlast.EditorTools
     {
         private const string SceneFolder = "Assets/Scenes";
         private const string ScenePath = SceneFolder + "/Main.unity";
-        private const string DefaultBundleId = "com.sliceblast.game";
+        private const string DefaultBundleId = "com.javidalishov.sliceblast";
         private const string ProductName = "Slice & Blast";
 
         [MenuItem("Slice & Blast/Create Playable Scene")]
         public static void CreatePlayableScene()
         {
             EnsureScene(true);
+        }
+
+        /// <summary>
+        /// Pre-export hook for Unity Build Automation, which drives the build itself:
+        /// generate the scene, put it in the build list and apply the player settings.
+        /// </summary>
+        public static void PrepareForCloudBuild()
+        {
+            string scenePath = EnsureScene(false);
+            EditorBuildSettings.scenes = new[] { new EditorBuildSettingsScene(scenePath, true) };
+
+            BuildTarget target = EditorUserBuildSettings.activeBuildTarget;
+            BuildTargetGroup group = BuildPipeline.GetBuildTargetGroup(target);
+            ApplyPlayerSettings(target, group);
+
+            AssetDatabase.SaveAssets();
+            Debug.Log($"[SliceBlast] Cloud build prepared: {scenePath} for {target}.");
         }
 
         [MenuItem("Slice & Blast/Build iOS Xcode Project")]
