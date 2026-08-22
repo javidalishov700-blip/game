@@ -46,15 +46,19 @@ workflows:
             exit 1
           fi
 
-          # Plus/Pro: set UNITY_SERIAL. Personal: paste the .ulf contents into UNITY_LICENSE.
+          # Plus/Pro -> UNITY_SERIAL. Personal -> UNITY_EMAIL + UNITY_PASSWORD (Unity
+          # discontinued manual .ulf activation for Personal; UNITY_LICENSE is legacy only).
           if [ -n "$UNITY_SERIAL" ]; then
             "$UNITY_BIN" -batchmode -quit -nographics -logFile - \
               -serial "$UNITY_SERIAL" -username "$UNITY_EMAIL" -password "$UNITY_PASSWORD"
+          elif [ -n "$UNITY_EMAIL" ] && [ -n "$UNITY_PASSWORD" ]; then
+            "$UNITY_BIN" -batchmode -quit -nographics -logFile - \
+              -username "$UNITY_EMAIL" -password "$UNITY_PASSWORD"
           elif [ -n "$UNITY_LICENSE" ]; then
             printf '%s' "$UNITY_LICENSE" > /tmp/unity.ulf
             "$UNITY_BIN" -batchmode -quit -nographics -logFile - -manualLicenseFile /tmp/unity.ulf || true
           else
-            echo "No Unity licence configured: set UNITY_SERIAL (Plus/Pro) or UNITY_LICENSE (Personal .ulf)."
+            echo "No Unity licence configured: set UNITY_SERIAL (Plus/Pro), or UNITY_EMAIL + UNITY_PASSWORD (Personal)."
             exit 1
           fi
 
@@ -126,15 +130,19 @@ workflows:
             exit 1
           fi
 
-          # Plus/Pro: set UNITY_SERIAL. Personal: paste the .ulf contents into UNITY_LICENSE.
+          # Plus/Pro -> UNITY_SERIAL. Personal -> UNITY_EMAIL + UNITY_PASSWORD (Unity
+          # discontinued manual .ulf activation for Personal; UNITY_LICENSE is legacy only).
           if [ -n "$UNITY_SERIAL" ]; then
             "$UNITY_BIN" -batchmode -quit -nographics -logFile - \
               -serial "$UNITY_SERIAL" -username "$UNITY_EMAIL" -password "$UNITY_PASSWORD"
+          elif [ -n "$UNITY_EMAIL" ] && [ -n "$UNITY_PASSWORD" ]; then
+            "$UNITY_BIN" -batchmode -quit -nographics -logFile - \
+              -username "$UNITY_EMAIL" -password "$UNITY_PASSWORD"
           elif [ -n "$UNITY_LICENSE" ]; then
             printf '%s' "$UNITY_LICENSE" > /tmp/unity.ulf
             "$UNITY_BIN" -batchmode -quit -nographics -logFile - -manualLicenseFile /tmp/unity.ulf || true
           else
-            echo "No Unity licence configured: set UNITY_SERIAL (Plus/Pro) or UNITY_LICENSE (Personal .ulf)."
+            echo "No Unity licence configured: set UNITY_SERIAL (Plus/Pro), or UNITY_EMAIL + UNITY_PASSWORD (Personal)."
             exit 1
           fi
 
