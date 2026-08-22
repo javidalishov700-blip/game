@@ -40,7 +40,7 @@ namespace SliceBlast.Core
 
             if (ReferenceEquals(tintTarget, null))
             {
-                tintTarget = GetComponentInChildren<Renderer>();
+                tintTarget = GetComponentInChildren<Renderer>(true);
             }
 
             CacheComponents();

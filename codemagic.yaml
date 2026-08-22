@@ -1,0 +1,112 @@
+workflows:
+  slice-blast-ios:
+    name: Slice & Blast — iOS (TestFlight)
+    max_build_duration: 120
+    instance_type: mac_mini_m2
+
+    # Codemagic UI → Teams/App settings → Integrations → App Store Connect.
+    # Replace the key name below with the one you created there.
+    integrations:
+      app_store_connect: SliceBlast ASC Key
+
+    environment:
+      groups:
+        # Codemagic UI → Environment variables. Group "unity" must contain:
+        #   UNITY_HOME     e.g. /Applications/Unity/Hub/Editor/2022.3.21f1/Unity.app
+        #   UNITY_EMAIL, UNITY_PASSWORD   (Unity account)
+        #   UNITY_SERIAL   (Plus/Pro serial — Personal licences use the .ulf flow, see README)
+        - unity
+      vars:
+        UNITY_BIN: $UNITY_HOME/Contents/MacOS/Unity
+        UNITY_PROJECT: unity/SliceBlast
+        XCODE_PROJECT: unity/SliceBlast/ios/Unity-iPhone.xcodeproj
+        XCODE_SCHEME: Unity-iPhone
+        BUNDLE_ID: com.sliceblast.game
+        APP_VERSION: 1.0.0
+        IOS_MIN_VERSION: "13.0"
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.sliceblast.game
+      xcode: latest
+
+    triggering:
+      events:
+        - push
+      branch_patterns:
+        - pattern: claude/slice-blast-core-sihw5b
+          include: true
+          source: true
+
+    scripts:
+      - name: Activate Unity licence
+        script: |
+          "$UNITY_BIN" -batchmode -quit -nographics -logFile - \
+            -serial "$UNITY_SERIAL" -username "$UNITY_EMAIL" -password "$UNITY_PASSWORD"
+
+      - name: Generate the Xcode project with Unity
+        script: |
+          "$UNITY_BIN" -batchmode -quit -nographics -logFile - \
+            -projectPath "$UNITY_PROJECT" \
+            -buildTarget iOS \
+            -executeMethod SliceBlast.EditorTools.SliceBlastBuild.BuildIos
+
+      - name: Apply provisioning profiles
+        script: xcode-project use-profiles --project "$XCODE_PROJECT"
+
+      - name: Set the build number
+        script: |
+          cd unity/SliceBlast/ios
+          agvtool new-version -all "$PROJECT_BUILD_NUMBER"
+
+      - name: Build the .ipa
+        script: |
+          xcode-project build-ipa \
+            --project "$XCODE_PROJECT" \
+            --scheme "$XCODE_SCHEME"
+
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+
+    publishing:
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: true
+      scripts:
+        - name: Return the Unity licence
+          script: '"$UNITY_BIN" -batchmode -quit -nographics -logFile - -returnlicense'
+
+  slice-blast-android:
+    name: Slice & Blast — Android APK
+    max_build_duration: 90
+    instance_type: mac_mini_m2
+
+    environment:
+      groups:
+        - unity
+      vars:
+        UNITY_BIN: $UNITY_HOME/Contents/MacOS/Unity
+        UNITY_PROJECT: unity/SliceBlast
+        BUNDLE_ID: com.sliceblast.game
+        APP_VERSION: 1.0.0
+
+    scripts:
+      - name: Activate Unity licence
+        script: |
+          "$UNITY_BIN" -batchmode -quit -nographics -logFile - \
+            -serial "$UNITY_SERIAL" -username "$UNITY_EMAIL" -password "$UNITY_PASSWORD"
+
+      - name: Build the APK
+        script: |
+          "$UNITY_BIN" -batchmode -quit -nographics -logFile - \
+            -projectPath "$UNITY_PROJECT" \
+            -buildTarget Android \
+            -executeMethod SliceBlast.EditorTools.SliceBlastBuild.BuildAndroid
+
+    artifacts:
+      - unity/SliceBlast/build/android/*.apk
+
+    publishing:
+      scripts:
+        - name: Return the Unity licence
+          script: '"$UNITY_BIN" -batchmode -quit -nographics -logFile - -returnlicense'

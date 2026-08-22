@@ -100,6 +100,14 @@ namespace SliceBlast.Core
         public float CurrentSpeed => _speed;
         public int StackHeight => _stack.Count;
 
+        /// <summary>Runtime wiring. Call on an inactive object so it lands before Awake.</summary>
+        public void Configure(BlockPool blocks, BlockPool debris, CameraRig rig)
+        {
+            blockPool = blocks;
+            debrisPool = debris;
+            cameraRig = rig;
+        }
+
         private void Awake()
         {
             if (Instance != null && Instance != this)

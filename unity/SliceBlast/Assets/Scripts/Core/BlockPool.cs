@@ -17,6 +17,14 @@ namespace SliceBlast.Core
         private Transform _root;
         private int _created;
 
+        /// <summary>Runtime wiring. Call on an inactive object so it lands before Awake.</summary>
+        public void Configure(PooledObject poolPrefab, int prewarm, int cap)
+        {
+            prefab = poolPrefab;
+            prewarmCount = prewarm;
+            hardCap = Mathf.Max(cap, prewarm);
+        }
+
         private void Awake()
         {
             _root = transform;

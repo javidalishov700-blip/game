@@ -136,7 +136,7 @@ namespace SliceBlast.Core
             flow.EmitDebris(position, scale, moving.Tint, impulse, torque);
         }
 
-        private static bool TapPressedThisFrame()
+        public static bool TapPressedThisFrame()
         {
 #if ENABLE_INPUT_SYSTEM
             Touchscreen touchscreen = Touchscreen.current;
