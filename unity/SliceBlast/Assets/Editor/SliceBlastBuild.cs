@@ -18,7 +18,7 @@ namespace SliceBlast.EditorTools
         private const string SceneFolder = "Assets/Scenes";
         private const string ScenePath = SceneFolder + "/Main.unity";
         private const string DefaultBundleId = "com.javidalishov.sliceblast";
-        private const string ProductName = "Slice & Blast";
+        private const string ProductName = "Slice Blast";
 
         [MenuItem("Slice & Blast/Create Playable Scene")]
         public static void CreatePlayableScene()
