@@ -2,10 +2,33 @@
 // machine — make sure the generated materials exist and the scene is in the build list.
 // The build never depends on this having run, it just makes the result better when it does.
 using UnityEditor;
+using UnityEditor.Build;
+using UnityEditor.Build.Reporting;
 using UnityEngine;
 
 namespace SliceBlast.EditorTools
 {
+    /// <summary>
+    /// Runs for every player build, including cloud builds: guarantees the Resources
+    /// materials exist so the shaders they reference survive build-time stripping.
+    /// </summary>
+    public sealed class SliceBlastBuildPreprocessor : IPreprocessBuildWithReport
+    {
+        public int callbackOrder => 0;
+
+        public void OnPreprocessBuild(BuildReport report)
+        {
+            try
+            {
+                SliceBlastAssets.EnsureMaterials();
+            }
+            catch (System.Exception exception)
+            {
+                Debug.LogWarning($"[SliceBlast] Material pass skipped: {exception.Message}");
+            }
+        }
+    }
+
     [InitializeOnLoad]
     public static class SliceBlastAutoSetup
     {

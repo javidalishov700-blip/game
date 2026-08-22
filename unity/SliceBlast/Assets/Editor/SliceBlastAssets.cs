@@ -110,7 +110,7 @@ namespace SliceBlast.EditorTools
         /// Draws the icon: a dark gradient with three stacked bars and one sliced-off chunk —
         /// the game's whole idea readable at 60 pixels.
         /// </summary>
-        private static Texture2D DrawIcon()
+        public static Texture2D DrawIcon()
         {
             Texture2D texture = new Texture2D(IconSize, IconSize, TextureFormat.RGBA32, false);
 
