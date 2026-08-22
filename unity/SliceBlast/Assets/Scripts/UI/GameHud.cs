@@ -23,6 +23,7 @@ namespace SliceBlast.UI
         private Text _streak;
         private Text _hint;
         private Text _banner;
+        private Text _bannerBonus;
         private Text _finalScore;
         private Text _bestScore;
         private Text _restart;
@@ -80,6 +81,10 @@ namespace SliceBlast.UI
             _banner = CreateText("Banner", _safeArea, font, 130, FontStyle.Bold, Gold, TextAnchor.MiddleCenter);
             Anchor(_banner.rectTransform, new Vector2(0f, 0.5f), new Vector2(1f, 0.5f), new Vector2(0f, -110f), new Vector2(0f, 110f));
             SetAlpha(_banner, 0f);
+
+            _bannerBonus = CreateText("BannerBonus", _safeArea, font, 78, FontStyle.Bold, Gold, TextAnchor.MiddleCenter);
+            Anchor(_bannerBonus.rectTransform, new Vector2(0f, 0.5f), new Vector2(1f, 0.5f), new Vector2(0f, -220f), new Vector2(0f, -110f));
+            SetAlpha(_bannerBonus, 0f);
 
             _hint = CreateText("Hint", _safeArea, font, 52, FontStyle.Bold, new Color(1f, 1f, 1f, 0.85f), TextAnchor.LowerCenter);
             Anchor(_hint.rectTransform, new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(0f, 150f), new Vector2(0f, 250f));
@@ -156,7 +161,7 @@ namespace SliceBlast.UI
             _streakLife = 1f;
         }
 
-        public void ShowBanner(string text, Color color)
+        public void ShowBanner(string text, string subtitle, Color color)
         {
             if (_banner == null)
             {
@@ -166,6 +171,12 @@ namespace SliceBlast.UI
             _banner.text = text;
             _banner.color = new Color(color.r, color.g, color.b, 1f);
             _bannerLife = 1f;
+
+            if (_bannerBonus != null)
+            {
+                _bannerBonus.text = subtitle;
+                _bannerBonus.color = new Color(color.r, color.g, color.b, 1f);
+            }
         }
 
         public void Flash(float strength)
@@ -226,9 +237,18 @@ namespace SliceBlast.UI
             if (_banner != null)
             {
                 _bannerLife = Mathf.Max(0f, _bannerLife - dt * 1.05f);
-                SetAlpha(_banner, Mathf.SmoothStep(0f, 1f, _bannerLife));
+                float bannerAlpha = Mathf.SmoothStep(0f, 1f, _bannerLife);
+                SetAlpha(_banner, bannerAlpha);
+
                 float grow = Mathf.Lerp(1.45f, 0.95f, Mathf.Clamp01((1f - _bannerLife) * 3.2f));
                 _banner.rectTransform.localScale = new Vector3(grow, grow, 1f);
+
+                if (_bannerBonus != null)
+                {
+                    SetAlpha(_bannerBonus, bannerAlpha);
+                    float bonusPop = Mathf.Lerp(1.3f, 1f, Mathf.Clamp01((1f - _bannerLife) * 4f));
+                    _bannerBonus.rectTransform.localScale = new Vector3(bonusPop, bonusPop, 1f);
+                }
             }
 
             if (_flash != null)

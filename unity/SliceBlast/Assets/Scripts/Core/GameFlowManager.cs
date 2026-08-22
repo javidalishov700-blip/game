@@ -47,13 +47,17 @@ namespace SliceBlast.Core
 
         [Header("Blast Flow State")]
         [SerializeField] private int blastStreak = 3;
-        [SerializeField] private int blastFlashLayers = 3;
+        [SerializeField] private int blastLayers = 3;
         [SerializeField] private float blastGrowth = 0.35f;
         [SerializeField] private int maxMultiplier = 5;
-        [SerializeField] private float blastShake = 0.85f;
+        [SerializeField] private float blastShake = 0.95f;
+        [SerializeField] private float blastImpulse = 7f;
+        [SerializeField] private float blastSpin = 6f;
+        [SerializeField] private float comboSpeedBonus = 0.45f;
 
         [Header("Scoring")]
         [SerializeField] private int perfectBonus = 2;
+        [SerializeField] private int blastLayerBonus = 15;
 
         // Onboarding grace: the very first block can never kill the run.
         [SerializeField] private bool forgiveFirstBlock = true;
@@ -77,7 +81,7 @@ namespace SliceBlast.Core
         public event Action<int, int> ScoreChanged;
         public event Action<int, Vector3> PerfectSnapped;
         public event Action<Vector3> BlockSliced;
-        public event Action<int, Vector3> BlastFired;
+        public event Action<int, int, Vector3> BlastFired;
         public event Action<int, int> GameEnded;
 
         private readonly List<MovingBlock> _stack = new List<MovingBlock>(128);
@@ -292,7 +296,9 @@ namespace SliceBlast.Core
             float tutorialFactor = Mathf.Lerp(tutorialSpeedScale, 1f, Mathf.SmoothStep(0f, 1f, _tutorialProgress));
             _slowdown = Mathf.MoveTowards(_slowdown, 0f, slowdownRecovery * dt);
 
-            float target = Mathf.Min(baseSpeed + speedPerLayer * _stack.Count, maxSpeed) * tutorialFactor * (1f - _slowdown);
+            // Combo raises the stakes: every blast level makes the block travel faster.
+            float combo = comboSpeedBonus * (_multiplier - 1);
+            float target = Mathf.Min(baseSpeed + speedPerLayer * _spawnCount + combo, maxSpeed) * tutorialFactor * (1f - _slowdown);
             _speed = Mathf.LerpUnclamped(_speed, target, 1f - Mathf.Exp(-speedSmoothing * dt));
         }
 
@@ -417,35 +423,60 @@ namespace SliceBlast.Core
         }
 
         /// <summary>
-        /// Blast: the tower is never destroyed — that would erase the only visible progress
-        /// the player has. Instead the top layers flare gold, the platform widens and the
-        /// score multiplier steps up. All reward, no loss.
+        /// Blast: three perfect placements detonate those layers. The tower loses height but
+        /// the run harvests a large bonus, the platform widens and the multiplier steps up —
+        /// clearing is the pay-off, exactly like a line clear.
         /// </summary>
         public void TriggerBlast()
         {
-            if (!_running || _stack.Count == 0)
+            if (!_running || _stack.Count <= 1)
             {
                 return;
             }
+
+            // The base platform is never removed, otherwise there is nothing to build on.
+            int removable = Mathf.Min(blastLayers, _stack.Count - 1);
+            Vector3 epicenter = _stack[_stack.Count - 1].CachedTransform.position;
+
+            for (int i = 0; i < removable; i++)
+            {
+                int last = _stack.Count - 1;
+                MovingBlock layer = _stack[last];
+                _stack.RemoveAt(last);
+
+                int index = _animating.IndexOf(layer);
+                if (index >= 0)
+                {
+                    _animating.RemoveAt(index);
+                }
+
+                ShatterLayer(layer, epicenter);
+                layer.Release();
+            }
+
+            int bonus = blastLayerBonus * removable * _multiplier;
+            _score += bonus;
 
             _multiplier = Mathf.Min(_multiplier + 1, maxMultiplier);
             _perfectStreak = 0;
             _slowdown = 0f;
 
+            // The width earned before the blast is kept and widened — the run gets easier
+            // in space while it gets faster in time.
             _nextSize = new Vector2(
                 Mathf.Min(_nextSize.x + blastGrowth, basePlatformSize.x),
                 Mathf.Min(_nextSize.y + blastGrowth, basePlatformSize.z));
 
-            Color gold = new Color(1f, 0.79f, 0.29f);
-            int flashCount = Mathf.Min(blastFlashLayers, _stack.Count);
-
-            for (int i = 0; i < flashCount; i++)
+            MovingBlock top = TopBlock;
+            if (top != null)
             {
-                MovingBlock layer = _stack[_stack.Count - 1 - i];
-                PlayImpact(layer, 0.30f - i * 0.06f, 3.2f, true, gold);
-            }
+                PlayImpact(top, 0.28f, 3.4f, true, new Color(1f, 0.79f, 0.29f));
 
-            Vector3 epicenter = _stack[_stack.Count - 1].CachedTransform.position;
+                if (cameraRig != null)
+                {
+                    cameraRig.SetTargetHeight(top.CachedTransform.position.y + basePlatformSize.y);
+                }
+            }
 
             if (cameraRig != null)
             {
@@ -453,8 +484,36 @@ namespace SliceBlast.Core
             }
 
             Haptics.Heavy();
-            BlastFired?.Invoke(_multiplier, epicenter);
+            BlastFired?.Invoke(_multiplier, bonus, epicenter);
             ScoreChanged?.Invoke(_score, _multiplier);
+        }
+
+        /// <summary>Bursts one layer into four pooled quadrants — a cheap, dense explosion.</summary>
+        private void ShatterLayer(MovingBlock layer, Vector3 epicenter)
+        {
+            Transform t = layer.CachedTransform;
+            Vector3 center = t.position;
+            Vector3 scale = t.localScale;
+            Vector3 quadrant = new Vector3(scale.x * 0.5f, scale.y, scale.z * 0.5f);
+            Color tint = layer.Tint;
+
+            for (int i = 0; i < 4; i++)
+            {
+                float sx = (i & 1) == 0 ? -1f : 1f;
+                float sz = (i & 2) == 0 ? -1f : 1f;
+
+                Vector3 position = new Vector3(
+                    center.x + sx * quadrant.x * 0.5f,
+                    center.y,
+                    center.z + sz * quadrant.z * 0.5f);
+
+                Vector3 outward = new Vector3(sx, 0f, sz).normalized;
+                float lift = Mathf.Max(0.3f, position.y - epicenter.y + 1f);
+                Vector3 impulse = outward * blastImpulse + Vector3.up * (blastImpulse * 0.4f + lift);
+                Vector3 torque = new Vector3(sz, 0f, -sx) * blastSpin;
+
+                EmitDebris(position, quadrant, tint, impulse, torque);
+            }
         }
 
         private void PlayImpact(MovingBlock block, float strength, float speed, bool flash, Color flashColor)

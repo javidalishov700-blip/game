@@ -67,9 +67,9 @@ Tüm dengeleme değerleri `GameFlowManager` ve `BlockSlicer` inspector alanları
 - **Invisible Tutorial** — ilk 3 blok 0.5x hızda, sonra yumuşak rampa.
 - **Dynamic Speed** — kule yükseldikçe hızlanır; kombo kırılınca yavaşlar, zamanla toparlar.
 - **Ego Boost** — `perfectThreshold` 0.05 birim; seri ve hızla birlikte görünmez şekilde genişler.
-- **Blast Flow State** — 3 perfect üst üste → kule **yıkılmaz**: üst katmanlar altın rengine
-  çalar, şok dalgası ve kıvılcımlar çıkar, platform genişler ve skor çarpanı bir kademe artar
-  (×2 → ×5). Ödülün tamamı kazanç tarafında; oyuncu görünür ilerlemesini asla kaybetmez.
+- **Blast Flow State** — 3 perfect üst üste → o katmanlar patlar (Block Blast'taki satır
+  temizleme hissi): her katman için büyük puan bonusu, platform genişler, skor çarpanı bir
+  kademe artar (×2 → ×5) ve blok hızı çarpanla birlikte yükselir. Taban platform asla yok olmaz.
 - **Sunum** — sesler çalışma anında sentezleniyor (`ProceduralSfx`), perfect serisi pentatonik
   bir merdiven çalar; HUD kod içinde kurulur (`GameHud`), en yüksek skor `PlayerPrefs`'te tutulur,
   uygulama ikonu build sırasında çizilir (`SliceBlastAssets`).

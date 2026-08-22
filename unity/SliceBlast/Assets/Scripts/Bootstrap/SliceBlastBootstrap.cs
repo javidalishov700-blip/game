@@ -177,13 +177,13 @@ namespace SliceBlast.Bootstrap
             _audio.PlaySlice();
         }
 
-        private void OnBlastFired(int multiplier, Vector3 position)
+        private void OnBlastFired(int multiplier, int bonus, Vector3 position)
         {
             _audio.PlayBlast();
-            _hud.ShowBanner("BLAST", Gold);
-            _hud.Flash(0.85f);
+            _hud.ShowBanner("BLAST", "+" + bonus, Gold);
+            _hud.Flash(0.9f);
 
-            EmitSparks(position, Gold, 7.5f, 0.14f);
+            EmitSparks(position, Gold, 8.5f, 0.15f);
             EmitShockwave(position, Gold);
         }
 
