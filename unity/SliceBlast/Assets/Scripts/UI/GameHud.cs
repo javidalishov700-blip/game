@@ -23,12 +23,14 @@ namespace SliceBlast.UI
 
         // Reachable from the title screen because a store listing is not the only place a
         // player should be able to find them. Served straight off the repository through
-        // jsDelivr's GitHub CDN mirror — no GitHub Pages toggle to flip, live the moment this
-        // is built. The files themselves live under docs/ and already carry the eventual
+        // githack's raw-GitHub CDN mirror — no GitHub Pages toggle to flip, live the moment
+        // this is built. (jsDelivr's gh mirror was tried first and rejected: it deliberately
+        // serves .html as text/plain, so it never renders — the page shows raw source.)
+        // The files themselves live under docs/ and already carry the eventual
         // https://javidalishov700-blip.github.io/game/... links for the day Pages is turned
         // on; only these two constants need to change when that happens.
-        private const string PrivacyUrl = "https://cdn.jsdelivr.net/gh/javidalishov700-blip/game@main/docs/privacy-policy.html";
-        private const string TermsUrl = "https://cdn.jsdelivr.net/gh/javidalishov700-blip/game@main/docs/terms-of-use.html";
+        private const string PrivacyUrl = "https://rawcdn.githack.com/javidalishov700-blip/game/main/docs/privacy-policy.html";
+        private const string TermsUrl = "https://rawcdn.githack.com/javidalishov700-blip/game/main/docs/terms-of-use.html";
 
         public event Action PauseToggled;
         public event Action RestartRequested;

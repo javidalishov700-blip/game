@@ -21,26 +21,28 @@ You do not need to configure any of these by hand — `SliceBlastBuild.PreparePr
 
 Getting a build to TestFlight is a separate document: [SHIPPING.md](SHIPPING.md).
 
-## 1. Publish the legal pages (once)
+## 1. The legal pages are already live
 
 Apple requires a reachable **Privacy Policy URL** and a **Support URL** before the app can be
-submitted. Three pages are in this repository and only need switching on:
-
-1. Merge this branch into the repository's default branch — GitHub Pages serves from a branch,
-   not from a pull request.
-2. GitHub → repository → **Settings → Pages** → *Source: Deploy from a branch* →
-   branch `main`, folder **`/docs`** → Save.
-3. Wait about a minute, then check the three URLs below load.
+submitted. The three pages live in this repository under `docs/`, and are already reachable
+today with no setup step, through githack's raw-GitHub CDN mirror:
 
 | page | URL |
 |---|---|
-| Support | `https://javidalishov700-blip.github.io/game/` |
-| Privacy Policy | `https://javidalishov700-blip.github.io/game/privacy-policy.html` |
-| Terms of Use | `https://javidalishov700-blip.github.io/game/terms-of-use.html` |
+| Support | `https://rawcdn.githack.com/javidalishov700-blip/game/main/docs/index.html` |
+| Privacy Policy | `https://rawcdn.githack.com/javidalishov700-blip/game/main/docs/privacy-policy.html` |
+| Terms of Use | `https://rawcdn.githack.com/javidalishov700-blip/game/main/docs/terms-of-use.html` |
 
-The title screen links to the second and third of these, so they must be live before the build
-is reviewed. They are also the URLs hard-coded in `GameHud.PrivacyUrl` / `GameHud.TermsUrl` —
-if you host them somewhere else, change them there too.
+These are the exact URLs hard-coded in `GameHud.PrivacyUrl` / `GameHud.TermsUrl`, and the ones
+to paste into App Store Connect in section 3 below — paste these, not a `github.io` link, or
+Apple's reviewer will hit a 404.
+
+**Optional, for later:** GitHub Pages gives the same three pages a cleaner, permanent
+`javidalishov700-blip.github.io` address instead of a CDN mirror. To switch to it: merge this
+branch to the repository's default branch, then GitHub → repository → **Settings → Pages** →
+*Source: Deploy from a branch* → branch `main`, folder **`/docs`** → Save. Once that resolves,
+update the two constants in `GameHud.cs` and the two URLs in section 3 below to match — nothing
+else changes.
 
 ## 2. Create the app record
 
@@ -109,9 +111,9 @@ Free, finished, and the same game every time you open it.
 stack,tower,block,slice,arcade,casual,one tap,offline,no ads,reflex,precision,combo,neon,blast
 ```
 
-**Support URL** → `https://javidalishov700-blip.github.io/game/`
+**Support URL** → `https://rawcdn.githack.com/javidalishov700-blip/game/main/docs/index.html`
 **Marketing URL** → *(leave blank, or the same URL)*
-**Privacy Policy URL** → `https://javidalishov700-blip.github.io/game/privacy-policy.html`
+**Privacy Policy URL** → `https://rawcdn.githack.com/javidalishov700-blip/game/main/docs/privacy-policy.html`
 
 **Category** → Primary: **Games → Arcade**. Secondary: **Games → Puzzle**.
 
