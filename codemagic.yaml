@@ -170,6 +170,66 @@ workflows:
             UNITY_BIN="${UNITY_BIN:-$(bash ci/find-unity.sh)}" || exit 0
             "$UNITY_BIN" -batchmode -quit -nographics -logFile - -returnlicense || true
 
+  # The Mac half of the escape hatch: GitHub Actions generates the Xcode project with Unity
+  # on a free Linux runner, this compiles, signs and ships it. No Unity on this machine, and
+  # no dependency on Unity Build Automation having a spare builder.
+  xcode-to-testflight:
+    name: Slice & Blast — Xcode project → TestFlight
+    max_build_duration: 45
+    instance_type: mac_mini_m2
+
+    integrations:
+      app_store_connect: SliceBlast ASC Key
+
+    environment:
+      groups:
+        # Add to the "unity" group in the Codemagic UI:
+        #   GITHUB_TOKEN — fine-grained PAT, Contents: read on the repository
+        - unity
+      vars:
+        GITHUB_REPO: javidalishov700-blip/game
+        RELEASE_TAG: ios-xcode-latest
+        XCODE_DIR: ios-xcode
+        XCODE_PROJECT: ios-xcode/Unity-iPhone.xcodeproj
+        XCODE_SCHEME: Unity-iPhone
+        BUNDLE_ID: com.javidalishov.sliceblast
+      xcode: latest
+
+    scripts:
+      - name: Fetch the Xcode project built by GitHub Actions
+        script: bash ci/fetch-xcode-project.sh "$XCODE_DIR"
+
+      - name: Fetch (and create) signing files
+        script: |
+          keychain initialize
+          app-store-connect fetch-signing-files "$BUNDLE_ID" \
+            --type IOS_APP_STORE \
+            --create
+          keychain add-certificates
+
+      - name: Apply provisioning profiles
+        script: xcode-project use-profiles --project "$XCODE_PROJECT"
+
+      - name: Set the build number
+        script: |
+          cd "$XCODE_DIR"
+          agvtool new-version -all "$PROJECT_BUILD_NUMBER"
+
+      - name: Build the .ipa
+        script: |
+          xcode-project build-ipa \
+            --project "$XCODE_PROJECT" \
+            --scheme "$XCODE_SCHEME"
+
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+
+    publishing:
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: true
+
   # Takes the .ipa built by Unity Build Automation and ships it to TestFlight.
   # Windows cannot upload to App Store Connect — Apple only ships Transporter for macOS —
   # so this workflow exists purely to be that macOS uploader.

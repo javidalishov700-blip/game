@@ -22,8 +22,9 @@ namespace SliceBlast.EditorTools
         {
             try
             {
-                SliceBlastAssets.EnsureMaterials();
-                SliceBlastBuild.ApplySplashSettings();
+                // Runs on every build path, including CI services that call the default
+                // pipeline without going through our menu items.
+                SliceBlastBuild.PrepareProject();
             }
             catch (System.Exception exception)
             {

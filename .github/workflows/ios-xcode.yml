@@ -1,0 +1,85 @@
+# Builds the iOS Xcode project with Unity on a free Linux runner, so shipping never
+# depends on Unity Build Automation having a spare macOS builder.
+#
+# Unity is only needed to *generate* the Xcode project — that works on Linux. Compiling
+# and signing it needs a Mac, and that half runs on Codemagic (workflow: xcode-to-testflight)
+# where the signing certificate and the App Store Connect key are already configured.
+#
+# Secrets required (Settings → Secrets and variables → Actions):
+#   UNITY_EMAIL     the Unity account e-mail
+#   UNITY_PASSWORD  its password
+#   UNITY_LICENSE   optional: contents of a .ulf licence file, if the account has one
+name: iOS Xcode project
+
+on:
+  workflow_dispatch:
+    inputs:
+      unityVersion:
+        description: "Unity version (must have a GameCI image published)"
+        required: false
+        default: "6000.3.22f1"
+
+jobs:
+  xcode-project:
+    name: Unity → Xcode project
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: false
+
+      - name: Report which credentials are present
+        run: |
+          # Never print the values — just whether the job has them, so a licence failure
+          # is one glance to diagnose instead of a guess.
+          echo "UNITY_EMAIL set:    ${{ secrets.UNITY_EMAIL != '' }}"
+          echo "UNITY_PASSWORD set: ${{ secrets.UNITY_PASSWORD != '' }}"
+          echo "UNITY_LICENSE set:  ${{ secrets.UNITY_LICENSE != '' }}"
+
+      # The editor install is the slow part; keeping the Library folder warm takes the
+      # second build down to a few minutes.
+      - uses: actions/cache@v4
+        with:
+          path: unity/SliceBlast/Library
+          key: unity-library-ios-${{ hashFiles('unity/SliceBlast/Assets/**') }}
+          restore-keys: unity-library-ios-
+
+      - uses: game-ci/unity-builder@v4
+        env:
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+        with:
+          projectPath: unity/SliceBlast
+          unityVersion: ${{ inputs.unityVersion }}
+          targetPlatform: iOS
+          allowDirtyBuild: true
+
+      - name: Package the Xcode project
+        run: |
+          set -eu
+          cd build/iOS
+          # unity-builder writes the generated project into a folder named after the target.
+          zip -qr "$GITHUB_WORKSPACE/ios-xcode.zip" iOS
+          ls -la "$GITHUB_WORKSPACE/ios-xcode.zip"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ios-xcode
+          path: ios-xcode.zip
+          retention-days: 7
+
+      # A release asset is what the Mac side can fetch with a plain token, without needing
+      # the Actions artifact API.
+      - name: Publish as the rolling ios-xcode-latest release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -eu
+          gh release delete ios-xcode-latest --cleanup-tag --yes || true
+          gh release create ios-xcode-latest ios-xcode.zip \
+            --title "iOS Xcode project (latest)" \
+            --notes "Generated from ${{ github.sha }} by the iOS Xcode project workflow." \
+            --target "${{ github.sha }}"

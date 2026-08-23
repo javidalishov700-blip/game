@@ -126,6 +126,24 @@ namespace SliceBlast.EditorTools
             return ScenePath;
         }
 
+        /// <summary>
+        /// Everything a player needs to be correct, applied from whichever build path is
+        /// driving: our own menu items, Unity Build Automation's pre-export hook, or a
+        /// third-party CI that calls the default build pipeline (GameCI and friends). The
+        /// repository carries no ProjectSettings.asset, so nothing here can be assumed.
+        /// </summary>
+        public static void PrepareProject()
+        {
+            SliceBlastAssets.EnsureMaterials();
+            SliceBlastAssets.EnsureIcon(false);
+
+            string scenePath = EnsureScene(false);
+            EditorBuildSettings.scenes = new[] { new EditorBuildSettingsScene(scenePath, true) };
+
+            BuildTarget target = EditorUserBuildSettings.activeBuildTarget;
+            ApplyPlayerSettings(target, BuildPipeline.GetBuildTargetGroup(target));
+        }
+
         private static void ApplyPlayerSettings(BuildTarget target, BuildTargetGroup group)
         {
             string bundleId = EnvOr("BUNDLE_ID", DefaultBundleId);
