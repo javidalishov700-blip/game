@@ -63,6 +63,9 @@ namespace SliceBlast.EditorTools
 
             if (glass != null && glass.shader != null && glass.shader.name == "Standard")
             {
+                // The tag has to go on before the blend mode, or the shader validates the
+                // material as opaque and throws the render queue back to Geometry.
+                glass.SetOverrideTag("RenderType", "Transparent");
                 glass.SetFloat("_Mode", 3f);
                 glass.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
                 glass.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
