@@ -40,15 +40,16 @@ namespace SliceBlast.EditorTools
                 return;
             }
 
-            StampExportCompliance(builtPath);
+            StampInfoPlist(builtPath);
             WriteAppIcon(builtPath);
         }
 
-        private static void StampExportCompliance(string builtPath)
+        private static void StampInfoPlist(string builtPath)
         {
             try
             {
                 string plistPath = Path.Combine(builtPath, "Info.plist");
+
                 if (!File.Exists(plistPath))
                 {
                     return;
@@ -59,7 +60,14 @@ namespace SliceBlast.EditorTools
 
                 // No custom crypto in the game — this is the standard exemption answer.
                 plist.root.SetBoolean("ITSAppUsesNonExemptEncryption", false);
+
+                // App Store Connect rejects a repeated build number, and cloud builds do not
+                // increment one. Minutes since 2024 is monotonic, compact and good for decades.
+                string build = ((int)(DateTime.UtcNow - new DateTime(2024, 1, 1)).TotalMinutes).ToString();
+                plist.root.SetString("CFBundleVersion", build);
+
                 plist.WriteToFile(plistPath);
+                Debug.Log("[SliceBlast] CFBundleVersion set to " + build);
             }
             catch (Exception exception)
             {
