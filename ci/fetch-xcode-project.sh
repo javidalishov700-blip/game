@@ -65,4 +65,8 @@ fi
 mv "$(dirname "$PROJECT")" "$DESTINATION"
 rm -rf .xcode-unpack
 
+# A zip made on Windows carries no executable bit, and Unity's Xcode project runs shell
+# scripts from its build phases — without this the archive step dies on "Permission denied".
+find "$DESTINATION" -name '*.sh' -exec chmod +x {} +
+
 echo "Xcode project ready at $DESTINATION"
