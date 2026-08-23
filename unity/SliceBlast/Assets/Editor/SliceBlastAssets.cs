@@ -107,71 +107,123 @@ namespace SliceBlast.EditorTools
         }
 
         /// <summary>
-        /// Draws the icon: a dark gradient with three stacked bars and one sliced-off chunk —
-        /// the game's whole idea readable at 60 pixels.
+        /// Draws the icon: an isometric stack under a cut beam, the severed corner tumbling
+        /// away. Geometry is precomputed once and the pixel loop only tests it, so a 1024
+        /// icon with 2x supersampling costs a second of build time and no assets.
         /// </summary>
         public static Texture2D DrawIcon()
         {
+            const int samples = 2;
+
+            Color backgroundTop = new Color(0.17f, 0.13f, 0.40f);
+            Color backgroundBottom = new Color(0.035f, 0.035f, 0.075f);
+            Color glow = new Color(0.80f, 0.28f, 0.85f);
+            Color beamCore = Color.white;
+            Color beamHalo = new Color(0.85f, 0.95f, 1f);
+
+            Color gold = new Color(1f, 0.78f, 0.28f);
+            Color mint = new Color(0.32f, 0.92f, 0.76f);
+            Color blue = new Color(0.40f, 0.66f, 1f);
+            Color coral = new Color(1f, 0.50f, 0.36f);
+
+            const float radius = 0.245f;
+            const float sideHeight = 0.128f;
+            const float centerX = 0.5f;
+            const float topY = 0.578f;
+
+            // Cut plane, parallel to the isometric edge, just right of the block centre.
+            Vector2 cutDirection = new Vector2(0.62f, -0.31f).normalized;
+            Vector2 cutOrigin = new Vector2(centerX + 0.015f, topY + 0.012f);
+            Vector2 cutA = cutOrigin - cutDirection;
+            Vector2 cutB = cutOrigin + cutDirection;
+            float cornerSign = Mathf.Sign(Side(new Vector2(0.95f, 0.95f), cutA, cutB));
+            Vector2 severedOffset = new Vector2(0.055f, 0.055f);
+
+            Vector2[][] stackFaces = new Vector2[6][];
+            Color[] stackColors = new Color[6];
+            BuildCube(stackFaces, stackColors, 0, centerX, 0.300f, radius, sideHeight, gold);
+            BuildCube(stackFaces, stackColors, 3, centerX, 0.440f, radius, sideHeight, mint);
+
+            Vector2[][] topFaces = new Vector2[3][];
+            Color[] topColors = new Color[3];
+            BuildCube(topFaces, topColors, 0, centerX, topY, radius, sideHeight, blue);
+
+            Vector2[][] severedFaces = new Vector2[3][];
+            Color[] severedColors = new Color[3];
+            BuildCube(severedFaces, severedColors, 0, centerX, topY, radius, sideHeight, coral);
+
+            Vector2[] sparks =
+            {
+                new Vector2(0.78f, 0.83f),
+                new Vector2(0.86f, 0.74f),
+                new Vector2(0.70f, 0.90f)
+            };
+
+            float[] sparkRadii = { 0.016f, 0.011f, 0.009f };
+
             Texture2D texture = new Texture2D(IconSize, IconSize, TextureFormat.RGBA32, false);
-
-            Color top = new Color(0.18f, 0.16f, 0.42f);
-            Color bottom = new Color(0.05f, 0.05f, 0.11f);
-
-            Color[] barColors =
-            {
-                new Color(1f, 0.79f, 0.29f),
-                new Color(0.36f, 0.91f, 0.77f),
-                new Color(0.40f, 0.66f, 1f)
-            };
-
-            // x, y, halfWidth, halfHeight (normalised, y up)
-            Vector4[] bars =
-            {
-                new Vector4(0.50f, 0.30f, 0.30f, 0.075f),
-                new Vector4(0.46f, 0.47f, 0.26f, 0.075f),
-                new Vector4(0.53f, 0.64f, 0.21f, 0.075f)
-            };
-
-            // The chunk that got sliced off the top layer, tumbling away.
-            Vector4 chunk = new Vector4(0.24f, 0.70f, 0.055f, 0.055f);
-
             Color[] pixels = new Color[IconSize * IconSize];
-            float unit = 1f / IconSize;
+            float inverse = 1f / (IconSize * samples);
 
             for (int y = 0; y < IconSize; y++)
             {
-                float v = y / (float)(IconSize - 1);
-                Color background = Color.Lerp(bottom, top, Mathf.Pow(v, 1.4f));
-
                 for (int x = 0; x < IconSize; x++)
                 {
-                    float u = x / (float)(IconSize - 1);
-                    Color color = background;
+                    float r = 0f;
+                    float g = 0f;
+                    float b = 0f;
 
-                    for (int i = 0; i < bars.Length; i++)
+                    for (int sy = 0; sy < samples; sy++)
                     {
-                        Vector4 bar = bars[i];
-                        float distance = RoundedRect(u, v, bar.x, bar.y, bar.z, bar.w, 0.03f);
-                        float mask = 1f - Mathf.Clamp01(distance / (unit * 2.5f));
-
-                        if (mask > 0f)
+                        for (int sx = 0; sx < samples; sx++)
                         {
-                            // Slight vertical shading keeps the bars from looking like flat stickers.
-                            float shade = Mathf.InverseLerp(bar.y - bar.w, bar.y + bar.w, v);
-                            Color face = Color.Lerp(barColors[i] * 0.72f, barColors[i], shade);
-                            color = Color.Lerp(color, face, mask);
+                            float u = (x * samples + sx + 0.5f) * inverse;
+                            float v = 1f - (y * samples + sy + 0.5f) * inverse;
+                            Vector2 p = new Vector2(u, v);
+
+                            Color c = Color.Lerp(backgroundBottom, backgroundTop, Mathf.Pow(v, 1.3f));
+
+                            float distanceToCentre = Vector2.Distance(p, new Vector2(0.5f, 0.5f)) * 3f;
+                            c = Color.Lerp(c, glow, Mathf.Clamp01(0.30f * Mathf.Exp(-distanceToCentre * distanceToCentre)));
+
+                            c = PaintFaces(c, p, stackFaces, stackColors);
+
+                            bool keep = (Side(p, cutA, cutB) >= 0f) != (cornerSign >= 0f);
+                            if (keep)
+                            {
+                                c = PaintFaces(c, p, topFaces, topColors);
+                            }
+
+                            Vector2 severedPoint = p - severedOffset;
+                            if ((Side(severedPoint, cutA, cutB) >= 0f) == (cornerSign >= 0f))
+                            {
+                                c = PaintFaces(c, severedPoint, severedFaces, severedColors);
+                            }
+
+                            Vector2 fromCut = p - cutOrigin;
+                            float along = Vector2.Dot(fromCut, cutDirection);
+                            float across = Mathf.Abs(-fromCut.x * cutDirection.y + fromCut.y * cutDirection.x);
+                            float taper = Mathf.Exp(-Mathf.Pow(Mathf.Abs(along / 0.40f), 4f));
+
+                            c = Color.Lerp(c, beamCore, Mathf.Clamp01(Mathf.Exp(-Mathf.Pow(across * 52f, 2f)) * 0.95f * taper));
+                            c = Color.Lerp(c, beamHalo, Mathf.Clamp01(Mathf.Exp(-Mathf.Pow(across * 15f, 2f)) * 0.22f * taper));
+
+                            for (int i = 0; i < sparks.Length; i++)
+                            {
+                                if (Vector2.Distance(p, sparks[i]) < sparkRadii[i])
+                                {
+                                    c = Color.white;
+                                }
+                            }
+
+                            r += c.r;
+                            g += c.g;
+                            b += c.b;
                         }
                     }
 
-                    float chunkDistance = RoundedRect(u, v, chunk.x, chunk.y, chunk.z, chunk.w, 0.02f);
-                    float chunkMask = 1f - Mathf.Clamp01(chunkDistance / (unit * 2.5f));
-                    if (chunkMask > 0f)
-                    {
-                        color = Color.Lerp(color, new Color(1f, 0.55f, 0.42f), chunkMask);
-                    }
-
-                    color.a = 1f;
-                    pixels[y * IconSize + x] = color;
+                    float weight = 1f / (samples * samples);
+                    pixels[y * IconSize + x] = new Color(r * weight, g * weight, b * weight, 1f);
                 }
             }
 
@@ -180,16 +232,63 @@ namespace SliceBlast.EditorTools
             return texture;
         }
 
-        private static float RoundedRect(float x, float y, float centerX, float centerY, float halfWidth, float halfHeight, float radius)
+        private static void BuildCube(Vector2[][] faces, Color[] colors, int offset, float cx, float cy, float radius, float sideHeight, Color color)
         {
-            float dx = Mathf.Abs(x - centerX) - (halfWidth - radius);
-            float dy = Mathf.Abs(y - centerY) - (halfHeight - radius);
+            Vector2 north = new Vector2(cx, cy + radius * 0.5f);
+            Vector2 east = new Vector2(cx + radius, cy);
+            Vector2 south = new Vector2(cx, cy - radius * 0.5f);
+            Vector2 west = new Vector2(cx - radius, cy);
+            Vector2 drop = new Vector2(0f, -sideHeight);
 
-            float outsideX = Mathf.Max(dx, 0f);
-            float outsideY = Mathf.Max(dy, 0f);
-            float outside = Mathf.Sqrt(outsideX * outsideX + outsideY * outsideY);
+            faces[offset] = new[] { north, east, south, west };
+            faces[offset + 1] = new[] { west, south, south + drop, west + drop };
+            faces[offset + 2] = new[] { south, east, east + drop, south + drop };
 
-            return outside + Mathf.Min(Mathf.Max(dx, dy), 0f) - radius;
+            colors[offset] = color;
+            colors[offset + 1] = color * 0.56f;
+            colors[offset + 2] = color * 0.79f;
+        }
+
+        private static Color PaintFaces(Color current, Vector2 point, Vector2[][] faces, Color[] colors)
+        {
+            for (int i = 0; i < faces.Length; i++)
+            {
+                if (InsideQuad(point, faces[i]))
+                {
+                    Color face = colors[i];
+                    return new Color(face.r, face.g, face.b, 1f);
+                }
+            }
+
+            return current;
+        }
+
+        private static bool InsideQuad(Vector2 point, Vector2[] quad)
+        {
+            bool positive = true;
+            bool negative = true;
+
+            for (int i = 0; i < 4; i++)
+            {
+                float s = Side(point, quad[i], quad[(i + 1) & 3]);
+
+                if (s < 0f)
+                {
+                    positive = false;
+                }
+
+                if (s > 0f)
+                {
+                    negative = false;
+                }
+            }
+
+            return positive || negative;
+        }
+
+        private static float Side(Vector2 point, Vector2 a, Vector2 b)
+        {
+            return (b.x - a.x) * (point.y - a.y) - (b.y - a.y) * (point.x - a.x);
         }
 
         private static void EnsureFolder(string parent, string child)
