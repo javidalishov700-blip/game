@@ -103,6 +103,10 @@ workflows:
       app_store_connect:
         auth: integration
         submit_to_testflight: true
+        # A build stuck in Apple's beta review queue blocks every later submission with a
+        # 422 ("Another build is in review") until it clears on its own — this expires it
+        # instead, so the newest build always gets submitted.
+        expire_build_submitted_for_review: true
       scripts:
         - name: Return the Unity licence
           script: |
@@ -234,6 +238,10 @@ workflows:
       app_store_connect:
         auth: integration
         submit_to_testflight: true
+        # A build stuck in Apple's beta review queue blocks every later submission with a
+        # 422 ("Another build is in review") until it clears on its own — this expires it
+        # instead, so the newest build always gets submitted.
+        expire_build_submitted_for_review: true
 
   # Takes the .ipa built by Unity Build Automation and ships it to TestFlight.
   # Windows cannot upload to App Store Connect — Apple only ships Transporter for macOS —
