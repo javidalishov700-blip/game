@@ -71,7 +71,22 @@ namespace SliceBlast.EditorTools
 
             if (EditorUserBuildSettings.activeBuildTarget != target)
             {
+                // Switching triggers a recompile, and the post-process hooks that write the
+                // app icon and stamp Info.plist live behind #if UNITY_IOS — they simply do
+                // not exist in the assembly running right now. Building anyway produces an
+                // Xcode project with no icon, which App Store Connect rejects with 91111.
                 EditorUserBuildSettings.SwitchActiveBuildTarget(group, target);
+
+                Debug.LogWarning(
+                    $"[SliceBlast] Active platform switched to {target}. Scripts are recompiling — "
+                    + "run the build again once that finishes.");
+
+                if (Application.isBatchMode)
+                {
+                    EditorApplication.Exit(2);
+                }
+
+                return;
             }
 
             // Unity appends to an existing Xcode project; a clean folder avoids stale signing state.

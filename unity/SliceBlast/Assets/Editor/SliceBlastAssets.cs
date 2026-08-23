@@ -218,7 +218,9 @@ namespace SliceBlast.EditorTools
 
             float[] sparkRadii = { 0.016f, 0.011f, 0.009f };
 
-            Texture2D texture = new Texture2D(IconSize, IconSize, TextureFormat.RGBA32, false);
+            // RGB24, not RGBA32: App Store Connect rejects an app icon whose PNG carries an
+            // alpha channel, even when every pixel in it is opaque.
+            Texture2D texture = new Texture2D(IconSize, IconSize, TextureFormat.RGB24, false);
             Color[] pixels = new Color[IconSize * IconSize];
             float inverse = 1f / (IconSize * samples);
 
