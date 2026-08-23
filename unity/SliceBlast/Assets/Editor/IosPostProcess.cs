@@ -61,6 +61,14 @@ namespace SliceBlast.EditorTools
                 // No custom crypto in the game — this is the standard exemption answer.
                 plist.root.SetBoolean("ITSAppUsesNonExemptEncryption", false);
 
+                // Names the asset catalog icon set. Its absence is a processing rejection
+                // ("Missing Info.plist value CFBundleIconName") even when the icon is there.
+                plist.root.SetString("CFBundleIconName", AppIconName);
+
+                // A portrait-only app that also claims iPad support is rejected unless it
+                // opts out of multitasking, which requires all four orientations.
+                plist.root.SetBoolean("UIRequiresFullScreen", true);
+
                 // App Store Connect rejects a repeated build number, and cloud builds do not
                 // increment one. Minutes since 2024 is monotonic, compact and good for decades.
                 string build = ((int)(DateTime.UtcNow - new DateTime(2024, 1, 1)).TotalMinutes).ToString();

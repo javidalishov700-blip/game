@@ -186,7 +186,9 @@ namespace SliceBlast.EditorTools
             }
 
             PlayerSettings.iOS.targetOSVersionString = EnvOr("IOS_MIN_VERSION", "13.0");
-            PlayerSettings.iOS.targetDevice = iOSTargetDevice.iPhoneAndiPad;
+            // Portrait-only phone game. Claiming iPad support would oblige it to handle every
+            // orientation for multitasking, which App Store Connect checks on the way in.
+            PlayerSettings.iOS.targetDevice = iOSTargetDevice.iPhoneOnly;
             PlayerSettings.iOS.appleEnableAutomaticSigning = false;
             PlayerSettings.iOS.buildNumber = EnvOr("PROJECT_BUILD_NUMBER", "1");
 
