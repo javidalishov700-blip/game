@@ -22,12 +22,13 @@ namespace SliceBlast.UI
         private static readonly Color BoltBlue = new Color(0.45f, 0.85f, 1f);
 
         // Reachable from the title screen because a store listing is not the only place a
-        // player should be able to find them. Pointed at the published Artifact copies for
-        // now — live the moment this is built, no GitHub Pages propagation to wait on — and
-        // meant to move to https://javidalishov700-blip.github.io/game/{privacy-policy,terms-of-use}.html
-        // (already committed under docs/) the day Pages is switched on for that repository.
-        private const string PrivacyUrl = "https://claude.ai/code/artifact/0cff8bb5-948c-459f-8518-a79650549968";
-        private const string TermsUrl = "https://claude.ai/code/artifact/4f8772aa-4781-4495-aadb-c3e134a353df";
+        // player should be able to find them. Served straight off the repository through
+        // jsDelivr's GitHub CDN mirror — no GitHub Pages toggle to flip, live the moment this
+        // is built. The files themselves live under docs/ and already carry the eventual
+        // https://javidalishov700-blip.github.io/game/... links for the day Pages is turned
+        // on; only these two constants need to change when that happens.
+        private const string PrivacyUrl = "https://cdn.jsdelivr.net/gh/javidalishov700-blip/game@main/docs/privacy-policy.html";
+        private const string TermsUrl = "https://cdn.jsdelivr.net/gh/javidalishov700-blip/game@main/docs/terms-of-use.html";
 
         public event Action PauseToggled;
         public event Action RestartRequested;

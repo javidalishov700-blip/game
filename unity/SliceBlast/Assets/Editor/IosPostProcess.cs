@@ -15,13 +15,23 @@ namespace SliceBlast.EditorTools
     {
         private const string AppIconName = "AppIcon";
 
-        // Xcode 14+ accepts a single 1024 source icon and derives every other size.
+        // The "universal" entry is Xcode 14's single-size icon feature, which supplies the
+        // home-screen icon once ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS is on. The
+        // "ios-marketing" entry is listed explicitly too, rather than left for that feature
+        // to derive, because it is specifically the one App Store Connect reads for its own
+        // listing — the slot that was showing empty.
         private const string ContentsJson = @"{
   ""images"" : [
     {
       ""filename"" : ""Icon-1024.png"",
       ""idiom"" : ""universal"",
       ""platform"" : ""ios"",
+      ""size"" : ""1024x1024""
+    },
+    {
+      ""filename"" : ""Icon-1024.png"",
+      ""idiom"" : ""ios-marketing"",
+      ""scale"" : ""1x"",
       ""size"" : ""1024x1024""
     }
   ],
@@ -111,6 +121,13 @@ namespace SliceBlast.EditorTools
 
                 string targetGuid = project.GetUnityMainTargetGuid();
                 project.SetBuildProperty(targetGuid, "ASSETCATALOG_COMPILER_APPICON_NAME", AppIconName);
+
+                // The single "universal" 1024 entry above is Xcode 14's single-size icon
+                // feature — it only expands into the full icon family (including the
+                // App Store marketing slot App Store Connect reads) when this is on. Without
+                // it the binary still has a home-screen icon, which is why TestFlight looks
+                // fine while the App Store Connect listing shows no icon at all.
+                project.SetBuildProperty(targetGuid, "ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS", "YES");
                 project.WriteToFile(pbxPath);
 
                 Debug.Log("[SliceBlast] App icon written to " + appIconSet);
