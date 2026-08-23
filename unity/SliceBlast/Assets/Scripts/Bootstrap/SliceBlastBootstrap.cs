@@ -5,6 +5,7 @@ using SliceBlast.Core;
 using SliceBlast.Feedback;
 using SliceBlast.UI;
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.Rendering;
 
 namespace SliceBlast.Bootstrap
@@ -41,6 +42,9 @@ namespace SliceBlast.Bootstrap
 
         private bool _gameOver;
         private float _gameOverTime;
+
+        private const string SoundKey = "sliceblast.sound";
+        private const string HapticsKey = "sliceblast.haptics";
 
         /// <summary>
         /// The shipped scene is deliberately empty — the game builds itself here. That keeps
@@ -81,10 +85,25 @@ namespace SliceBlast.Bootstrap
             _audio = audioObject.AddComponent<AudioDirector>();
             _audio.Initialize();
 
+            CreateEventSystem();
+
             GameObject hudObject = new GameObject("HUD");
             hudObject.transform.SetParent(transform, false);
             _hud = hudObject.AddComponent<GameHud>();
             _hud.Build();
+
+            bool soundOn = PlayerPrefs.GetInt(SoundKey, 1) == 1;
+            bool hapticsOn = PlayerPrefs.GetInt(HapticsKey, 1) == 1;
+
+            _audio.Muted = !soundOn;
+            Haptics.Enabled = hapticsOn;
+            _hud.SetSoundLabel(soundOn);
+            _hud.SetHapticsLabel(hapticsOn);
+
+            _hud.PauseToggled += OnPauseToggled;
+            _hud.RestartRequested += OnRestartRequested;
+            _hud.SoundToggled += OnSoundToggled;
+            _hud.HapticsToggled += OnHapticsToggled;
 
             GameObject flowObject = new GameObject("GameFlow");
             flowObject.transform.SetParent(transform, false);
@@ -100,6 +119,7 @@ namespace SliceBlast.Bootstrap
             _flow.BlockSliced += OnBlockSliced;
             _flow.BlastFired += OnBlastFired;
             _flow.GameEnded += OnGameEnded;
+            _flow.PauseChanged += OnPauseChanged;
 
             flowObject.SetActive(true);
         }
@@ -117,6 +137,73 @@ namespace SliceBlast.Bootstrap
             _flow.BlockSliced -= OnBlockSliced;
             _flow.BlastFired -= OnBlastFired;
             _flow.GameEnded -= OnGameEnded;
+            _flow.PauseChanged -= OnPauseChanged;
+
+            if (_hud != null)
+            {
+                _hud.PauseToggled -= OnPauseToggled;
+                _hud.RestartRequested -= OnRestartRequested;
+                _hud.SoundToggled -= OnSoundToggled;
+                _hud.HapticsToggled -= OnHapticsToggled;
+            }
+        }
+
+        private static void CreateEventSystem()
+        {
+            if (EventSystem.current != null)
+            {
+                return;
+            }
+
+            GameObject events = new GameObject("EventSystem", typeof(EventSystem));
+#if ENABLE_INPUT_SYSTEM
+            events.AddComponent<UnityEngine.InputSystem.UI.InputSystemUIInputModule>();
+#else
+            events.AddComponent<StandaloneInputModule>();
+#endif
+        }
+
+        private void OnPauseToggled()
+        {
+            _audio.PlayTick();
+            _flow.TogglePause();
+        }
+
+        private void OnRestartRequested()
+        {
+            _audio.PlayTick();
+            _gameOver = false;
+            _flow.SetPaused(false);
+            _flow.Restart();
+        }
+
+        private void OnSoundToggled(bool on)
+        {
+            _audio.Muted = !on;
+            PlayerPrefs.SetInt(SoundKey, on ? 1 : 0);
+            PlayerPrefs.Save();
+
+            if (on)
+            {
+                _audio.PlayTick();
+            }
+        }
+
+        private void OnHapticsToggled(bool on)
+        {
+            Haptics.Enabled = on;
+            PlayerPrefs.SetInt(HapticsKey, on ? 1 : 0);
+            PlayerPrefs.Save();
+
+            if (on)
+            {
+                Haptics.Light();
+            }
+        }
+
+        private void OnPauseChanged(bool paused)
+        {
+            _hud.ShowPaused(paused);
         }
 
         private void Update()
@@ -138,19 +225,20 @@ namespace SliceBlast.Bootstrap
                 return;
             }
 
-            if (!BlockSlicer.TapPressedThisFrame())
+            if (!BlockSlicer.TapPressedThisFrame() || BlockSlicer.PointerOverUi())
             {
                 return;
             }
 
-            _audio.PlayTick();
-            _flow.Restart();
+            OnRestartRequested();
         }
 
         private void OnRunStarted()
         {
             _gameOver = false;
             _hud.HideGameOver();
+            _hud.ShowPaused(false);
+            _hud.SetHintText("TAP TO DROP");
             _hud.ShowHint(true);
         }
 
@@ -159,7 +247,7 @@ namespace SliceBlast.Bootstrap
             _hud.SetScore(score);
             _hud.SetMultiplier(multiplier);
 
-            if (score > 0)
+            if (score > 0 && _flow.BlastCount > 0)
             {
                 _hud.ShowHint(false);
             }
@@ -170,6 +258,14 @@ namespace SliceBlast.Bootstrap
             _audio.PlayPerfect(streak);
             _hud.ShowStreak(streak);
             EmitSparks(position, Mint, 3.2f, 0.09f);
+
+            // First run: spell out the combo goal until the player has seen a blast.
+            if (_flow.BlastCount == 0)
+            {
+                int remaining = Mathf.Max(0, _flow.BlastStreakRequirement - streak);
+                _hud.SetHintText(remaining > 0 ? remaining + " MORE FOR BLAST" : "BLAST!");
+                _hud.ShowHint(true);
+            }
         }
 
         private void OnBlockSliced(Vector3 position)
@@ -177,14 +273,18 @@ namespace SliceBlast.Bootstrap
             _audio.PlaySlice();
         }
 
-        private void OnBlastFired(int multiplier, int bonus, Vector3 position)
+        private void OnBlastFired(BlastInfo blast)
         {
             _audio.PlayBlast();
-            _hud.ShowBanner("BLAST", "+" + bonus, Gold);
+            _hud.ShowBanner("BLAST x" + blast.Layers, "+" + blast.Bonus, Gold);
             _hud.Flash(0.9f);
 
-            EmitSparks(position, Gold, 8.5f, 0.15f);
-            EmitShockwave(position, Gold);
+            EmitSparks(blast.Epicenter, Gold, 8.5f, 0.15f);
+            EmitShockwave(blast.Epicenter, Gold);
+
+            // Mark where the tower now ends, so the next block never appears out of nowhere.
+            EmitShockwave(blast.NextTop, Mint);
+            _hud.ShowHint(false);
         }
 
         private void OnGameEnded(int score, int best)

@@ -1,5 +1,6 @@
 // Slice & Blast — tap resolution: Ego-Boost snap, axis-aligned slice math, Blast trigger.
 using UnityEngine;
+using UnityEngine.EventSystems;
 #if ENABLE_INPUT_SYSTEM
 using UnityEngine.InputSystem;
 #endif
@@ -12,10 +13,13 @@ namespace SliceBlast.Core
         [SerializeField] private GameFlowManager flow;
 
         [Header("Ego Boost (near-miss forgiveness)")]
-        [SerializeField] private float perfectThreshold = 0.05f;
-        [SerializeField] private float thresholdPerStreak = 0.005f;
-        [SerializeField] private float maxThreshold = 0.09f;
-        [SerializeField] private float snapSpeedScale = 0.004f;
+        // The magnet scales with the block: a wide platform forgives more than a sliver,
+        // so late-game precision still matters while early taps feel effortless.
+        [SerializeField] private float perfectThreshold = 0.06f;
+        [SerializeField, Range(0f, 0.3f)] private float magnetFraction = 0.11f;
+        [SerializeField, Range(0f, 0.6f)] private float maxThresholdFraction = 0.45f;
+        [SerializeField] private float thresholdPerStreak = 0.01f;
+        [SerializeField] private float snapSpeedScale = 0.012f;
 
         [Header("Slice")]
         [SerializeField] private float minChunkSize = 0.02f;
@@ -36,6 +40,12 @@ namespace SliceBlast.Core
             }
 
             if (flow == null || !flow.AcceptsInput || !TapPressedThisFrame())
+            {
+                return;
+            }
+
+            // A tap on the pause button must not also drop the block.
+            if (PointerOverUi())
             {
                 return;
             }
@@ -67,9 +77,13 @@ namespace SliceBlast.Core
 
             // Ego Boost: the window widens invisibly with the streak and with block speed,
             // so a run that *feels* clean stays clean.
-            float threshold = Mathf.Min(
-                perfectThreshold + thresholdPerStreak * flow.PerfectStreak + snapSpeedScale * flow.CurrentSpeed,
-                maxThreshold);
+            float reference = Mathf.Min(topSize, movingSize);
+            float threshold = Mathf.Max(perfectThreshold, reference * magnetFraction)
+                              + thresholdPerStreak * flow.PerfectStreak
+                              + snapSpeedScale * flow.CurrentSpeed
+                              + flow.TutorialAssist;
+
+            threshold = Mathf.Min(threshold, reference * maxThresholdFraction);
 
             if (Mathf.Abs(delta) <= threshold)
             {
@@ -134,6 +148,39 @@ namespace SliceBlast.Core
             Vector3 torque = spinAxis * (-outward * chunkSpin);
 
             flow.EmitDebris(position, scale, moving.Tint, impulse, torque);
+        }
+
+        public static bool PointerOverUi()
+        {
+            EventSystem events = EventSystem.current;
+
+            if (events == null)
+            {
+                return false;
+            }
+
+#if ENABLE_INPUT_SYSTEM
+            return events.IsPointerOverGameObject();
+#else
+            int touchCount = Input.touchCount;
+
+            if (touchCount > 0)
+            {
+                for (int i = 0; i < touchCount; i++)
+                {
+                    Touch touch = Input.GetTouch(i);
+
+                    if (touch.phase == TouchPhase.Began && events.IsPointerOverGameObject(touch.fingerId))
+                    {
+                        return true;
+                    }
+                }
+
+                return false;
+            }
+
+            return events.IsPointerOverGameObject();
+#endif
         }
 
         public static bool TapPressedThisFrame()
