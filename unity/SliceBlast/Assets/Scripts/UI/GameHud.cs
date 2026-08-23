@@ -35,6 +35,8 @@ namespace SliceBlast.UI
         private Text _finalScore;
         private Text _bestScore;
         private Text _restart;
+        private Text _shield;
+        private Text _electric;
         private Text _soundLabel;
         private Text _hapticsLabel;
         private Image _flash;
@@ -101,6 +103,14 @@ namespace SliceBlast.UI
             Anchor(_hint.rectTransform, new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(0f, 150f), new Vector2(0f, 250f));
             _hint.text = "TAP TO DROP";
             SetAlpha(_hint, 0f);
+
+            _shield = CreateText("Shield", _safeArea, 46, FontStyle.Bold, new Color(0.72f, 0.95f, 1f), TextAnchor.UpperLeft);
+            Anchor(_shield.rectTransform, new Vector2(0f, 1f), new Vector2(0.6f, 1f), new Vector2(40f, -130f), new Vector2(0f, -60f));
+            _shield.text = string.Empty;
+
+            _electric = CreateText("Electric", _safeArea, 46, FontStyle.Bold, new Color(1f, 0.93f, 0.2f), TextAnchor.UpperLeft);
+            Anchor(_electric.rectTransform, new Vector2(0f, 1f), new Vector2(0.6f, 1f), new Vector2(40f, -200f), new Vector2(0f, -130f));
+            _electric.text = string.Empty;
 
             BuildPauseButton();
             BuildPauseSheet();
@@ -212,6 +222,24 @@ namespace SliceBlast.UI
             rect.pivot = new Vector2(0.5f, 0.5f);
             rect.sizeDelta = new Vector2(680f, 130f);
             rect.anchoredPosition = new Vector2(0f, y);
+        }
+
+        public void SetShield(bool active)
+        {
+            if (_shield != null)
+            {
+                _shield.text = active ? "SHIELD READY" : string.Empty;
+            }
+        }
+
+        public void SetElectric(float remaining, float total)
+        {
+            if (_electric == null)
+            {
+                return;
+            }
+
+            _electric.text = remaining > 0f ? "x2  " + Mathf.CeilToInt(remaining) + "s" : string.Empty;
         }
 
         public void SetScore(int score)

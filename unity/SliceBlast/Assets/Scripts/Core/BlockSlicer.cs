@@ -1,4 +1,5 @@
-// Slice & Blast — tap resolution: Ego-Boost snap, axis-aligned slice math, Blast trigger.
+// Tap resolution: Ego-Boost magnet, axis-aligned slice math, shield forgiveness and the
+// special-block vanish. Decides what happened; the flow manager decides what it means.
 using UnityEngine;
 using UnityEngine.EventSystems;
 #if ENABLE_INPUT_SYSTEM
@@ -57,6 +58,7 @@ namespace SliceBlast.Core
         {
             MovingBlock moving = flow.ActiveBlock;
             MovingBlock top = flow.TopBlock;
+
             if (moving == null || top == null)
             {
                 return;
@@ -74,10 +76,10 @@ namespace SliceBlast.Core
             float topSize = axisX ? topScale.x : topScale.z;
 
             float delta = movingCenter - topCenter;
+            float reference = Mathf.Min(topSize, movingSize);
 
             // Ego Boost: the window widens invisibly with the streak and with block speed,
             // so a run that *feels* clean stays clean.
-            float reference = Mathf.Min(topSize, movingSize);
             float threshold = Mathf.Max(perfectThreshold, reference * magnetFraction)
                               + thresholdPerStreak * flow.PerfectStreak
                               + snapSpeedScale * flow.CurrentSpeed
@@ -89,12 +91,21 @@ namespace SliceBlast.Core
             {
                 moving.SnapAxis(topCenter);
                 flow.CommitPlacement(PlacementKind.Perfect, moving);
+                return;
+            }
 
-                if (flow.PerfectStreak >= flow.BlastStreakRequirement)
-                {
-                    flow.TriggerBlast();
-                }
+            // Missing a special never damages the tower — it vanishes and costs the combo.
+            if (BlockCatalogue.IsSpecial(moving.Type))
+            {
+                flow.FailSpecial(moving);
+                return;
+            }
 
+            // A held shield eats the mistake whole: no slice, no lost width.
+            if (flow.ConsumeShield())
+            {
+                moving.SnapAxis(topCenter);
+                flow.CommitPlacement(PlacementKind.Shielded, moving);
                 return;
             }
 
@@ -111,7 +122,7 @@ namespace SliceBlast.Core
             float newCenter = (overlapMin + overlapMax) * 0.5f;
 
             // Two potential offcuts: the moving block can overhang on either side once a
-            // Blast has grown it past the layer beneath it.
+            // Steel block or a blast has grown it past the layer beneath it.
             EmitChunk(moving, axisX, movingCenter - movingSize * 0.5f, overlapMin, -1f);
             EmitChunk(moving, axisX, overlapMax, movingCenter + movingSize * 0.5f, 1f);
 
@@ -122,6 +133,7 @@ namespace SliceBlast.Core
         private void EmitChunk(MovingBlock moving, bool axisX, float min, float max, float outward)
         {
             float size = max - min;
+
             if (size <= minChunkSize)
             {
                 return;
@@ -187,12 +199,14 @@ namespace SliceBlast.Core
         {
 #if ENABLE_INPUT_SYSTEM
             Touchscreen touchscreen = Touchscreen.current;
+
             if (touchscreen != null && touchscreen.primaryTouch.press.wasPressedThisFrame)
             {
                 return true;
             }
 
             Mouse mouse = Mouse.current;
+
             if (mouse != null && mouse.leftButton.wasPressedThisFrame)
             {
                 return true;
@@ -202,6 +216,7 @@ namespace SliceBlast.Core
             return keyboard != null && keyboard.spaceKey.wasPressedThisFrame;
 #else
             int touchCount = Input.touchCount;
+
             for (int i = 0; i < touchCount; i++)
             {
                 if (Input.GetTouch(i).phase == TouchPhase.Began)

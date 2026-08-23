@@ -100,6 +100,82 @@ namespace SliceBlast.Audio
             });
         }
 
+
+        /// <summary>Electric block: buzzing charge with a fast tremolo.</summary>
+        public static AudioClip Zap()
+        {
+            return Build("sfx_zap", 0.5f, (t, duration) =>
+            {
+                float p = t / duration;
+                float env = Mathf.Exp(-4.5f * t) * Mathf.Clamp01(t * 200f);
+                float tremolo = 0.6f + 0.4f * Mathf.Sin(2f * Mathf.PI * 26f * t);
+                float saw = Mathf.Repeat(Mathf.Lerp(180f, 420f, p) * t, 1f) * 2f - 1f;
+                float top = Mathf.Sin(2f * Mathf.PI * 1400f * t) * 0.2f;
+                return (saw * 0.6f + top) * env * tremolo * 0.7f;
+            });
+        }
+
+        /// <summary>Glass block shattering.</summary>
+        public static AudioClip Shatter()
+        {
+            return Build("sfx_shatter", 0.55f, (t, duration) =>
+            {
+                float env = Mathf.Exp(-9f * t);
+                float noise = (UnityEngine.Random.value * 2f - 1f) * Mathf.Exp(-22f * t);
+                float ring = Mathf.Sin(2f * Mathf.PI * 2600f * t) * 0.35f * Mathf.Exp(-6f * t);
+                float ring2 = Mathf.Sin(2f * Mathf.PI * 3700f * t) * 0.22f * Mathf.Exp(-8f * t);
+                return (noise + ring + ring2) * env * 0.8f;
+            });
+        }
+
+        /// <summary>Steel block landing: a heavy pound with a metallic tail.</summary>
+        public static AudioClip Pound()
+        {
+            return Build("sfx_pound", 0.6f, (t, duration) =>
+            {
+                float env = Mathf.Exp(-7f * t);
+                float sub = Mathf.Sin(2f * Mathf.PI * Mathf.Lerp(120f, 45f, t / duration) * t);
+                float clang = Mathf.Sin(2f * Mathf.PI * 720f * t) * 0.25f * Mathf.Exp(-14f * t);
+                float grit = (UnityEngine.Random.value * 2f - 1f) * Mathf.Exp(-40f * t) * 0.3f;
+                return (sub + clang + grit) * env * 0.9f;
+            });
+        }
+
+        /// <summary>Glitch feint: a bit-crushed stutter.</summary>
+        public static AudioClip Glitch()
+        {
+            float held = 0f;
+            int counter = 0;
+
+            return Build("sfx_glitch", 0.22f, (t, duration) =>
+            {
+                if (counter++ % 220 == 0)
+                {
+                    held = UnityEngine.Random.value * 2f - 1f;
+                }
+
+                float env = Mathf.Exp(-14f * t);
+                float tone = Mathf.Sign(Mathf.Sin(2f * Mathf.PI * 620f * t)) * 0.35f;
+                return (held * 0.6f + tone) * env * 0.7f;
+            });
+        }
+
+        /// <summary>Glitch jackpot: a quick rising arpeggio.</summary>
+        public static AudioClip Jackpot()
+        {
+            float[] steps = { 1f, 1.26f, 1.5f, 2f, 2.52f };
+
+            return Build("sfx_jackpot", 0.75f, (t, duration) =>
+            {
+                int index = Mathf.Clamp(Mathf.FloorToInt(t / duration * steps.Length), 0, steps.Length - 1);
+                float local = t - index * (duration / steps.Length);
+                float env = Mathf.Exp(-11f * local) * Mathf.Exp(-1.2f * t);
+                float f = 523.25f * steps[index];
+                float tone = Mathf.Sin(2f * Mathf.PI * f * t) + Mathf.Sin(2f * Mathf.PI * f * 2f * t) * 0.3f;
+                return tone * env * 0.5f;
+            });
+        }
+
         private static AudioClip Build(string name, float duration, Func<float, float, float> sample)
         {
             int count = Mathf.Max(1, Mathf.RoundToInt(duration * SampleRate));

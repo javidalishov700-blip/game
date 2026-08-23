@@ -60,6 +60,30 @@ Ad-hoc veya TestFlight imzası mümkün değil. O durumda `slice-blast-android` 
 Android'de test etmek en hızlı yol; iPhone için tek alternatif kendi Mac'inde Xcode'un ücretsiz
 7 günlük provisioning'i ile kurmak.
 
+
+## Blok tipleri
+
+| Blok | Hareket | Tam isabet | Iska |
+|---|---|---|---|
+| **Standard** | normal | istiflenir, seri artar | taşan kısım kesilir ve düşer |
+| **Neon** | normal | üstteki 3 katmanı patlatır, tabanı genişletir | yok olur, kule sağlam |
+| **Electric** | %10 hızlı | 15 saniye boyunca tüm puanlar ×2 (üst üste gelirse süre yenilenir) | yok olur, kule sağlam |
+| **Glass** | %5 yavaş | kalkan verir: sıradaki Standard ıskası kuleye zarar vermez | yok olur, kule sağlam |
+| **Steel** | **1.5× hızlı** | platformu %15 genişletir | yok olur, kule sağlam |
+| **Glitch** | %15 hızlı, yolun yarısında **ileri zıplar** | jackpot puan | yok olur, kule sağlam |
+
+Özel blok ıskası kuleyi asla kesmez: blok havuza döner, combo sıfırlanır ve **sonraki blok
+zorunlu olarak Standard** gelir — ritim böyle sıfırlanır. Özel bloklar arka arkaya gelmez,
+ilk 5 blok her zaman Standard'dır.
+
+## Mimari
+
+- `GameEvents` — statik sinyal veriyolu; oyun mantığı yayınlar, sunum katmanı dinler
+- `PoolManager` / `BlockPool` — blok, moloz, kıvılcım ve şok dalgası havuzları; oyun sırasında sıfır tahsis
+- `BlockSpawner` — tip kurası, ağırlıklar, zorunlu Standard kuralı, konumlandırma
+- `GameFlowManager` — skor, combo, 15 saniyelik çarpan, kalkan, blast, oyun sonu
+- `BlockSlicer` — girdi, mıknatıs doğrulaması, dilimleme matematiği, özel blok yok oluşu
+
 ## 3. Ayarlama
 
 Tüm dengeleme değerleri `GameFlowManager` ve `BlockSlicer` inspector alanlarında:

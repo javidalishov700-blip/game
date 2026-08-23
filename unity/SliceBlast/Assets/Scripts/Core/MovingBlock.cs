@@ -2,15 +2,21 @@ using UnityEngine;
 
 namespace SliceBlast.Core
 {
-    /// <summary>A tower layer. Ping-pongs along one axis until it is snapped, sliced or missed.</summary>
+    /// <summary>A tower layer. Ping-pongs along one axis until it is snapped, sliced or lost.</summary>
     public sealed class MovingBlock : PooledObject
     {
         public bool MovingAxisX { get; private set; }
         public bool IsMoving { get; private set; }
+        public BlockType Type { get; private set; }
 
         private float _pivot;
         private float _range;
         private float _direction = 1f;
+        private float _speedMultiplier = 1f;
+
+        private float _glitchJump;
+        private bool _glitched;
+        private bool _glitchPending;
 
         private Vector3 _restScale;
         private Color _restTint;
@@ -42,15 +48,38 @@ namespace SliceBlast.Core
         {
             IsMoving = false;
             _direction = 1f;
+            _speedMultiplier = 1f;
+            _glitchJump = 0f;
+            _glitched = false;
+            _glitchPending = false;
+            _impact = 0f;
+            Type = BlockType.Standard;
         }
 
-        public void Configure(bool axisX, float pivot, float range, float direction)
+        public void Configure(bool axisX, float pivot, float range, float direction, BlockType type, float speedMultiplier, float glitchJump)
         {
             MovingAxisX = axisX;
             _pivot = pivot;
             _range = Mathf.Max(0.01f, range);
             _direction = direction >= 0f ? 1f : -1f;
+            _speedMultiplier = Mathf.Max(0.1f, speedMultiplier);
+            _glitchJump = Mathf.Max(0f, glitchJump);
+            _glitched = false;
+            _glitchPending = false;
+            Type = type;
             IsMoving = true;
+        }
+
+        /// <summary>True once, on the frame the glitch block jumps — for the sound and the flash.</summary>
+        public bool ConsumeGlitchPulse()
+        {
+            if (!_glitchPending)
+            {
+                return false;
+            }
+
+            _glitchPending = false;
+            return true;
         }
 
         public void Tick(float speed, float deltaTime)
@@ -64,7 +93,15 @@ namespace SliceBlast.Core
             Vector3 position = t.position;
             float axis = MovingAxisX ? position.x : position.z;
 
-            axis += _direction * speed * deltaTime;
+            axis += _direction * speed * _speedMultiplier * deltaTime;
+
+            // Feint: halfway in, the block skips forward and the read the player had is gone.
+            if (_glitchJump > 0f && !_glitched && Mathf.Abs(axis - _pivot) <= _range * 0.5f)
+            {
+                axis += _direction * _glitchJump;
+                _glitched = true;
+                _glitchPending = true;
+            }
 
             float min = _pivot - _range;
             float max = _pivot + _range;

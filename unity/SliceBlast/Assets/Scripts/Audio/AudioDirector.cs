@@ -29,6 +29,11 @@ namespace SliceBlast.Audio
         private AudioClip _rise;
         private AudioClip _fail;
         private AudioClip _tick;
+        private AudioClip _zap;
+        private AudioClip _shatter;
+        private AudioClip _pound;
+        private AudioClip _glitch;
+        private AudioClip _jackpot;
 
         public bool Muted { get; set; }
 
@@ -41,6 +46,11 @@ namespace SliceBlast.Audio
             _rise = ProceduralSfx.Rise();
             _fail = ProceduralSfx.Fail();
             _tick = ProceduralSfx.Tick();
+            _zap = ProceduralSfx.Zap();
+            _shatter = ProceduralSfx.Shatter();
+            _pound = ProceduralSfx.Pound();
+            _glitch = ProceduralSfx.Glitch();
+            _jackpot = ProceduralSfx.Jackpot();
 
             _voices = new AudioSource[Mathf.Max(2, voiceCount)];
             for (int i = 0; i < _voices.Length; i++)
@@ -87,6 +97,31 @@ namespace SliceBlast.Audio
         public void PlayTick()
         {
             Play(_tick, 1f, 0.5f);
+        }
+
+        public void PlayZap()
+        {
+            Play(_zap, 1f, 0.75f);
+        }
+
+        public void PlayShatter()
+        {
+            Play(_shatter, Random.Range(0.95f, 1.08f), 0.8f);
+        }
+
+        public void PlayPound()
+        {
+            Play(_pound, 1f, 0.95f);
+        }
+
+        public void PlayGlitch()
+        {
+            Play(_glitch, Random.Range(0.9f, 1.2f), 0.6f);
+        }
+
+        public void PlayJackpot()
+        {
+            Play(_jackpot, 1f, 0.85f);
         }
 
         private void Play(AudioClip clip, float pitch, float volume)

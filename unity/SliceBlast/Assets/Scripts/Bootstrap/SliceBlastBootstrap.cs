@@ -1,5 +1,6 @@
-// Zero-setup entry point: one empty GameObject in an empty scene builds the whole game —
-// camera rig, lighting, backdrop, pooled prefabs, audio, HUD and the flow manager.
+// Composition root: builds the camera rig, lighting, backdrop, pools, spawner, audio, HUD
+// and flow manager, then wires presentation to the signal bus. Nothing else knows about
+// anything else.
 using SliceBlast.Audio;
 using SliceBlast.Core;
 using SliceBlast.Feedback;
@@ -14,6 +15,9 @@ namespace SliceBlast.Bootstrap
     [DisallowMultipleComponent]
     public sealed class SliceBlastBootstrap : MonoBehaviour
     {
+        private const string SoundKey = "sliceblast.sound";
+        private const string HapticsKey = "sliceblast.haptics";
+
         private static readonly Color Gold = new Color(1f, 0.79f, 0.29f);
         private static readonly Color Mint = new Color(0.55f, 1f, 0.9f);
 
@@ -21,14 +25,14 @@ namespace SliceBlast.Bootstrap
         [SerializeField] private Vector3 cameraAngles = new Vector3(26f, 45f, 0f);
         [SerializeField] private float cameraDistance = 18f;
         [SerializeField] private float orthographicSize = 5.5f;
-        [SerializeField] private Color skyTop = new Color(0.10f, 0.11f, 0.22f);
+        [SerializeField] private Color skyTop = new Color(0.1f, 0.11f, 0.22f);
         [SerializeField] private Color skyBottom = new Color(0.03f, 0.03f, 0.06f);
 
         [Header("Pools")]
         [SerializeField] private int blockPrewarm = 48;
         [SerializeField] private int blockCap = 220;
-        [SerializeField] private int debrisPrewarm = 32;
-        [SerializeField] private int debrisCap = 120;
+        [SerializeField] private int debrisPrewarm = 40;
+        [SerializeField] private int debrisCap = 160;
         [SerializeField] private int sparksPerBurst = 16;
 
         [Header("Flow")]
@@ -37,14 +41,10 @@ namespace SliceBlast.Bootstrap
         private GameFlowManager _flow;
         private AudioDirector _audio;
         private GameHud _hud;
-        private BlockPool _sparkPool;
-        private BlockPool _shockwavePool;
+        private PoolManager _pools;
 
         private bool _gameOver;
         private float _gameOverTime;
-
-        private const string SoundKey = "sliceblast.sound";
-        private const string HapticsKey = "sliceblast.haptics";
 
         /// <summary>
         /// The shipped scene is deliberately empty — the game builds itself here. That keeps
@@ -74,8 +74,14 @@ namespace SliceBlast.Bootstrap
 
             BlockPool blockPool = CreatePool("BlockPool", blockTemplate, blockPrewarm, blockCap);
             BlockPool debrisPool = CreatePool("DebrisPool", debrisTemplate, debrisPrewarm, debrisCap);
-            _sparkPool = CreatePool("SparkPool", sparkTemplate, 6, 24);
-            _shockwavePool = CreatePool("ShockwavePool", shockwaveTemplate, 4, 12);
+            BlockPool sparkPool = CreatePool("SparkPool", sparkTemplate, 6, 24);
+            BlockPool shockwavePool = CreatePool("ShockwavePool", shockwaveTemplate, 4, 12);
+
+            _pools = gameObject.AddComponent<PoolManager>();
+            _pools.Register(PoolManager.Blocks, blockPool, false);
+            _pools.Register(PoolManager.Debris, debrisPool, false); // ticked by the flow manager
+            _pools.Register(PoolManager.Sparks, sparkPool, true);
+            _pools.Register(PoolManager.Shockwaves, shockwavePool, true);
 
             CameraRig rig = CreateCameraRig(unlit);
             CreateLighting();
@@ -105,39 +111,27 @@ namespace SliceBlast.Bootstrap
             _hud.SoundToggled += OnSoundToggled;
             _hud.HapticsToggled += OnHapticsToggled;
 
+            GameObject spawnerObject = new GameObject("Spawner");
+            spawnerObject.transform.SetParent(transform, false);
+            BlockSpawner spawner = spawnerObject.AddComponent<BlockSpawner>();
+            spawner.Bind(blockPool);
+
+            Subscribe();
+
             GameObject flowObject = new GameObject("GameFlow");
             flowObject.transform.SetParent(transform, false);
             flowObject.SetActive(false);
 
             _flow = flowObject.AddComponent<GameFlowManager>();
             flowObject.AddComponent<BlockSlicer>();
-            _flow.Configure(blockPool, debrisPool, rig);
-
-            _flow.RunStarted += OnRunStarted;
-            _flow.ScoreChanged += OnScoreChanged;
-            _flow.PerfectSnapped += OnPerfectSnapped;
-            _flow.BlockSliced += OnBlockSliced;
-            _flow.BlastFired += OnBlastFired;
-            _flow.GameEnded += OnGameEnded;
-            _flow.PauseChanged += OnPauseChanged;
+            _flow.Configure(spawner, blockPool, debrisPool, rig);
 
             flowObject.SetActive(true);
         }
 
         private void OnDestroy()
         {
-            if (_flow == null)
-            {
-                return;
-            }
-
-            _flow.RunStarted -= OnRunStarted;
-            _flow.ScoreChanged -= OnScoreChanged;
-            _flow.PerfectSnapped -= OnPerfectSnapped;
-            _flow.BlockSliced -= OnBlockSliced;
-            _flow.BlastFired -= OnBlastFired;
-            _flow.GameEnded -= OnGameEnded;
-            _flow.PauseChanged -= OnPauseChanged;
+            Unsubscribe();
 
             if (_hud != null)
             {
@@ -146,6 +140,192 @@ namespace SliceBlast.Bootstrap
                 _hud.SoundToggled -= OnSoundToggled;
                 _hud.HapticsToggled -= OnHapticsToggled;
             }
+        }
+
+        private void Subscribe()
+        {
+            GameEvents.RunStarted += OnRunStarted;
+            GameEvents.ScoreChanged += OnScoreChanged;
+            GameEvents.BlockPlaced += OnBlockPlaced;
+            GameEvents.BlastFired += OnBlastFired;
+            GameEvents.RewardGranted += OnReward;
+            GameEvents.ShieldChanged += OnShieldChanged;
+            GameEvents.MultiplierTimerChanged += OnMultiplierTimer;
+            GameEvents.RunEnded += OnRunEnded;
+            GameEvents.PauseChanged += OnPauseChanged;
+            GameEvents.GlitchPulsed += OnGlitchPulsed;
+        }
+
+        private void Unsubscribe()
+        {
+            GameEvents.RunStarted -= OnRunStarted;
+            GameEvents.ScoreChanged -= OnScoreChanged;
+            GameEvents.BlockPlaced -= OnBlockPlaced;
+            GameEvents.BlastFired -= OnBlastFired;
+            GameEvents.RewardGranted -= OnReward;
+            GameEvents.ShieldChanged -= OnShieldChanged;
+            GameEvents.MultiplierTimerChanged -= OnMultiplierTimer;
+            GameEvents.RunEnded -= OnRunEnded;
+            GameEvents.PauseChanged -= OnPauseChanged;
+            GameEvents.GlitchPulsed -= OnGlitchPulsed;
+        }
+
+        private void Update()
+        {
+            if (_pools != null)
+            {
+                _pools.Tick(Time.deltaTime);
+            }
+
+            if (!_gameOver || Time.unscaledTime - _gameOverTime < restartDelay)
+            {
+                return;
+            }
+
+            if (!BlockSlicer.TapPressedThisFrame() || BlockSlicer.PointerOverUi())
+            {
+                return;
+            }
+
+            OnRestartRequested();
+        }
+
+        private void OnRunStarted()
+        {
+            _gameOver = false;
+            _hud.HideGameOver();
+            _hud.ShowPaused(false);
+            _hud.SetHintText("TAP TO DROP");
+            _hud.ShowHint(true);
+        }
+
+        private void OnScoreChanged(int score, int multiplier)
+        {
+            _hud.SetScore(score);
+            _hud.SetMultiplier(multiplier);
+
+            if (score > 0 && _flow != null && _flow.BlastCount > 0)
+            {
+                _hud.ShowHint(false);
+            }
+        }
+
+        private void OnBlockPlaced(PlacementEvent placement)
+        {
+            BlockDefinition definition = BlockCatalogue.Get(placement.Type);
+
+            switch (placement.Kind)
+            {
+                case PlacementKind.Perfect:
+                    _audio.PlayPerfect(placement.Streak);
+                    _hud.ShowStreak(placement.Streak);
+                    EmitSparks(placement.Position, definition.UsesPalette ? Mint : definition.Tint, 3.4f, 0.09f);
+
+                    if (placement.Type == BlockType.Steel)
+                    {
+                        _audio.PlayPound();
+                    }
+
+                    // First run: spell out the combo goal until the player has seen a blast.
+                    if (_flow != null && _flow.BlastCount == 0)
+                    {
+                        int remaining = Mathf.Max(0, _flow.BlastStreakRequirement - placement.Streak);
+                        _hud.SetHintText(remaining > 0 ? remaining + " MORE FOR BLAST" : "BLAST!");
+                        _hud.ShowHint(true);
+                    }
+
+                    break;
+
+                case PlacementKind.Sliced:
+                    _audio.PlaySlice();
+                    break;
+
+                case PlacementKind.Shielded:
+                    _audio.PlayShatter();
+                    _hud.ShowBanner("SHIELD USED", "TOWER SAVED", new Color(0.72f, 0.95f, 1f));
+                    EmitSparks(placement.Position, new Color(0.72f, 0.95f, 1f), 4.5f, 0.1f);
+                    break;
+
+                case PlacementKind.SpecialFailed:
+                    _audio.PlayShatter();
+                    _hud.ShowBanner(definition.Label + " LOST", "COMBO RESET", definition.Tint);
+                    EmitSparks(placement.Position, definition.Tint, 5.5f, 0.11f);
+                    EmitShockwave(placement.Position, definition.Tint);
+                    break;
+            }
+        }
+
+        private void OnBlastFired(BlastEvent blast)
+        {
+            _audio.PlayBlast();
+            _hud.ShowBanner(blast.FromNeon ? "NEON BLAST" : "BLAST x" + blast.Layers, "+" + blast.Bonus, Gold);
+            _hud.Flash(0.9f);
+
+            EmitSparks(blast.Epicenter, Gold, 8.5f, 0.15f);
+            EmitShockwave(blast.Epicenter, Gold);
+
+            // Mark where the tower now ends, so the next block never appears out of nowhere.
+            EmitShockwave(blast.NextTop, Mint);
+            _hud.ShowHint(false);
+        }
+
+        private void OnReward(RewardEvent reward)
+        {
+            _hud.ShowBanner(reward.Headline, reward.Detail, reward.Color);
+            EmitSparks(reward.Position, reward.Color, 6f, 0.12f);
+
+            switch (reward.Source)
+            {
+                case BlockType.Electric:
+                    _audio.PlayZap();
+                    _hud.Flash(0.35f);
+                    break;
+
+                case BlockType.Glitch:
+                    _audio.PlayJackpot();
+                    _hud.Flash(0.55f);
+                    EmitShockwave(reward.Position, reward.Color);
+                    break;
+
+                case BlockType.Steel:
+                    EmitShockwave(reward.Position, reward.Color);
+                    break;
+
+                case BlockType.Glass:
+                    _audio.PlayTick();
+                    break;
+            }
+        }
+
+        private void OnShieldChanged(bool active)
+        {
+            _hud.SetShield(active);
+        }
+
+        private void OnMultiplierTimer(float remaining, float total)
+        {
+            _hud.SetElectric(remaining, total);
+        }
+
+        private void OnGlitchPulsed(Vector3 position)
+        {
+            _audio.PlayGlitch();
+            EmitSparks(position, new Color(0.72f, 0.55f, 1f), 2.4f, 0.07f);
+        }
+
+        private void OnRunEnded(int score, int best)
+        {
+            _gameOver = true;
+            _gameOverTime = Time.unscaledTime;
+
+            _audio.PlayGameOver();
+            _hud.ShowHint(false);
+            _hud.ShowGameOver(score, best);
+        }
+
+        private void OnPauseChanged(bool paused)
+        {
+            _hud.ShowPaused(paused);
         }
 
         private static void CreateEventSystem()
@@ -201,110 +381,10 @@ namespace SliceBlast.Bootstrap
             }
         }
 
-        private void OnPauseChanged(bool paused)
-        {
-            _hud.ShowPaused(paused);
-        }
-
-        private void Update()
-        {
-            float dt = Time.deltaTime;
-
-            if (_sparkPool != null)
-            {
-                _sparkPool.Tick(dt);
-            }
-
-            if (_shockwavePool != null)
-            {
-                _shockwavePool.Tick(dt);
-            }
-
-            if (!_gameOver || Time.unscaledTime - _gameOverTime < restartDelay)
-            {
-                return;
-            }
-
-            if (!BlockSlicer.TapPressedThisFrame() || BlockSlicer.PointerOverUi())
-            {
-                return;
-            }
-
-            OnRestartRequested();
-        }
-
-        private void OnRunStarted()
-        {
-            _gameOver = false;
-            _hud.HideGameOver();
-            _hud.ShowPaused(false);
-            _hud.SetHintText("TAP TO DROP");
-            _hud.ShowHint(true);
-        }
-
-        private void OnScoreChanged(int score, int multiplier)
-        {
-            _hud.SetScore(score);
-            _hud.SetMultiplier(multiplier);
-
-            if (score > 0 && _flow.BlastCount > 0)
-            {
-                _hud.ShowHint(false);
-            }
-        }
-
-        private void OnPerfectSnapped(int streak, Vector3 position)
-        {
-            _audio.PlayPerfect(streak);
-            _hud.ShowStreak(streak);
-            EmitSparks(position, Mint, 3.2f, 0.09f);
-
-            // First run: spell out the combo goal until the player has seen a blast.
-            if (_flow.BlastCount == 0)
-            {
-                int remaining = Mathf.Max(0, _flow.BlastStreakRequirement - streak);
-                _hud.SetHintText(remaining > 0 ? remaining + " MORE FOR BLAST" : "BLAST!");
-                _hud.ShowHint(true);
-            }
-        }
-
-        private void OnBlockSliced(Vector3 position)
-        {
-            _audio.PlaySlice();
-        }
-
-        private void OnBlastFired(BlastInfo blast)
-        {
-            _audio.PlayBlast();
-            _hud.ShowBanner("BLAST x" + blast.Layers, "+" + blast.Bonus, Gold);
-            _hud.Flash(0.9f);
-
-            EmitSparks(blast.Epicenter, Gold, 8.5f, 0.15f);
-            EmitShockwave(blast.Epicenter, Gold);
-
-            // Mark where the tower now ends, so the next block never appears out of nowhere.
-            EmitShockwave(blast.NextTop, Mint);
-            _hud.ShowHint(false);
-        }
-
-        private void OnGameEnded(int score, int best)
-        {
-            _gameOver = true;
-            _gameOverTime = Time.unscaledTime;
-
-            _audio.PlayGameOver();
-            _hud.ShowHint(false);
-            _hud.ShowGameOver(score, best);
-        }
-
         private void EmitSparks(Vector3 position, Color color, float speed, float scale)
         {
-            if (_sparkPool == null)
-            {
-                return;
-            }
+            SparkBurst burst = _pools.Spawn(PoolManager.Sparks, position, Vector3.one, Quaternion.identity) as SparkBurst;
 
-            SparkBurst burst = _sparkPool.Spawn(position, Vector3.one, Quaternion.identity) as SparkBurst;
             if (burst != null)
             {
                 burst.Emit(color, speed, scale);
@@ -313,12 +393,8 @@ namespace SliceBlast.Bootstrap
 
         private void EmitShockwave(Vector3 position, Color color)
         {
-            if (_shockwavePool == null)
-            {
-                return;
-            }
+            Shockwave wave = _pools.Spawn(PoolManager.Shockwaves, position, Vector3.one, Quaternion.identity) as Shockwave;
 
-            Shockwave wave = _shockwavePool.Spawn(position, Vector3.one, Quaternion.identity) as Shockwave;
             if (wave != null)
             {
                 wave.Play(color);
@@ -351,6 +427,7 @@ namespace SliceBlast.Bootstrap
             go.name = "BlockTemplate";
 
             Collider collider = go.GetComponent<Collider>();
+
             if (collider != null)
             {
                 DestroyImmediate(collider);
@@ -392,6 +469,7 @@ namespace SliceBlast.Bootstrap
             Mesh cubeMesh = null;
             GameObject sample = GameObject.CreatePrimitive(PrimitiveType.Cube);
             MeshFilter sampleFilter = sample.GetComponent<MeshFilter>();
+
             if (sampleFilter != null)
             {
                 cubeMesh = sampleFilter.sharedMesh;
@@ -496,6 +574,7 @@ namespace SliceBlast.Bootstrap
             quad.name = "Backdrop";
 
             Collider collider = quad.GetComponent<Collider>();
+
             if (collider != null)
             {
                 DestroyImmediate(collider);
