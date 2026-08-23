@@ -59,6 +59,7 @@ namespace SliceBlast.Core
         [SerializeField] private float electricDuration = 15f;
         [SerializeField] private int electricMultiplier = 2;
         [SerializeField, Range(0f, 1f)] private float steelExpansion = 0.15f;
+        [SerializeField, Range(0f, 2f)] private float glitchExpansion = 0.5f;
         [SerializeField] private int glitchJackpot = 150;
         [SerializeField] private int specialPerfectBonus = 25;
 
@@ -519,7 +520,6 @@ namespace SliceBlast.Core
             {
                 case BlockType.Neon:
                     _score += specialPerfectBonus * TotalMultiplier;
-                    Grow(neonGrowth);
                     TriggerBlast(neonLayers, true);
                     break;
 
@@ -538,7 +538,7 @@ namespace SliceBlast.Core
                     break;
 
                 case BlockType.Steel:
-                    Grow(_nextSize.x * steelExpansion);
+                    GrowByFraction(steelExpansion);
                     _score += specialPerfectBonus * TotalMultiplier;
                     Shake(0.45f);
                     Haptics.Heavy();
@@ -548,9 +548,10 @@ namespace SliceBlast.Core
                 case BlockType.Glitch:
                     int jackpot = glitchJackpot * TotalMultiplier;
                     _score += jackpot;
+                    GrowByFraction(glitchExpansion);
                     Shake(0.5f);
                     Haptics.Heavy();
-                    Reward(type, "JACKPOT", "+" + jackpot, new Color(0.72f, 0.55f, 1f), position, jackpot);
+                    Reward(type, "JACKPOT", "+" + jackpot + "   +50% BASE", new Color(0.72f, 0.55f, 1f), position, jackpot);
                     break;
             }
         }
@@ -638,13 +639,16 @@ namespace SliceBlast.Core
             _perfectStreak = 0;
             _slowdown = 0f;
 
-            Grow(blastGrowth);
-
             Vector3 nextTop = epicenter;
             MovingBlock top = TopBlock;
 
             if (top != null)
             {
+                // The exposed layer becomes the new base: clearing downwards hands the
+                // player back the width those lower blocks still have.
+                Vector3 exposed = top.CachedTransform.localScale;
+                _nextSize = new Vector2(exposed.x, exposed.z);
+
                 nextTop = top.CachedTransform.position;
                 PlayImpact(top, 0.3f, 3f, true, Gold);
 
@@ -653,6 +657,8 @@ namespace SliceBlast.Core
                     cameraRig.SetTargetHeight(nextTop.y + basePlatformSize.y);
                 }
             }
+
+            Grow(blastGrowth + (fromNeon ? neonGrowth : 0f));
 
             Shake(blastShake);
 
@@ -673,6 +679,14 @@ namespace SliceBlast.Core
             });
 
             GameEvents.RaiseScoreChanged(_score, TotalMultiplier);
+        }
+
+        /// <summary>Widens the next platform by a share of its current size.</summary>
+        private void GrowByFraction(float fraction)
+        {
+            _nextSize = new Vector2(
+                Mathf.Min(_nextSize.x * (1f + fraction), basePlatformSize.x),
+                Mathf.Min(_nextSize.y * (1f + fraction), basePlatformSize.z));
         }
 
         private void Grow(float amount)
