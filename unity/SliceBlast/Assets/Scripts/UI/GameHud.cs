@@ -22,15 +22,12 @@ namespace SliceBlast.UI
         private static readonly Color BoltBlue = new Color(0.45f, 0.85f, 1f);
 
         // Reachable from the title screen because a store listing is not the only place a
-        // player should be able to find them. Served straight off the repository through
-        // githack's raw-GitHub CDN mirror — no GitHub Pages toggle to flip, live the moment
-        // this is built. (jsDelivr's gh mirror was tried first and rejected: it deliberately
-        // serves .html as text/plain, so it never renders — the page shows raw source.)
-        // The files themselves live under docs/ and already carry the eventual
-        // https://javidalishov700-blip.github.io/game/... links for the day Pages is turned
-        // on; only these two constants need to change when that happens.
-        private const string PrivacyUrl = "https://rawcdn.githack.com/javidalishov700-blip/game/main/docs/privacy-policy.html";
-        private const string TermsUrl = "https://rawcdn.githack.com/javidalishov700-blip/game/main/docs/terms-of-use.html";
+        // player should be able to find them. Served by real GitHub Pages — the javidalishov
+        // steady-site repository already has Pages switched on for another app, so these ride
+        // the same deployment under their own /sliceblast/ path rather than waiting on a
+        // separate Pages toggle for this repository.
+        private const string PrivacyUrl = "https://javidalishov700-blip.github.io/steady-site/sliceblast/legal/privacy.html";
+        private const string TermsUrl = "https://javidalishov700-blip.github.io/steady-site/sliceblast/legal/terms.html";
 
         public event Action PauseToggled;
         public event Action RestartRequested;

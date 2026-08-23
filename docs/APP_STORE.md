@@ -24,24 +24,23 @@ Getting a build to TestFlight is a separate document: [SHIPPING.md](SHIPPING.md)
 ## 1. The legal pages are already live
 
 Apple requires a reachable **Privacy Policy URL** and a **Support URL** before the app can be
-submitted. The three pages live in this repository under `docs/`, and are already reachable
-today with no setup step, through githack's raw-GitHub CDN mirror:
+submitted. They're served by real GitHub Pages, riding the deployment already switched on for
+the `javidalishov700-blip/steady-site` repository, under their own path:
 
 | page | URL |
 |---|---|
-| Support | `https://rawcdn.githack.com/javidalishov700-blip/game/main/docs/index.html` |
-| Privacy Policy | `https://rawcdn.githack.com/javidalishov700-blip/game/main/docs/privacy-policy.html` |
-| Terms of Use | `https://rawcdn.githack.com/javidalishov700-blip/game/main/docs/terms-of-use.html` |
+| Support | `https://javidalishov700-blip.github.io/steady-site/sliceblast/legal/support.html` |
+| Privacy Policy | `https://javidalishov700-blip.github.io/steady-site/sliceblast/legal/privacy.html` |
+| Terms of Use | `https://javidalishov700-blip.github.io/steady-site/sliceblast/legal/terms.html` |
 
 These are the exact URLs hard-coded in `GameHud.PrivacyUrl` / `GameHud.TermsUrl`, and the ones
-to paste into App Store Connect in section 3 below — paste these, not a `github.io` link, or
-Apple's reviewer will hit a 404.
+to paste into App Store Connect in section 3 below. The source files live in the `steady-site`
+repository at `public/sliceblast/legal/`, not in this one — edit them there if the copy ever
+needs to change; a push to `main` redeploys automatically via that repo's `pages.yml`.
 
-**Optional, for later:** GitHub Pages gives the same three pages a cleaner, permanent
-`javidalishov700-blip.github.io` address instead of a CDN mirror. To switch to it: merge this
-branch to the repository's default branch, then GitHub → repository → **Settings → Pages** →
-*Source: Deploy from a branch* → branch `main`, folder **`/docs`** → Save. Once that resolves,
-update the two constants in `GameHud.cs` and the two URLs in section 3 below to match — nothing
+The copies of the same three pages under this repository's own `docs/` folder are unused by the
+app for now. Kept in case this repository ever gets its own GitHub Pages switched on — at that
+point, update the two constants in `GameHud.cs` and the two URLs in section 3 below and nothing
 else changes.
 
 ## 2. Create the app record
@@ -111,9 +110,9 @@ Free, finished, and the same game every time you open it.
 stack,tower,block,slice,arcade,casual,one tap,offline,no ads,reflex,precision,combo,neon,blast
 ```
 
-**Support URL** → `https://rawcdn.githack.com/javidalishov700-blip/game/main/docs/index.html`
+**Support URL** → `https://javidalishov700-blip.github.io/steady-site/sliceblast/legal/support.html`
 **Marketing URL** → *(leave blank, or the same URL)*
-**Privacy Policy URL** → `https://rawcdn.githack.com/javidalishov700-blip/game/main/docs/privacy-policy.html`
+**Privacy Policy URL** → `https://javidalishov700-blip.github.io/steady-site/sliceblast/legal/privacy.html`
 
 **Category** → Primary: **Games → Arcade**. Secondary: **Games → Puzzle**.
 
