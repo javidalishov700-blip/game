@@ -30,7 +30,7 @@ namespace SliceBlast.Core
         [SerializeField] private float tutorialBlendSeconds = 2.2f;
         // Until the player has seen their first blast the magnet is wide open, so the
         // opening three taps land perfectly and the reward teaches itself.
-        [SerializeField, Range(0f, 0.5f)] private float tutorialAssistFraction = 0.4f;
+        [SerializeField, Range(0f, 0.5f)] private float tutorialAssistFraction = 0.22f;
 
         [Header("Dynamic Speed")]
         [SerializeField] private float baseSpeed = 2.4f;
@@ -106,6 +106,7 @@ namespace SliceBlast.Core
         private float _deathHold;
         private float _spawnDelay;
         private float _electricTimer;
+        private float _idleGuard;
 
         public MovingBlock ActiveBlock => _active;
         public MovingBlock TopBlock => _stack.Count > 0 ? _stack[_stack.Count - 1] : null;
@@ -300,6 +301,7 @@ namespace SliceBlast.Core
 
             TickElectric(dt);
             UpdateDynamicSpeed(dt);
+            GuardAgainstStall(dt);
 
             if (_active != null)
             {
@@ -328,6 +330,28 @@ namespace SliceBlast.Core
 
             _pendingSpawn = false;
             SpawnNext();
+        }
+
+        /// <summary>
+        /// Safety net: whatever goes wrong in a reward path, the run must never sit there
+        /// with nothing to tap. If no block is in flight and none is queued, queue one.
+        /// </summary>
+        private void GuardAgainstStall(float deltaTime)
+        {
+            if (_active != null || _pendingSpawn)
+            {
+                _idleGuard = 0f;
+                return;
+            }
+
+            _idleGuard += deltaTime;
+
+            if (_idleGuard > 1.5f)
+            {
+                _idleGuard = 0f;
+                _spawnDelay = 0f;
+                _pendingSpawn = true;
+            }
         }
 
         private void TickElectric(float deltaTime)
@@ -527,14 +551,14 @@ namespace SliceBlast.Core
                     _electricTimer = electricDuration;
                     _score += specialPerfectBonus * TotalMultiplier;
                     GameEvents.RaiseMultiplierTimer(_electricTimer, electricDuration);
-                    Reward(type, "x" + electricMultiplier + " CHARGED", electricDuration.ToString("0") + "s", new Color(1f, 0.93f, 0.2f), position, 0);
+                    Reward(type, string.Empty, string.Empty, new Color(1f, 0.95f, 0.15f), position, 0);
                     break;
 
                 case BlockType.Glass:
                     HasShield = true;
                     _score += specialPerfectBonus * TotalMultiplier;
                     GameEvents.RaiseShieldChanged(true);
-                    Reward(type, "SHIELD", "NEXT MISS FORGIVEN", new Color(0.72f, 0.95f, 1f), position, 0);
+                    Reward(type, string.Empty, string.Empty, new Color(0.78f, 0.97f, 1f), position, 0);
                     break;
 
                 case BlockType.Steel:
@@ -542,7 +566,7 @@ namespace SliceBlast.Core
                     _score += specialPerfectBonus * TotalMultiplier;
                     Shake(0.45f);
                     Haptics.Heavy();
-                    Reward(type, "+15% BASE", string.Empty, new Color(0.82f, 0.86f, 0.92f), position, 0);
+                    Reward(type, string.Empty, string.Empty, new Color(0.82f, 0.86f, 0.92f), position, 0);
                     break;
 
                 case BlockType.Glitch:
@@ -551,7 +575,7 @@ namespace SliceBlast.Core
                     GrowByFraction(glitchExpansion);
                     Shake(0.5f);
                     Haptics.Heavy();
-                    Reward(type, "JACKPOT", "+" + jackpot + "   +50% BASE", new Color(0.72f, 0.55f, 1f), position, jackpot);
+                    Reward(type, string.Empty, string.Empty, new Color(0.72f, 0.55f, 1f), position, jackpot);
                     break;
             }
         }

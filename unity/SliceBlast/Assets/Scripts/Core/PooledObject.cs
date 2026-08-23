@@ -17,6 +17,8 @@ namespace SliceBlast.Core
 
         public Color Tint { get; private set; } = Color.white;
 
+        private Material _defaultMaterial;
+
         public Transform CachedTransform
         {
             get
@@ -43,7 +45,29 @@ namespace SliceBlast.Core
                 tintTarget = GetComponentInChildren<Renderer>(true);
             }
 
+            if (!ReferenceEquals(tintTarget, null))
+            {
+                _defaultMaterial = tintTarget.sharedMaterial;
+            }
+
             CacheComponents();
+        }
+
+        /// <summary>Swaps the shared material (used for the see-through Glass block).</summary>
+        public void SetMaterial(Material material)
+        {
+            if (tintTarget != null && material != null)
+            {
+                tintTarget.sharedMaterial = material;
+            }
+        }
+
+        public void ResetMaterial()
+        {
+            if (tintTarget != null && _defaultMaterial != null)
+            {
+                tintTarget.sharedMaterial = _defaultMaterial;
+            }
         }
 
         protected virtual void CacheComponents()

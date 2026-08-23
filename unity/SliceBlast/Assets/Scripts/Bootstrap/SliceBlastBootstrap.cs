@@ -67,7 +67,7 @@ namespace SliceBlast.Bootstrap
             Material lit = LoadMaterial("Materials/BlockLit", "Standard");
             Material unlit = LoadMaterial("Materials/BlastUnlit", "Sprites/Default");
 
-            MovingBlock blockTemplate = CreateBlockTemplate(lit);
+            MovingBlock blockTemplate = CreateBlockTemplate(lit, unlit);
             DebrisChunk debrisTemplate = CreateDebrisTemplate(lit);
             SparkBurst sparkTemplate = CreateSparkTemplate(lit);
             Shockwave shockwaveTemplate = CreateShockwaveTemplate(unlit);
@@ -242,13 +242,13 @@ namespace SliceBlast.Bootstrap
 
                 case PlacementKind.Shielded:
                     _audio.PlayShatter();
-                    _hud.ShowBanner("SHIELD USED", "TOWER SAVED", new Color(0.72f, 0.95f, 1f));
-                    EmitSparks(placement.Position, new Color(0.72f, 0.95f, 1f), 4.5f, 0.1f);
+                    _hud.Flash(0.25f);
+                    EmitSparks(placement.Position, new Color(0.72f, 0.95f, 1f), 5f, 0.1f);
+                    EmitShockwave(placement.Position, new Color(0.72f, 0.95f, 1f));
                     break;
 
                 case PlacementKind.SpecialFailed:
                     _audio.PlayShatter();
-                    _hud.ShowBanner(definition.Label + " LOST", "COMBO RESET", definition.Tint);
                     EmitSparks(placement.Position, definition.Tint, 5.5f, 0.11f);
                     EmitShockwave(placement.Position, definition.Tint);
                     break;
@@ -271,7 +271,6 @@ namespace SliceBlast.Bootstrap
 
         private void OnReward(RewardEvent reward)
         {
-            _hud.ShowBanner(reward.Headline, reward.Detail, reward.Color);
             EmitSparks(reward.Position, reward.Color, 6f, 0.12f);
 
             switch (reward.Source)
@@ -279,11 +278,14 @@ namespace SliceBlast.Bootstrap
                 case BlockType.Electric:
                     _audio.PlayZap();
                     _hud.Flash(0.35f);
+                    EmitShockwave(reward.Position, reward.Color);
                     break;
 
                 case BlockType.Glitch:
+                    // The only pay-off big enough to interrupt the screen with a word.
                     _audio.PlayJackpot();
-                    _hud.Flash(0.55f);
+                    _hud.Flash(0.6f);
+                    _hud.ShowBanner("JACKPOT", "+" + reward.Points, reward.Color);
                     EmitShockwave(reward.Position, reward.Color);
                     break;
 
@@ -293,6 +295,7 @@ namespace SliceBlast.Bootstrap
 
                 case BlockType.Glass:
                     _audio.PlayTick();
+                    EmitShockwave(reward.Position, reward.Color);
                     break;
             }
         }
@@ -421,7 +424,7 @@ namespace SliceBlast.Bootstrap
             return new Material(shader) { enableInstancing = true };
         }
 
-        private MovingBlock CreateBlockTemplate(Material material)
+        private MovingBlock CreateBlockTemplate(Material material, Material auraMaterial)
         {
             GameObject go = GameObject.CreatePrimitive(PrimitiveType.Cube);
             go.name = "BlockTemplate";
@@ -438,9 +441,84 @@ namespace SliceBlast.Bootstrap
             renderer.shadowCastingMode = ShadowCastingMode.On;
 
             MovingBlock block = go.AddComponent<MovingBlock>();
+
+            // Halo shell: an oversized transparent copy the special types animate, so each
+            // one is identified by how it looks and moves rather than by a caption.
+            GameObject aura = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            aura.name = "Aura";
+
+            Collider auraCollider = aura.GetComponent<Collider>();
+
+            if (auraCollider != null)
+            {
+                DestroyImmediate(auraCollider);
+            }
+
+            MeshRenderer auraRenderer = aura.GetComponent<MeshRenderer>();
+            auraRenderer.sharedMaterial = auraMaterial;
+            auraRenderer.shadowCastingMode = ShadowCastingMode.Off;
+            auraRenderer.receiveShadows = false;
+
+            aura.transform.SetParent(go.transform, false);
+            aura.transform.localScale = Vector3.one * 1.06f;
+            aura.SetActive(false);
+
+            // Symbol plate on the top face — from this camera it is the face the player
+            // reads, so the bolt, the shield and the burst are legible without a caption.
+            GameObject decal = GameObject.CreatePrimitive(PrimitiveType.Quad);
+            decal.name = "Symbol";
+
+            Collider decalCollider = decal.GetComponent<Collider>();
+
+            if (decalCollider != null)
+            {
+                DestroyImmediate(decalCollider);
+            }
+
+            MeshRenderer decalRenderer = decal.GetComponent<MeshRenderer>();
+            decalRenderer.sharedMaterial = auraMaterial;
+            decalRenderer.shadowCastingMode = ShadowCastingMode.Off;
+            decalRenderer.receiveShadows = false;
+
+            decal.transform.SetParent(go.transform, false);
+            decal.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
+            decal.transform.localPosition = new Vector3(0f, 0.51f, 0f);
+            decal.SetActive(false);
+
+            block.SetupVisuals(aura.transform, auraRenderer, auraMaterial, decal.transform, decalRenderer, CreateSymbolMaterials(auraMaterial));
+
             go.transform.SetParent(transform, false);
             go.SetActive(false);
             return block;
+        }
+
+        /// <summary>
+        /// One shared material per block type, indexed by <see cref="BlockType"/>. Six
+        /// materials for the whole game — the symbols never cost a per-block instance.
+        /// </summary>
+        private static Material[] CreateSymbolMaterials(Material unlitMaterial)
+        {
+            Material[] materials = new Material[BlockCatalogue.Count];
+
+            // Dark symbols on bright blocks, bright symbols on dark ones: always readable.
+            materials[(int)BlockType.Neon] = SymbolMaterial(unlitMaterial, IconShape.Burst, new Color(0.28f, 0f, 0.18f));
+            materials[(int)BlockType.Electric] = SymbolMaterial(unlitMaterial, IconShape.Bolt, new Color(0.16f, 0.12f, 0f));
+            materials[(int)BlockType.Glass] = SymbolMaterial(unlitMaterial, IconShape.Shield, new Color(0.06f, 0.36f, 0.55f));
+            materials[(int)BlockType.Steel] = SymbolMaterial(unlitMaterial, IconShape.Chevrons, new Color(0.16f, 0.18f, 0.24f));
+            materials[(int)BlockType.Glitch] = SymbolMaterial(unlitMaterial, IconShape.Glitch, new Color(0.95f, 0.9f, 1f));
+
+            return materials;
+        }
+
+        private static Material SymbolMaterial(Material unlitMaterial, IconShape shape, Color color)
+        {
+            return new Material(unlitMaterial.shader)
+            {
+                name = "Symbol_" + shape,
+                mainTexture = IconFactory.GetTexture(shape),
+                color = color,
+                hideFlags = HideFlags.HideAndDontSave
+            };
         }
 
         private DebrisChunk CreateDebrisTemplate(Material material)

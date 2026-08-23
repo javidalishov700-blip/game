@@ -10,7 +10,9 @@ namespace SliceBlast.Core
     [DisallowMultipleComponent]
     public sealed class BlockSpawner : MonoBehaviour
     {
-        [SerializeField] private int standardOnlyBlocks = 5;
+        [SerializeField] private int standardOnlyBlocks = 12;
+        // A special is an event, not a rhythm: this many plain blocks must pass between them.
+        [SerializeField] private int specialCooldown = 9;
         [SerializeField] private float travelRange = 3.2f;
         [SerializeField] private float glitchJump = 0.9f;
         [SerializeField] private float hueStart = 0.55f;
@@ -20,7 +22,7 @@ namespace SliceBlast.Core
 
         private BlockPool _pool;
         private bool _forceStandard;
-        private bool _lastWasSpecial;
+        private int _sinceSpecial;
         private int _spawnCount;
 
         public float TravelRange => travelRange;
@@ -33,7 +35,7 @@ namespace SliceBlast.Core
         public void ResetRun()
         {
             _forceStandard = false;
-            _lastWasSpecial = false;
+            _sinceSpecial = 0;
             _spawnCount = 0;
         }
 
@@ -68,15 +70,23 @@ namespace SliceBlast.Core
             block.Configure(axisX, pivot, travelRange, -side, type, definition.SpeedMultiplier, type == BlockType.Glitch ? glitchJump : 0f);
 
             _spawnCount++;
-            _lastWasSpecial = BlockCatalogue.IsSpecial(type);
             _forceStandard = false;
+
+            if (BlockCatalogue.IsSpecial(type))
+            {
+                _sinceSpecial = 0;
+            }
+            else
+            {
+                _sinceSpecial++;
+            }
 
             return block;
         }
 
         private BlockType PickType()
         {
-            if (_forceStandard || _lastWasSpecial || _spawnCount < standardOnlyBlocks)
+            if (_forceStandard || _spawnCount < standardOnlyBlocks || _sinceSpecial < specialCooldown)
             {
                 return BlockType.Standard;
             }

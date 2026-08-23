@@ -18,6 +18,20 @@ namespace SliceBlast.Core
         private bool _glitched;
         private bool _glitchPending;
 
+        [SerializeField] private Transform aura;
+        [SerializeField] private Renderer auraRenderer;
+        [SerializeField] private Material transparentMaterial;
+        [SerializeField] private Transform decal;
+        [SerializeField] private Renderer decalRenderer;
+        [SerializeField] private Material[] decalMaterials;
+
+        private static MaterialPropertyBlock s_auraBlock;
+        private static readonly int AuraBaseColorId = Shader.PropertyToID("_BaseColor");
+        private static readonly int AuraColorId = Shader.PropertyToID("_Color");
+
+        private Color _auraColor = Color.white;
+        private float _auraPhase;
+
         private Vector3 _restScale;
         private Color _restTint;
         private Color _flashTint;
@@ -53,7 +67,189 @@ namespace SliceBlast.Core
             _glitched = false;
             _glitchPending = false;
             _impact = 0f;
+            _auraPhase = 0f;
             Type = BlockType.Standard;
+
+            ResetMaterial();
+            ShowAura(false);
+            ShowDecal(false);
+        }
+
+        /// <summary>Called once on the pooled template so every clone carries the same assets.</summary>
+        public void SetupVisuals(Transform auraTransform, Renderer auraRend, Material transparent, Transform decalTransform, Renderer decalRend, Material[] symbols)
+        {
+            aura = auraTransform;
+            auraRenderer = auraRend;
+            transparentMaterial = transparent;
+            decal = decalTransform;
+            decalRenderer = decalRend;
+            decalMaterials = symbols;
+        }
+
+        /// <summary>
+        /// Each type has to be readable at a glance, without a label: colour, halo behaviour
+        /// and — for Glass — an actually see-through body.
+        /// </summary>
+        private void ApplyTypeVisual(BlockType type, Color tint)
+        {
+            _auraColor = tint;
+
+            switch (type)
+            {
+                case BlockType.Glass:
+                    if (transparentMaterial != null)
+                    {
+                        SetMaterial(transparentMaterial);
+                        SetTint(new Color(tint.r, tint.g, tint.b, 0.45f));
+                    }
+
+                    ShowAura(true);
+                    break;
+
+                case BlockType.Neon:
+                case BlockType.Electric:
+                case BlockType.Glitch:
+                    ShowAura(true);
+                    break;
+
+                default:
+                    ShowAura(false);
+                    break;
+            }
+
+            ApplyDecal(type);
+        }
+
+        /// <summary>
+        /// The symbol printed on the top face — a bolt, a shield, a burst. From this camera
+        /// the top face is the biggest thing on screen, so the block says what it is before
+        /// the player has to think about colour.
+        /// </summary>
+        private void ApplyDecal(BlockType type)
+        {
+            if (decal == null || decalRenderer == null || decalMaterials == null)
+            {
+                return;
+            }
+
+            int index = (int)type;
+
+            if (index < 0 || index >= decalMaterials.Length || decalMaterials[index] == null)
+            {
+                ShowDecal(false);
+                return;
+            }
+
+            decalRenderer.sharedMaterial = decalMaterials[index];
+            ShowDecal(true);
+            FitDecal();
+        }
+
+        private void ShowDecal(bool visible)
+        {
+            if (decal != null && decal.gameObject.activeSelf != visible)
+            {
+                decal.gameObject.SetActive(visible);
+            }
+        }
+
+        /// <summary>Keeps the symbol a constant world size while the block is resized.</summary>
+        private void FitDecal()
+        {
+            if (decal == null || !decal.gameObject.activeSelf)
+            {
+                return;
+            }
+
+            Vector3 scale = CachedTransform.localScale;
+            float sx = Mathf.Max(0.001f, scale.x);
+            float sy = Mathf.Max(0.001f, scale.y);
+            float sz = Mathf.Max(0.001f, scale.z);
+
+            float size = Mathf.Min(0.55f, Mathf.Min(sx, sz) * 0.6f);
+
+            decal.localScale = new Vector3(size / sx, size / sz, 1f);
+            decal.localPosition = new Vector3(0f, 0.5f + 0.01f / sy, 0f);
+        }
+
+        private void ShowAura(bool visible)
+        {
+            if (aura == null)
+            {
+                return;
+            }
+
+            if (aura.gameObject.activeSelf != visible)
+            {
+                aura.gameObject.SetActive(visible);
+            }
+        }
+
+        private void TickAura(float deltaTime)
+        {
+            if (aura == null || !aura.gameObject.activeSelf || auraRenderer == null)
+            {
+                return;
+            }
+
+            _auraPhase += deltaTime;
+
+            float scale;
+            float alpha;
+            Vector3 offset = Vector3.zero;
+
+            switch (Type)
+            {
+                case BlockType.Neon:
+                    // A hard, fast pulse — the block that blows things up looks like it.
+                    // The halo stays translucent enough to read the symbol underneath.
+                    scale = 1.06f + Mathf.Sin(_auraPhase * 11f) * 0.05f;
+                    alpha = 0.34f + Mathf.Sin(_auraPhase * 11f) * 0.22f;
+                    break;
+
+                case BlockType.Electric:
+                    // Erratic flicker, like a bad contact.
+                    scale = 1.05f + Random.value * 0.04f;
+                    alpha = Random.value < 0.35f ? 0.12f : 0.34f + Random.value * 0.22f;
+                    break;
+
+                case BlockType.Glitch:
+                    // Displacement: the halo tears away from the body at random.
+                    scale = 1.04f;
+                    alpha = 0.34f + Mathf.Sin(_auraPhase * 17f) * 0.22f;
+                    if (Random.value < 0.2f)
+                    {
+                        float jitter = (Random.value - 0.5f) * 0.35f;
+                        offset = MovingAxisX ? new Vector3(jitter, 0f, 0f) : new Vector3(0f, 0f, jitter);
+                    }
+
+                    break;
+
+                case BlockType.Glass:
+                    // A slow, cold shimmer.
+                    scale = 1.03f + Mathf.Sin(_auraPhase * 2.4f) * 0.015f;
+                    alpha = 0.25f + Mathf.Sin(_auraPhase * 2.4f) * 0.12f;
+                    break;
+
+                default:
+                    return;
+            }
+
+            aura.localScale = new Vector3(scale, scale * 1.02f, scale);
+            aura.localPosition = offset;
+
+            if (s_auraBlock == null)
+            {
+                s_auraBlock = new MaterialPropertyBlock();
+            }
+
+            Color c = _auraColor;
+            c.a = Mathf.Clamp01(alpha);
+
+            auraRenderer.GetPropertyBlock(s_auraBlock);
+            s_auraBlock.SetColor(AuraBaseColorId, c);
+            s_auraBlock.SetColor(AuraColorId, c);
+            auraRenderer.SetPropertyBlock(s_auraBlock);
         }
 
         public void Configure(bool axisX, float pivot, float range, float direction, BlockType type, float speedMultiplier, float glitchJump)
@@ -68,6 +264,8 @@ namespace SliceBlast.Core
             _glitchPending = false;
             Type = type;
             IsMoving = true;
+
+            ApplyTypeVisual(type, Tint);
         }
 
         /// <summary>True once, on the frame the glitch block jumps — for the sound and the flash.</summary>
@@ -88,6 +286,8 @@ namespace SliceBlast.Core
             {
                 return;
             }
+
+            TickAura(deltaTime);
 
             Transform t = CachedTransform;
             Vector3 position = t.position;
@@ -146,6 +346,7 @@ namespace SliceBlast.Core
 
             t.position = position;
             IsMoving = false;
+            ShowAura(false);
         }
 
         /// <summary>Resize to the surviving overlap. Cheaper and cleaner than runtime mesh surgery.</summary>
@@ -169,11 +370,14 @@ namespace SliceBlast.Core
             t.position = position;
             t.localScale = scale;
             IsMoving = false;
+            ShowAura(false);
+            FitDecal();
         }
 
         public void Freeze()
         {
             IsMoving = false;
+            ShowAura(false);
         }
 
         /// <summary>

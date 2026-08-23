@@ -1,13 +1,15 @@
 using System;
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.UI;
 
 namespace SliceBlast.UI
 {
     /// <summary>
     /// The whole interface, built in code: score, streak, multiplier, blast banner, screen
-    /// flash, the pause/settings sheet and the full-screen end-of-run screen. Everything
-    /// animates on unscaled time so pausing and the death slow-motion stay responsive.
+    /// flash, the pause/settings sheet and the full-screen end-of-run screen. Every control
+    /// carries a drawn icon rather than relying on a glyph, and everything animates on
+    /// unscaled time so pausing and the death slow-motion stay responsive.
     /// </summary>
     [DisallowMultipleComponent]
     public sealed class GameHud : MonoBehaviour
@@ -15,7 +17,9 @@ namespace SliceBlast.UI
         private static readonly Color Gold = new Color(1f, 0.79f, 0.29f);
         private static readonly Color Mint = new Color(0.36f, 0.91f, 0.77f);
         private static readonly Color Ink = new Color(0.04f, 0.05f, 0.09f);
-        private static readonly Color Panel = new Color(0.13f, 0.15f, 0.26f);
+        private static readonly Color Panel = new Color(0.16f, 0.18f, 0.3f);
+        private static readonly Color ShieldBlue = new Color(0.72f, 0.95f, 1f);
+        private static readonly Color BoltYellow = new Color(1f, 0.93f, 0.2f);
 
         public event Action PauseToggled;
         public event Action RestartRequested;
@@ -35,11 +39,15 @@ namespace SliceBlast.UI
         private Text _finalScore;
         private Text _bestScore;
         private Text _restart;
-        private Text _shield;
-        private Text _electric;
+        private Text _electricSeconds;
         private Text _soundLabel;
         private Text _hapticsLabel;
+
         private Image _flash;
+        private Image _shieldIcon;
+        private Image _electricIcon;
+        private Image _soundIcon;
+        private Image _hapticsIcon;
 
         private CanvasGroup _gameOver;
         private CanvasGroup _pause;
@@ -52,6 +60,8 @@ namespace SliceBlast.UI
         private float _hintAlpha;
         private float _gameOverAlpha;
         private float _pauseAlpha;
+        private bool _shieldActive;
+        private bool _electricActive;
 
         private bool _soundOn = true;
         private bool _hapticsOn = true;
@@ -104,27 +114,48 @@ namespace SliceBlast.UI
             _hint.text = "TAP TO DROP";
             SetAlpha(_hint, 0f);
 
-            _shield = CreateText("Shield", _safeArea, 46, FontStyle.Bold, new Color(0.72f, 0.95f, 1f), TextAnchor.UpperLeft);
-            Anchor(_shield.rectTransform, new Vector2(0f, 1f), new Vector2(0.6f, 1f), new Vector2(40f, -130f), new Vector2(0f, -60f));
-            _shield.text = string.Empty;
-
-            _electric = CreateText("Electric", _safeArea, 46, FontStyle.Bold, new Color(1f, 0.93f, 0.2f), TextAnchor.UpperLeft);
-            Anchor(_electric.rectTransform, new Vector2(0f, 1f), new Vector2(0.6f, 1f), new Vector2(40f, -200f), new Vector2(0f, -130f));
-            _electric.text = string.Empty;
-
+            BuildStatusBadges();
             BuildPauseButton();
             BuildPauseSheet();
             BuildGameOverScreen();
         }
 
+        /// <summary>Shield and multiplier read as badges, not sentences.</summary>
+        private void BuildStatusBadges()
+        {
+            _shieldIcon = CreateImage("ShieldIcon", _safeArea, ShieldBlue);
+            _shieldIcon.sprite = IconFactory.GetSprite(IconShape.Shield);
+            RectTransform shieldRect = _shieldIcon.rectTransform;
+            shieldRect.anchorMin = new Vector2(0f, 1f);
+            shieldRect.anchorMax = new Vector2(0f, 1f);
+            shieldRect.pivot = new Vector2(0f, 1f);
+            shieldRect.sizeDelta = new Vector2(84f, 84f);
+            shieldRect.anchoredPosition = new Vector2(40f, -40f);
+            SetAlpha(_shieldIcon, 0f);
+
+            _electricIcon = CreateImage("ElectricIcon", _safeArea, BoltYellow);
+            _electricIcon.sprite = IconFactory.GetSprite(IconShape.Bolt);
+            RectTransform boltRect = _electricIcon.rectTransform;
+            boltRect.anchorMin = new Vector2(0f, 1f);
+            boltRect.anchorMax = new Vector2(0f, 1f);
+            boltRect.pivot = new Vector2(0f, 1f);
+            boltRect.sizeDelta = new Vector2(84f, 84f);
+            boltRect.anchoredPosition = new Vector2(40f, -140f);
+            SetAlpha(_electricIcon, 0f);
+
+            _electricSeconds = CreateText("ElectricSeconds", _safeArea, 50, FontStyle.Bold, BoltYellow, TextAnchor.MiddleLeft);
+            Anchor(_electricSeconds.rectTransform, new Vector2(0f, 1f), new Vector2(0.5f, 1f), new Vector2(128f, -224f), new Vector2(0f, -140f));
+            _electricSeconds.text = string.Empty;
+        }
+
         private void BuildPauseButton()
         {
-            Button button = CreateButton("PauseButton", _safeArea, "II", 62, new Color(1f, 1f, 1f, 0.14f), Color.white);
+            Button button = CreateButton("PauseButton", _safeArea, string.Empty, 0, new Color(1f, 1f, 1f, 0.16f), Color.white, IconShape.Pause);
             RectTransform rect = button.GetComponent<RectTransform>();
             rect.anchorMin = new Vector2(1f, 1f);
             rect.anchorMax = new Vector2(1f, 1f);
             rect.pivot = new Vector2(1f, 1f);
-            rect.sizeDelta = new Vector2(120f, 120f);
+            rect.sizeDelta = new Vector2(130f, 130f);
             rect.anchoredPosition = new Vector2(-40f, -40f);
 
             button.onClick.AddListener(() => PauseToggled?.Invoke());
@@ -148,31 +179,31 @@ namespace SliceBlast.UI
             Anchor(title.rectTransform, new Vector2(0f, 0.5f), new Vector2(1f, 0.5f), new Vector2(0f, 420f), new Vector2(0f, 560f));
             title.text = "PAUSED";
 
-            Button resume = CreateButton("Resume", sheet, "RESUME", 60, Mint, Ink);
+            Button resume = CreateButton("Resume", sheet, "RESUME", 58, Mint, Ink, IconShape.Play);
             PlaceMenuButton(resume, 240f);
             resume.onClick.AddListener(() => PauseToggled?.Invoke());
 
-            Button restart = CreateButton("Restart", sheet, "RESTART", 60, Panel, Color.white);
+            Button restart = CreateButton("Restart", sheet, "REPLAY", 58, Panel, Color.white, IconShape.Replay);
             PlaceMenuButton(restart, 80f);
             restart.onClick.AddListener(() => RestartRequested?.Invoke());
 
-            Button sound = CreateButton("Sound", sheet, "SOUND  ON", 52, Panel, Color.white);
+            Button sound = CreateButton("Sound", sheet, "SOUND", 52, Panel, Color.white, IconShape.SoundOn);
             PlaceMenuButton(sound, -80f);
-            _soundLabel = sound.GetComponentInChildren<Text>();
+            _soundLabel = FindLabel(sound);
+            _soundIcon = FindIcon(sound);
             sound.onClick.AddListener(() =>
             {
-                _soundOn = !_soundOn;
-                SetSoundLabel(_soundOn);
+                SetSoundLabel(!_soundOn);
                 SoundToggled?.Invoke(_soundOn);
             });
 
-            Button haptics = CreateButton("Haptics", sheet, "HAPTICS  ON", 52, Panel, Color.white);
-            PlaceMenuButton(haptics, -220f);
-            _hapticsLabel = haptics.GetComponentInChildren<Text>();
+            Button haptics = CreateButton("Haptics", sheet, "VIBRATION", 52, Panel, Color.white, IconShape.VibrateOn);
+            PlaceMenuButton(haptics, -240f);
+            _hapticsLabel = FindLabel(haptics);
+            _hapticsIcon = FindIcon(haptics);
             haptics.onClick.AddListener(() =>
             {
-                _hapticsOn = !_hapticsOn;
-                SetHapticsLabel(_hapticsOn);
+                SetHapticsLabel(!_hapticsOn);
                 HapticsToggled?.Invoke(_hapticsOn);
             });
 
@@ -202,10 +233,19 @@ namespace SliceBlast.UI
             _finalScore = CreateText("FinalScore", screen, 230, FontStyle.Bold, Color.white, TextAnchor.MiddleCenter);
             Anchor(_finalScore.rectTransform, new Vector2(0f, 0.5f), new Vector2(1f, 0.5f), new Vector2(0f, 40f), new Vector2(0f, 290f));
 
+            Image crown = CreateImage("Crown", screen, Gold);
+            crown.sprite = IconFactory.GetSprite(IconShape.Crown);
+            RectTransform crownRect = crown.rectTransform;
+            crownRect.anchorMin = new Vector2(0.5f, 0.5f);
+            crownRect.anchorMax = new Vector2(0.5f, 0.5f);
+            crownRect.pivot = new Vector2(0.5f, 0.5f);
+            crownRect.sizeDelta = new Vector2(72f, 72f);
+            crownRect.anchoredPosition = new Vector2(-210f, -18f);
+
             _bestScore = CreateText("BestScore", screen, 58, FontStyle.Bold, Gold, TextAnchor.MiddleCenter);
             Anchor(_bestScore.rectTransform, new Vector2(0f, 0.5f), new Vector2(1f, 0.5f), new Vector2(0f, -60f), new Vector2(0f, 30f));
 
-            Button again = CreateButton("PlayAgain", screen, "PLAY AGAIN", 62, Mint, Ink);
+            Button again = CreateButton("PlayAgain", screen, "PLAY AGAIN", 60, Mint, Ink, IconShape.Replay);
             PlaceMenuButton(again, -240f);
             again.onClick.AddListener(() => RestartRequested?.Invoke());
 
@@ -214,32 +254,29 @@ namespace SliceBlast.UI
             _restart.text = "OR TAP ANYWHERE";
         }
 
-        private void PlaceMenuButton(Button button, float y)
+        private static void PlaceMenuButton(Button button, float y)
         {
             RectTransform rect = button.GetComponent<RectTransform>();
             rect.anchorMin = new Vector2(0.5f, 0.5f);
             rect.anchorMax = new Vector2(0.5f, 0.5f);
             rect.pivot = new Vector2(0.5f, 0.5f);
-            rect.sizeDelta = new Vector2(680f, 130f);
+            rect.sizeDelta = new Vector2(700f, 132f);
             rect.anchoredPosition = new Vector2(0f, y);
         }
 
         public void SetShield(bool active)
         {
-            if (_shield != null)
-            {
-                _shield.text = active ? "SHIELD READY" : string.Empty;
-            }
+            _shieldActive = active;
         }
 
         public void SetElectric(float remaining, float total)
         {
-            if (_electric == null)
-            {
-                return;
-            }
+            _electricActive = remaining > 0f;
 
-            _electric.text = remaining > 0f ? "x2  " + Mathf.CeilToInt(remaining) + "s" : string.Empty;
+            if (_electricSeconds != null)
+            {
+                _electricSeconds.text = _electricActive ? "x2  " + Mathf.CeilToInt(remaining) : string.Empty;
+            }
         }
 
         public void SetScore(int score)
@@ -317,7 +354,7 @@ namespace SliceBlast.UI
 
             if (_bestScore != null)
             {
-                _bestScore.text = score >= best ? "NEW BEST!" : "BEST  " + best;
+                _bestScore.text = score >= best ? "NEW BEST!" : best.ToString();
                 _bestScore.color = score >= best ? Gold : new Color(1f, 1f, 1f, 0.6f);
             }
 
@@ -358,7 +395,13 @@ namespace SliceBlast.UI
 
             if (_soundLabel != null)
             {
-                _soundLabel.text = on ? "SOUND  ON" : "SOUND  OFF";
+                _soundLabel.text = on ? "SOUND" : "MUTED";
+            }
+
+            if (_soundIcon != null)
+            {
+                _soundIcon.sprite = IconFactory.GetSprite(on ? IconShape.SoundOn : IconShape.SoundOff);
+                _soundIcon.color = on ? Color.white : new Color(1f, 1f, 1f, 0.4f);
             }
         }
 
@@ -368,7 +411,13 @@ namespace SliceBlast.UI
 
             if (_hapticsLabel != null)
             {
-                _hapticsLabel.text = on ? "HAPTICS  ON" : "HAPTICS  OFF";
+                _hapticsLabel.text = on ? "VIBRATION" : "NO VIBRATION";
+            }
+
+            if (_hapticsIcon != null)
+            {
+                _hapticsIcon.sprite = IconFactory.GetSprite(on ? IconShape.VibrateOn : IconShape.VibrateOff);
+                _hapticsIcon.color = on ? Color.white : new Color(1f, 1f, 1f, 0.4f);
             }
         }
 
@@ -427,6 +476,8 @@ namespace SliceBlast.UI
                 SetAlpha(_hint, _hintAlpha * pulse);
             }
 
+            TickBadges(dt);
+
             if (_gameOver != null)
             {
                 _gameOver.alpha = Mathf.MoveTowards(_gameOver.alpha, _gameOverAlpha, dt * 3.5f);
@@ -441,6 +492,33 @@ namespace SliceBlast.UI
             if (_pause != null)
             {
                 _pause.alpha = Mathf.MoveTowards(_pause.alpha, _pauseAlpha, dt * 6f);
+            }
+        }
+
+        private void TickBadges(float dt)
+        {
+            if (_shieldIcon != null)
+            {
+                float alpha = Mathf.MoveTowards(_shieldIcon.color.a, _shieldActive ? 1f : 0f, dt * 5f);
+                SetAlpha(_shieldIcon, alpha);
+
+                if (alpha > 0.01f)
+                {
+                    float breathe = 1f + Mathf.Sin(Time.unscaledTime * 3f) * 0.07f;
+                    _shieldIcon.rectTransform.localScale = new Vector3(breathe, breathe, 1f);
+                }
+            }
+
+            if (_electricIcon != null)
+            {
+                float alpha = Mathf.MoveTowards(_electricIcon.color.a, _electricActive ? 1f : 0f, dt * 5f);
+                SetAlpha(_electricIcon, alpha);
+
+                if (alpha > 0.01f)
+                {
+                    float jolt = 1f + Mathf.Sin(Time.unscaledTime * 14f) * 0.06f;
+                    _electricIcon.rectTransform.localScale = new Vector3(jolt, jolt, 1f);
+                }
             }
         }
 
@@ -518,27 +596,82 @@ namespace SliceBlast.UI
             return text;
         }
 
-        private Button CreateButton(string name, Transform parent, string label, int fontSize, Color background, Color foreground)
+        /// <summary>
+        /// A rounded panel, an icon and — where it helps — a word. The colour states are set
+        /// explicitly: Unity's defaults leave a tapped button stuck in its selected tint on
+        /// touch devices, which is exactly how a label ends up invisible.
+        /// </summary>
+        private Button CreateButton(string name, Transform parent, string label, int fontSize, Color background, Color foreground, IconShape icon)
         {
             RectTransform rect = CreateChild(name, parent);
 
             Image image = rect.gameObject.AddComponent<Image>();
+            image.sprite = IconFactory.GetSprite(IconShape.Panel);
+            image.type = Image.Type.Sliced;
             image.color = background;
             image.raycastTarget = true;
 
             Button button = rect.gameObject.AddComponent<Button>();
             button.targetGraphic = image;
+            button.transition = Selectable.Transition.ColorTint;
 
-            ColorBlock colors = button.colors;
-            colors.highlightedColor = new Color(1f, 1f, 1f, 0.9f);
-            colors.pressedColor = new Color(0.8f, 0.8f, 0.8f, 1f);
-            colors.fadeDuration = 0.05f;
+            ColorBlock colors = ColorBlock.defaultColorBlock;
+            colors.normalColor = Color.white;
+            colors.highlightedColor = Color.white;
+            colors.selectedColor = Color.white;
+            colors.pressedColor = new Color(0.74f, 0.74f, 0.74f, 1f);
+            colors.disabledColor = new Color(1f, 1f, 1f, 0.35f);
+            colors.colorMultiplier = 1f;
+            colors.fadeDuration = 0.06f;
             button.colors = colors;
 
-            Text text = CreateText(name + "Label", rect, fontSize, FontStyle.Bold, foreground, TextAnchor.MiddleCenter);
-            Stretch(text.rectTransform);
+            bool hasLabel = !string.IsNullOrEmpty(label);
+
+            if (icon != IconShape.None)
+            {
+                Image glyph = CreateImage("Icon", rect, foreground);
+                glyph.sprite = IconFactory.GetSprite(icon);
+                glyph.preserveAspect = true;
+
+                RectTransform glyphRect = glyph.rectTransform;
+                glyphRect.anchorMin = new Vector2(hasLabel ? 0f : 0.5f, 0.5f);
+                glyphRect.anchorMax = glyphRect.anchorMin;
+                glyphRect.pivot = new Vector2(0.5f, 0.5f);
+                glyphRect.sizeDelta = hasLabel ? new Vector2(74f, 74f) : new Vector2(62f, 62f);
+                glyphRect.anchoredPosition = hasLabel ? new Vector2(92f, 0f) : Vector2.zero;
+            }
+
+            if (hasLabel)
+            {
+                Text text = CreateText(name + "Label", rect, fontSize, FontStyle.Bold, foreground, TextAnchor.MiddleCenter);
+                Anchor(text.rectTransform, Vector2.zero, Vector2.one, new Vector2(160f, 0f), new Vector2(-40f, 0f));
+            }
+
+            // Leaving a control selected keeps it highlighted for the rest of the run.
+            button.onClick.AddListener(Deselect);
 
             return button;
+        }
+
+        private static Text FindLabel(Button button)
+        {
+            return button.GetComponentInChildren<Text>(true);
+        }
+
+        private static Image FindIcon(Button button)
+        {
+            Transform icon = button.transform.Find("Icon");
+            return icon != null ? icon.GetComponent<Image>() : null;
+        }
+
+        private static void Deselect()
+        {
+            EventSystem events = EventSystem.current;
+
+            if (events != null)
+            {
+                events.SetSelectedGameObject(null);
+            }
         }
 
         private static void Anchor(RectTransform rect, Vector2 anchorMin, Vector2 anchorMax, Vector2 offsetMin, Vector2 offsetMax)
