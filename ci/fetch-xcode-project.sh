@@ -47,20 +47,22 @@ curl -fsSL \
   -o ios-xcode.zip \
   "$API/releases/assets/$ASSET_ID"
 
-rm -rf "$DESTINATION"
-mkdir -p "$DESTINATION"
-unzip -q ios-xcode.zip -d "$DESTINATION"
+rm -rf "$DESTINATION" .xcode-unpack
+mkdir -p .xcode-unpack
+unzip -q ios-xcode.zip -d .xcode-unpack
 
-# unity-builder wraps the project in a folder named after the build target.
-if [ -d "$DESTINATION/iOS" ]; then
-  mv "$DESTINATION/iOS"/* "$DESTINATION"/
-  rmdir "$DESTINATION/iOS"
-fi
+# The zip may come from CI (wrapped in a target-named folder) or straight from a local
+# Unity build on Windows (wrapped in whatever the user zipped). Find the project instead
+# of assuming a layout.
+PROJECT="$(find .xcode-unpack -maxdepth 4 -name 'Unity-iPhone.xcodeproj' -print -quit)"
 
-if [ ! -d "$DESTINATION/Unity-iPhone.xcodeproj" ]; then
-  echo "Unity-iPhone.xcodeproj not found under $DESTINATION:"
-  ls -la "$DESTINATION"
+if [ -z "$PROJECT" ]; then
+  echo "Unity-iPhone.xcodeproj not found in the archive. Top level:"
+  ls -la .xcode-unpack
   exit 1
 fi
+
+mv "$(dirname "$PROJECT")" "$DESTINATION"
+rm -rf .xcode-unpack
 
 echo "Xcode project ready at $DESTINATION"

@@ -28,6 +28,28 @@ Billing is a separate question and usually *not* the cause: Unity Cloud → Orga
 Cost and usage shows spend and Mac minutes, and Usage allowance shows the free-tier bars.
 If those read zero, the queue is a scheduling problem, not a quota one.
 
+## Route C — build the Xcode project on your own Windows machine
+
+The path that needs no CI licence and no build farm at all. Unity on Windows generates the
+iOS Xcode project perfectly well; only compiling and signing it needs a Mac, and Codemagic
+already does that half.
+
+**One-time:** Unity Hub → Installs → the 6000.3.22f1 editor → Add modules → **iOS Build
+Support** (~2 GB). And in Codemagic, add `GITHUB_TOKEN` to the `unity` environment group (a
+fine-grained PAT with *Contents: read*), same as Route B.
+
+**Every build:**
+
+1. Open the project in Unity, then **Slice & Blast → Build iOS Xcode Project**. It writes the
+   project to `unity/SliceBlast/ios/`.
+2. Zip that `ios` folder (right-click → Send to → Compressed folder). Around 30–60 MB.
+3. GitHub → repository → Releases → either edit the existing `ios-xcode-latest` release or
+   create a new one with that exact tag → attach the zip → publish.
+4. Codemagic → run the **xcode-to-testflight** workflow.
+
+`ci/fetch-xcode-project.sh` locates `Unity-iPhone.xcodeproj` wherever it sits inside the
+archive, so it does not matter how the zip is wrapped.
+
 ## Route B — GitHub Actions + Codemagic (no Unity build farm)
 
 Unity only needs a Mac to *compile* the Xcode project, not to *generate* it. So the two
