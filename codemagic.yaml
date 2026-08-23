@@ -193,19 +193,18 @@ workflows:
         XCODE_PROJECT: ios-xcode/Unity-iPhone.xcodeproj
         XCODE_SCHEME: Unity-iPhone
         BUNDLE_ID: com.javidalishov.sliceblast
+      # Declarative signing: Codemagic installs the certificate and profile from the team's
+      # code signing identities before the scripts run. A certificate downloaded from App
+      # Store Connect carries only its public half — the private key has to come from the
+      # .p12 uploaded to Codemagic, which is what this block uses.
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.javidalishov.sliceblast
       xcode: latest
 
     scripts:
       - name: Fetch the Xcode project built by GitHub Actions
         script: bash ci/fetch-xcode-project.sh "$XCODE_DIR"
-
-      - name: Fetch (and create) signing files
-        script: |
-          keychain initialize
-          app-store-connect fetch-signing-files "$BUNDLE_ID" \
-            --type IOS_APP_STORE \
-            --create
-          keychain add-certificates
 
       - name: Apply provisioning profiles
         script: xcode-project use-profiles --project "$XCODE_PROJECT"

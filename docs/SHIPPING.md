@@ -47,6 +47,22 @@ fine-grained PAT with *Contents: read*), same as Route B.
    create a new one with that exact tag → attach the zip → publish.
 4. Codemagic → run the **xcode-to-testflight** workflow.
 
+### Code signing (one-time, in the Codemagic UI)
+
+The workflow signs with the certificate and profile stored in Codemagic, not with one
+downloaded at build time — a certificate fetched from App Store Connect contains only its
+public half, so signing with it fails with *"Cannot save Signing Certificates without
+certificate private key"*.
+
+Codemagic → **Teams / Personal account → Code signing identities**:
+
+- **iOS certificates** → Upload the `.p12` (the one exported with its private key) and enter
+  its password.
+- **iOS provisioning profiles** → Upload the `.mobileprovision` for
+  `com.javidalishov.sliceblast`, App Store distribution.
+
+The `ios_signing` block in `codemagic.yaml` then picks both up automatically.
+
 `ci/fetch-xcode-project.sh` locates `Unity-iPhone.xcodeproj` wherever it sits inside the
 archive, so it does not matter how the zip is wrapped.
 
