@@ -46,6 +46,27 @@ jobs:
           key: unity-library-ios-${{ hashFiles('unity/SliceBlast/Assets/**') }}
           restore-keys: unity-library-ios-
 
+      - name: Check that a Unity image exists for this version
+        run: |
+          set -eu
+          VERSION="${{ inputs.unityVersion }}"
+          echo "Looking for unityci/editor tags matching $VERSION"
+          # A missing image is the one failure that looks cryptic in the builder's log, so
+          # find out here and print what is actually published instead.
+          TAGS="$(curl -fsS "https://hub.docker.com/v2/repositories/unityci/editor/tags?page_size=100&name=$VERSION" \
+            | python3 -c 'import json,sys; print("\n".join(t["name"] for t in json.load(sys.stdin).get("results", [])))')"
+
+          if [ -z "$TAGS" ]; then
+            echo "::error::No GameCI image published for Unity $VERSION."
+            echo "Recent 6000.x images with iOS support:"
+            curl -fsS "https://hub.docker.com/v2/repositories/unityci/editor/tags?page_size=100&name=6000" \
+              | python3 -c 'import json,sys; print("\n".join(sorted(t["name"] for t in json.load(sys.stdin).get("results", []) if "ios" in t["name"])))'
+            echo "Re-run this workflow and put one of those editor versions in the unityVersion input."
+            exit 1
+          fi
+
+          echo "$TAGS"
+
       - uses: game-ci/unity-builder@v4
         env:
           UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
