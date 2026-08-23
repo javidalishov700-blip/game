@@ -211,8 +211,14 @@ workflows:
 
       - name: Set the build number
         script: |
+          # Minutes since 2024 — the same formula the Unity post-process uses, so the number
+          # only ever climbs. Codemagic's own counter restarts per workflow and would push a
+          # build number *below* an earlier upload, which TestFlight then never offers as an
+          # update on the device.
+          BUILD_NUMBER=$(( ( $(date -u +%s) - 1704067200 ) / 60 ))
+          echo "CFBundleVersion = $BUILD_NUMBER"
           cd "$XCODE_DIR"
-          agvtool new-version -all "$PROJECT_BUILD_NUMBER"
+          agvtool new-version -all "$BUILD_NUMBER"
 
       - name: Build the .ipa
         script: |
