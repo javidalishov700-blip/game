@@ -896,13 +896,16 @@ namespace SliceBlast.UI
         }
 
         /// <summary>
-        /// A menu control. The tap target, the glyph and the word are three separate objects
-        /// rather than one nested stack, and that is the whole point: a uGUI
-        /// <see cref="Selectable"/> tints its target graphic through the CanvasRenderer, and a
-        /// CanvasRenderer's colour multiplies into every graphic *below* it. Parent the label
-        /// to the button and the button's own state — pressed, and above all disabled, which
-        /// is what a non-interactable CanvasGroup forces — silently drains the label's alpha.
-        /// Kept as siblings, the icon and the word are immune to it.
+        /// A menu control: the tap target, the glyph and the word as three separate objects.
+        /// The real bug that once made every one of these labels invisible was much plainer
+        /// than the hierarchy — <see cref="CreateButton"/> built the label's Text component
+        /// and never assigned its <c>text</c> string, so it rendered as an empty, correctly
+        /// coloured, correctly sized box. SOUND and VIBRATION looked fine only because
+        /// <see cref="SetSoundLabel"/>/<see cref="SetHapticsLabel"/> happen to set that string
+        /// themselves on load; RESUME, REPLAY, HOME and PLAY AGAIN have no such second call
+        /// and stayed blank. Keeping the label as a sibling rather than a child of the button
+        /// is still worth doing — it is not, itself, at the mercy of the button's own
+        /// <see cref="Selectable"/> transition — but it was never what was hiding the text.
         /// </summary>
         private sealed class MenuControl
         {
@@ -967,6 +970,7 @@ namespace SliceBlast.UI
             {
                 Text text = CreateText(name + "Label", root, fontSize, FontStyle.Bold, foreground, TextAnchor.MiddleCenter, true);
                 Anchor(text.rectTransform, Vector2.zero, Vector2.one, new Vector2(160f, 0f), new Vector2(-40f, 0f));
+                text.text = label;
                 control.Label = text;
             }
 
