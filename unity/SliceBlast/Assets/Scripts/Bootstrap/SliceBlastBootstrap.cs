@@ -22,6 +22,7 @@ namespace SliceBlast.Bootstrap
         private const int ArcNodeCount = 6;
 
         private static readonly Color Mint = new Color(0.55f, 1f, 0.9f);
+        private static readonly Color MissRed = new Color(1f, 0.42f, 0.38f);
 
         [Header("Camera")]
         [SerializeField] private Vector3 cameraAngles = new Vector3(26f, 45f, 0f);
@@ -299,7 +300,10 @@ namespace SliceBlast.Bootstrap
                     break;
 
                 case PlacementKind.SpecialFailed:
+                    // Say what was lost. A special that vanishes without a word reads as a
+                    // bug rather than as the player's mistake.
                     PlayLostVoice(placement.Type);
+                    _hud.ShowBanner("MISSED!", definition.Label + " LOST", MissRed);
                     EmitSparks(placement.Position, placement.Color, 5.5f, 0.11f);
                     EmitShockwave(placement.Position, placement.Color);
                     break;

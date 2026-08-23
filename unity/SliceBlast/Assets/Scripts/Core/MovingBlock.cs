@@ -10,6 +10,22 @@ namespace SliceBlast.Core
     {
         private static readonly Color ArcWhite = new Color(0.78f, 0.95f, 1f);
 
+        // Neon is a tube, not a lamp: the body stays dark and the colour comes out of the
+        // emission. Painting the body at full brightness *and* adding emission on top is
+        // what clipped it to white and made it read as a rendering fault.
+        private const float NeonBodyLevel = 0.34f;
+        private const float NeonGlowLevel = 0.55f;
+
+        // Same reasoning for electric: a bright blue body plus a bright cyan emission adds up
+        // past white and the block loses its colour altogether.
+        private const float ElectricBodyLevel = 0.62f;
+
+        // The arcs run laps around the block's perimeter, in world units per second.
+        private const float ArcOrbitSpeed = 4.5f;
+        private const float ArcLength = 0.34f;
+        private const float ArcThickness = 0.05f;
+        private const float ArcHug = 1.07f;
+
         public bool MovingAxisX { get; private set; }
         public bool IsMoving { get; private set; }
         public BlockType Type { get; private set; }
@@ -28,6 +44,8 @@ namespace SliceBlast.Core
         [SerializeField] private Transform arcs;
         [SerializeField] private Transform[] arcNodes;
 
+        private Renderer[] _arcRenderers;
+
         private static MaterialPropertyBlock s_effectBlock;
         private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
         private static readonly int ColorId = Shader.PropertyToID("_Color");
@@ -35,8 +53,12 @@ namespace SliceBlast.Core
 
         private Color _auraColor = Color.white;
         private float _auraPhase;
-        private float _arcTimer;
+        private float _arcPhase;
         private float _charge;
+
+        // The emission this block returns to once nothing is animating it: black for
+        // everything except neon, which keeps burning after it lands.
+        private Color _restEmission = Color.black;
 
         // The colour the body actually wears, alpha included — glass is see-through, so
         // every effect has to return to this rather than to the raw tint.
@@ -74,9 +96,10 @@ namespace SliceBlast.Core
             _speedMultiplier = 1f;
             _impact = 0f;
             _auraPhase = 0f;
-            _arcTimer = 0f;
+            _arcPhase = 0f;
             _charge = 0f;
             _body = Color.white;
+            _restEmission = Color.black;
             Type = BlockType.Standard;
 
             ResetMaterial();
@@ -105,10 +128,12 @@ namespace SliceBlast.Core
             if (arcs != null)
             {
                 arcNodes = new Transform[arcs.childCount];
+                _arcRenderers = new Renderer[arcs.childCount];
 
                 for (int i = 0; i < arcNodes.Length; i++)
                 {
                     arcNodes[i] = arcs.GetChild(i);
+                    _arcRenderers[i] = arcNodes[i].GetComponent<Renderer>();
                 }
             }
         }
@@ -155,18 +180,23 @@ namespace SliceBlast.Core
         {
             _auraColor = tint;
             _body = tint;
+            _restEmission = Color.black;
             _charge = 0f;
 
             switch (type)
             {
                 case BlockType.Neon:
-                    SetGlow(tint, tint * 0.8f);
+                    _body = new Color(tint.r * NeonBodyLevel, tint.g * NeonBodyLevel, tint.b * NeonBodyLevel, 1f);
+                    _restEmission = tint * NeonGlowLevel;
+                    SetGlow(_body, _restEmission);
                     ShowAura(true);
                     break;
 
                 case BlockType.Electric:
-                    SetGlow(tint, ArcWhite * 0.6f);
+                    _body = new Color(tint.r * ElectricBodyLevel, tint.g * ElectricBodyLevel, tint.b * ElectricBodyLevel, 1f);
+                    SetGlow(_body, ArcWhite * 0.45f);
                     _auraColor = ArcWhite;
+                    _arcPhase = 0f;
                     ShowAura(true);
                     ShowArcs(true);
                     break;
@@ -298,19 +328,20 @@ namespace SliceBlast.Core
             {
                 case BlockType.Neon:
                 {
-                    // A hard, fast pulse — the block that blows things up looks like it.
-                    float wave = Mathf.Sin(_auraPhase * 9f);
-                    SetGlow(_body, _body * (0.6f + wave * 0.4f));
-                    TickAura(1.06f + wave * 0.05f, 0.34f + wave * 0.22f);
+                    // A slow breath. A hard strobe on a saturated colour reads as a broken
+                    // shader on a phone, not as neon.
+                    float wave = Mathf.Sin(_auraPhase * 3.4f);
+                    SetGlow(_body, _restEmission * (1f + wave * 0.2f));
+                    TickAura(1.05f + wave * 0.02f, 0.2f + wave * 0.06f);
                     break;
                 }
 
                 case BlockType.Electric:
                 {
-                    // Erratic, like a bad contact.
-                    float flicker = Random.value < 0.3f ? 0.25f : 0.7f + Random.value * 0.5f;
-                    SetGlow(_body, ArcWhite * flicker);
-                    TickAura(1.05f + Random.value * 0.04f, 0.18f + flicker * 0.22f);
+                    // The body hums; the arcs do the talking.
+                    float hum = 0.44f + Mathf.Sin(_auraPhase * 11f) * 0.14f;
+                    SetGlow(_body, ArcWhite * hum);
+                    TickAura(1.045f + Mathf.Sin(_auraPhase * 7f) * 0.015f, 0.16f + hum * 0.12f);
                     TickArcs(deltaTime);
                     break;
                 }
@@ -343,8 +374,10 @@ namespace SliceBlast.Core
         }
 
         /// <summary>
-        /// Live arcs crawling over the shell. Axis-aligned on purpose: a rotated child inside
-        /// a non-uniformly scaled block would shear.
+        /// The arcs orbit the block: every node walks the same lap around its perimeter, one
+        /// spacing apart, so the discharge reads as one current circling the block rather
+        /// than as sparks blinking at random. Each sliver stays axis-aligned with the side it
+        /// is riding, which is also the only way to avoid shearing inside a squashed block.
         /// </summary>
         private void TickArcs(float deltaTime)
         {
@@ -353,19 +386,23 @@ namespace SliceBlast.Core
                 return;
             }
 
-            _arcTimer -= deltaTime;
-
-            if (_arcTimer > 0f)
-            {
-                return;
-            }
-
-            _arcTimer = 0.04f;
-
             Vector3 scale = CachedTransform.localScale;
             float sx = Mathf.Max(0.001f, scale.x);
             float sy = Mathf.Max(0.001f, scale.y);
             float sz = Mathf.Max(0.001f, scale.z);
+
+            float perimeter = 2f * (sx + sz);
+
+            _arcPhase += deltaTime * ArcOrbitSpeed;
+
+            if (_arcPhase > perimeter)
+            {
+                _arcPhase -= perimeter; // keeps the phase small however long the block lives
+            }
+
+            float spacing = perimeter / arcNodes.Length;
+            float halfX = sx * 0.5f;
+            float halfZ = sz * 0.5f;
 
             for (int i = 0; i < arcNodes.Length; i++)
             {
@@ -376,27 +413,53 @@ namespace SliceBlast.Core
                     continue;
                 }
 
-                if (Random.value < 0.25f)
+                float distance = Mathf.Repeat(_arcPhase + i * spacing, perimeter);
+                float flicker = 0.6f + Mathf.Sin(_arcPhase * 5.5f + i * 1.7f) * 0.4f;
+
+                float x;
+                float z;
+                bool alongX;
+
+                if (distance < sx)
                 {
-                    node.localScale = Vector3.zero; // gaps in the crackle
-                    continue;
+                    alongX = true;
+                    x = distance - halfX;
+                    z = -halfZ;
+                }
+                else if (distance < sx + sz)
+                {
+                    alongX = false;
+                    x = halfX;
+                    z = (distance - sx) - halfZ;
+                }
+                else if (distance < sx + sz + sx)
+                {
+                    alongX = true;
+                    x = halfX - (distance - sx - sz);
+                    z = halfZ;
+                }
+                else
+                {
+                    alongX = false;
+                    x = -halfX;
+                    z = halfZ - (distance - sx - sz - sx);
                 }
 
-                bool alongX = Random.value < 0.5f;
-                float length = Random.Range(0.18f, 0.45f);
-                const float thickness = 0.045f;
+                float length = ArcLength * (0.7f + flicker * 0.5f);
+                float bob = Mathf.Sin(_arcPhase * 2.2f + i * 2.1f) * 0.26f;
+
+                // World offsets divided back out of the block's own scale, so the arcs keep
+                // a constant real size and hug the shell on any block width.
+                node.localPosition = new Vector3(x * ArcHug / sx, bob, z * ArcHug / sz);
 
                 node.localScale = alongX
-                    ? new Vector3(length / sx, thickness / sy, thickness / sz)
-                    : new Vector3(thickness / sx, thickness / sy, length / sz);
+                    ? new Vector3(length / sx, ArcThickness / sy, ArcThickness / sz)
+                    : new Vector3(ArcThickness / sx, ArcThickness / sy, length / sz);
 
-                float along = Random.Range(-0.45f, 0.45f);
-                float height = Random.Range(-0.45f, 0.55f);
-                float face = Random.value < 0.5f ? -0.53f : 0.53f;
-
-                node.localPosition = alongX
-                    ? new Vector3(along, height, face)
-                    : new Vector3(face, height, along);
+                if (_arcRenderers != null && i < _arcRenderers.Length)
+                {
+                    WriteEffectColor(_arcRenderers[i], ArcWhite * flicker);
+                }
             }
         }
 
@@ -417,7 +480,7 @@ namespace SliceBlast.Core
 
             if (amount <= 0f)
             {
-                SetGlow(_body, Type == BlockType.Neon ? _body * 0.8f : Color.black);
+                SetGlow(_body, _restEmission);
                 return;
             }
 
@@ -542,10 +605,9 @@ namespace SliceBlast.Core
             ShowAura(false);
             ShowArcs(false);
 
-            if (Type == BlockType.Electric)
-            {
-                SetGlow(_body, Color.black);
-            }
+            // Whatever was animating stops here; neon keeps its steady burn, everything
+            // else goes back to an unlit body.
+            SetGlow(_body, _restEmission);
         }
 
         /// <summary>
@@ -598,7 +660,7 @@ namespace SliceBlast.Core
 
                 if (_impactFlashes && _charge <= 0f)
                 {
-                    SetGlow(_body, Type == BlockType.Neon ? _body * 0.8f : Color.black);
+                    SetGlow(_body, _restEmission);
                 }
 
                 return false;

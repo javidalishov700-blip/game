@@ -28,7 +28,7 @@ namespace SliceBlast.Core
         private int _sinceSpecial;
         private int _gap;
         private int _spawnCount;
-        private float _lastNeonHue = -1f;
+        private int _lastNeonIndex = -1;
 
         public float TravelRange => travelRange;
 
@@ -42,7 +42,7 @@ namespace SliceBlast.Core
             _forceStandard = false;
             _sinceSpecial = 0;
             _spawnCount = 0;
-            _lastNeonHue = -1f;
+            _lastNeonIndex = -1;
             RollGap();
         }
 
@@ -107,27 +107,37 @@ namespace SliceBlast.Core
         }
 
         /// <summary>
-        /// A neon block has no signature colour — every one of them is a different hue, and
-        /// never one close to the last. Full saturation at full value is what makes it neon.
+        /// Ten real neon-tube hues, never twice the same one in a row and never a signature
+        /// one. Curated rather than rolled off the whole colour wheel on purpose: a free hue
+        /// can land on a muddy olive or a sodium orange, and on a phone that reads as a
+        /// rendering fault rather than as neon.
         /// </summary>
+        private static readonly float[] NeonHues =
+        {
+            0.00f, // red
+            0.05f, // orange
+            0.13f, // amber
+            0.28f, // lime
+            0.40f, // green
+            0.48f, // cyan
+            0.55f, // ice blue
+            0.68f, // indigo
+            0.78f, // violet
+            0.90f  // magenta
+        };
+
         private Color RollNeon()
         {
-            float hue = Random.value;
+            int index = Random.Range(0, NeonHues.Length);
 
-            for (int attempt = 0; attempt < 8 && _lastNeonHue >= 0f; attempt++)
+            if (index == _lastNeonIndex)
             {
-                float distance = Mathf.Abs(Mathf.DeltaAngle(hue * 360f, _lastNeonHue * 360f)) / 360f;
-
-                if (distance >= 0.15f)
-                {
-                    break;
-                }
-
-                hue = Random.value;
+                // Step to any of the other nine rather than re-rolling in a loop.
+                index = (index + 1 + Random.Range(0, NeonHues.Length - 1)) % NeonHues.Length;
             }
 
-            _lastNeonHue = hue;
-            return Color.HSVToRGB(hue, 0.85f, 1f);
+            _lastNeonIndex = index;
+            return Color.HSVToRGB(NeonHues[index], 0.9f, 1f);
         }
 
         private void RollGap()

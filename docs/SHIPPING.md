@@ -2,6 +2,10 @@
 
 Two independent routes exist. Use whichever is available — they produce the same build.
 
+Once a build is on TestFlight, [APP_STORE.md](APP_STORE.md) covers the rest: hosting the
+privacy policy, the metadata to paste into App Store Connect, the privacy and age-rating
+answers, and how to capture the screenshots.
+
 ## Route A — Unity Build Automation (original)
 
 Unity builds the `.ipa`, Codemagic uploads it.

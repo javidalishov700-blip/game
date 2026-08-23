@@ -21,6 +21,11 @@ namespace SliceBlast.UI
         private static readonly Color ShieldBlue = new Color(0.72f, 0.95f, 1f);
         private static readonly Color BoltBlue = new Color(0.45f, 0.85f, 1f);
 
+        // Reachable from the title screen because a store listing is not the only place a
+        // player should be able to find them.
+        private const string PrivacyUrl = "https://javidalishov700-blip.github.io/game/privacy-policy.html";
+        private const string TermsUrl = "https://javidalishov700-blip.github.io/game/terms-of-use.html";
+
         public event Action PauseToggled;
         public event Action RestartRequested;
         public event Action HomeRequested;
@@ -173,15 +178,15 @@ namespace SliceBlast.UI
 
         private void BuildPauseButton()
         {
-            Button button = CreateButton("PauseButton", _safeArea, string.Empty, 0, new Color(1f, 1f, 1f, 0.16f), Color.white, IconShape.Pause);
-            RectTransform rect = button.GetComponent<RectTransform>();
+            MenuControl control = CreateButton("PauseButton", _safeArea, string.Empty, 0, new Color(1f, 1f, 1f, 0.16f), Color.white, IconShape.Pause);
+            RectTransform rect = control.Root;
             rect.anchorMin = new Vector2(1f, 1f);
             rect.anchorMax = new Vector2(1f, 1f);
             rect.pivot = new Vector2(1f, 1f);
             rect.sizeDelta = new Vector2(130f, 130f);
             rect.anchoredPosition = new Vector2(-40f, -40f);
 
-            button.onClick.AddListener(() => PauseToggled?.Invoke());
+            control.Button.onClick.AddListener(() => PauseToggled?.Invoke());
         }
 
         private void BuildPauseSheet()
@@ -202,33 +207,33 @@ namespace SliceBlast.UI
             Anchor(title.rectTransform, new Vector2(0f, 0.5f), new Vector2(1f, 0.5f), new Vector2(0f, 420f), new Vector2(0f, 560f));
             title.text = "PAUSED";
 
-            Button resume = CreateButton("Resume", sheet, "RESUME", 58, Mint, Ink, IconShape.Play);
+            MenuControl resume = CreateButton("Resume", sheet, "RESUME", 58, Mint, Ink, IconShape.Play);
             PlaceMenuButton(resume, 240f);
-            resume.onClick.AddListener(() => PauseToggled?.Invoke());
+            resume.Button.onClick.AddListener(() => PauseToggled?.Invoke());
 
-            Button restart = CreateButton("Restart", sheet, "REPLAY", 58, Panel, Color.white, IconShape.Replay);
+            MenuControl restart = CreateButton("Restart", sheet, "REPLAY", 58, Panel, Color.white, IconShape.Replay);
             PlaceMenuButton(restart, 80f);
-            restart.onClick.AddListener(() => RestartRequested?.Invoke());
+            restart.Button.onClick.AddListener(() => RestartRequested?.Invoke());
 
-            Button home = CreateButton("Home", sheet, "HOME", 58, Panel, Color.white, IconShape.Home);
+            MenuControl home = CreateButton("Home", sheet, "HOME", 58, Panel, Color.white, IconShape.Home);
             PlaceMenuButton(home, -80f);
-            home.onClick.AddListener(() => HomeRequested?.Invoke());
+            home.Button.onClick.AddListener(() => HomeRequested?.Invoke());
 
-            Button sound = CreateButton("Sound", sheet, "SOUND", 52, Panel, Color.white, IconShape.SoundOn);
+            MenuControl sound = CreateButton("Sound", sheet, "SOUND", 52, Panel, Color.white, IconShape.SoundOn);
             PlaceMenuButton(sound, -240f);
-            _soundLabel = FindLabel(sound);
-            _soundIcon = FindIcon(sound);
-            sound.onClick.AddListener(() =>
+            _soundLabel = sound.Label;
+            _soundIcon = sound.Icon;
+            sound.Button.onClick.AddListener(() =>
             {
                 SetSoundLabel(!_soundOn);
                 SoundToggled?.Invoke(_soundOn);
             });
 
-            Button haptics = CreateButton("Haptics", sheet, "VIBRATION", 52, Panel, Color.white, IconShape.VibrateOn);
+            MenuControl haptics = CreateButton("Haptics", sheet, "VIBRATION", 52, Panel, Color.white, IconShape.VibrateOn);
             PlaceMenuButton(haptics, -400f);
-            _hapticsLabel = FindLabel(haptics);
-            _hapticsIcon = FindIcon(haptics);
-            haptics.onClick.AddListener(() =>
+            _hapticsLabel = haptics.Label;
+            _hapticsIcon = haptics.Icon;
+            haptics.Button.onClick.AddListener(() =>
             {
                 SetHapticsLabel(!_hapticsOn);
                 HapticsToggled?.Invoke(_hapticsOn);
@@ -289,31 +294,70 @@ namespace SliceBlast.UI
             _homeBest = CreateText("HomeBest", screen, 54, FontStyle.Bold, Gold, TextAnchor.MiddleCenter);
             Anchor(_homeBest.rectTransform, new Vector2(0f, 0.5f), new Vector2(1f, 0.5f), new Vector2(60f, -490f), new Vector2(0f, -410f));
 
-            Button sound = CreateButton("HomeSound", screen, string.Empty, 0, new Color(1f, 1f, 1f, 0.16f), Color.white, IconShape.SoundOn);
+            MenuControl sound = CreateButton("HomeSound", screen, string.Empty, 0, new Color(1f, 1f, 1f, 0.16f), Color.white, IconShape.SoundOn);
             PlaceHomeToggle(sound, -110f);
-            _homeSoundIcon = FindIcon(sound);
-            sound.onClick.AddListener(() =>
+            _homeSoundIcon = sound.Icon;
+            sound.Button.onClick.AddListener(() =>
             {
                 SetSoundLabel(!_soundOn);
                 SoundToggled?.Invoke(_soundOn);
             });
 
-            Button haptics = CreateButton("HomeHaptics", screen, string.Empty, 0, new Color(1f, 1f, 1f, 0.16f), Color.white, IconShape.VibrateOn);
+            MenuControl haptics = CreateButton("HomeHaptics", screen, string.Empty, 0, new Color(1f, 1f, 1f, 0.16f), Color.white, IconShape.VibrateOn);
             PlaceHomeToggle(haptics, 110f);
-            _homeHapticsIcon = FindIcon(haptics);
-            haptics.onClick.AddListener(() =>
+            _homeHapticsIcon = haptics.Icon;
+            haptics.Button.onClick.AddListener(() =>
             {
                 SetHapticsLabel(!_hapticsOn);
                 HapticsToggled?.Invoke(_hapticsOn);
             });
 
+            CreateLink("Privacy", screen, "PRIVACY POLICY", -175f, PrivacyUrl);
+            CreateLink("Terms", screen, "TERMS OF USE", 175f, TermsUrl);
+
             _titleSliceRest = _titleSlice.anchoredPosition;
             _titleBlastRest = _titleBlast.anchoredPosition;
         }
 
-        private static void PlaceHomeToggle(Button button, float x)
+        /// <summary>
+        /// A quiet text link along the bottom of the title screen. The tap target is a
+        /// transparent image sized well past the words, so it is comfortable on a phone
+        /// without the link itself shouting.
+        /// </summary>
+        private void CreateLink(string name, Transform parent, string label, float x, string url)
         {
-            RectTransform rect = button.GetComponent<RectTransform>();
+            RectTransform rect = CreateChild(name, parent);
+            rect.anchorMin = new Vector2(0.5f, 0f);
+            rect.anchorMax = new Vector2(0.5f, 0f);
+            rect.pivot = new Vector2(0.5f, 0.5f);
+            rect.sizeDelta = new Vector2(330f, 90f);
+            rect.anchoredPosition = new Vector2(x, 90f);
+
+            Image hit = rect.gameObject.AddComponent<Image>();
+            hit.color = Color.clear;
+            hit.raycastTarget = true;
+
+            Button button = rect.gameObject.AddComponent<Button>();
+            button.targetGraphic = hit;
+            button.transition = Selectable.Transition.None;
+            button.onClick.AddListener(() =>
+            {
+                Deselect();
+                Application.OpenURL(url);
+            });
+
+            Text text = CreateText(name + "Label", parent, 34, FontStyle.Normal, new Color(1f, 1f, 1f, 0.55f), TextAnchor.MiddleCenter);
+            text.rectTransform.anchorMin = rect.anchorMin;
+            text.rectTransform.anchorMax = rect.anchorMax;
+            text.rectTransform.pivot = rect.pivot;
+            text.rectTransform.sizeDelta = rect.sizeDelta;
+            text.rectTransform.anchoredPosition = rect.anchoredPosition;
+            text.text = label;
+        }
+
+        private static void PlaceHomeToggle(MenuControl control, float x)
+        {
+            RectTransform rect = control.Root;
             rect.anchorMin = new Vector2(0.5f, 0f);
             rect.anchorMax = new Vector2(0.5f, 0f);
             rect.pivot = new Vector2(0.5f, 0.5f);
@@ -362,23 +406,23 @@ namespace SliceBlast.UI
             _bestScore = CreateText("BestScore", screen, 54, FontStyle.Bold, Gold, TextAnchor.MiddleCenter);
             Anchor(_bestScore.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(40f, -700f), new Vector2(0f, -630f));
 
-            Button again = CreateButton("PlayAgain", screen, "PLAY AGAIN", 60, Mint, Ink, IconShape.Replay);
-            RectTransform againRect = again.GetComponent<RectTransform>();
+            MenuControl again = CreateButton("PlayAgain", screen, "PLAY AGAIN", 60, Mint, Ink, IconShape.Replay);
+            RectTransform againRect = again.Root;
             againRect.anchorMin = new Vector2(0.5f, 0f);
             againRect.anchorMax = new Vector2(0.5f, 0f);
             againRect.pivot = new Vector2(0.5f, 0.5f);
             againRect.sizeDelta = new Vector2(700f, 132f);
             againRect.anchoredPosition = new Vector2(0f, 320f);
-            again.onClick.AddListener(() => RestartRequested?.Invoke());
+            again.Button.onClick.AddListener(() => RestartRequested?.Invoke());
 
             _restart = CreateText("RestartHint", screen, 44, FontStyle.Bold, new Color(1f, 1f, 1f, 0.7f), TextAnchor.MiddleCenter);
             Anchor(_restart.rectTransform, new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(0f, 170f), new Vector2(0f, 250f));
             _restart.text = "OR TAP ANYWHERE";
         }
 
-        private static void PlaceMenuButton(Button button, float y)
+        private static void PlaceMenuButton(MenuControl control, float y)
         {
-            RectTransform rect = button.GetComponent<RectTransform>();
+            RectTransform rect = control.Root;
             rect.anchorMin = new Vector2(0.5f, 0.5f);
             rect.anchorMax = new Vector2(0.5f, 0.5f);
             rect.pivot = new Vector2(0.5f, 0.5f);
@@ -816,7 +860,7 @@ namespace SliceBlast.UI
             return image;
         }
 
-        private Text CreateText(string name, Transform parent, int size, FontStyle style, Color color, TextAnchor anchor)
+        private Text CreateText(string name, Transform parent, int size, FontStyle style, Color color, TextAnchor anchor, bool outlined = false)
         {
             RectTransform rect = CreateChild(name, parent);
 
@@ -830,29 +874,59 @@ namespace SliceBlast.UI
             text.verticalOverflow = VerticalWrapMode.Overflow;
             text.raycastTarget = false;
 
-            Shadow shadow = rect.gameObject.AddComponent<Shadow>();
-            shadow.effectColor = new Color(0f, 0f, 0f, 0.55f);
-            shadow.effectDistance = new Vector2(3f, -3f);
+            // A word sitting on a coloured panel needs a rim, not a drop shadow, to survive
+            // whatever the panel behind it happens to be.
+            if (outlined)
+            {
+                Outline outline = rect.gameObject.AddComponent<Outline>();
+                outline.effectColor = new Color(0f, 0f, 0f, 0.55f);
+                outline.effectDistance = new Vector2(2.5f, -2.5f);
+            }
+            else
+            {
+                Shadow shadow = rect.gameObject.AddComponent<Shadow>();
+                shadow.effectColor = new Color(0f, 0f, 0f, 0.55f);
+                shadow.effectDistance = new Vector2(3f, -3f);
+            }
 
             return text;
         }
 
         /// <summary>
-        /// A rounded panel, an icon and — where it helps — a word. The colour states are set
-        /// explicitly: Unity's defaults leave a tapped button stuck in its selected tint on
-        /// touch devices, which is exactly how a label ends up invisible.
+        /// A menu control. The tap target, the glyph and the word are three separate objects
+        /// rather than one nested stack, and that is the whole point: a uGUI
+        /// <see cref="Selectable"/> tints its target graphic through the CanvasRenderer, and a
+        /// CanvasRenderer's colour multiplies into every graphic *below* it. Parent the label
+        /// to the button and the button's own state — pressed, and above all disabled, which
+        /// is what a non-interactable CanvasGroup forces — silently drains the label's alpha.
+        /// Kept as siblings, the icon and the word are immune to it.
         /// </summary>
-        private Button CreateButton(string name, Transform parent, string label, int fontSize, Color background, Color foreground, IconShape icon)
+        private sealed class MenuControl
         {
-            RectTransform rect = CreateChild(name, parent);
+            public RectTransform Root;
+            public Button Button;
+            public Image Icon;
+            public Text Label;
+        }
 
-            Image image = rect.gameObject.AddComponent<Image>();
+        private MenuControl CreateButton(string name, Transform parent, string label, int fontSize, Color background, Color foreground, IconShape icon)
+        {
+            MenuControl control = new MenuControl();
+
+            RectTransform root = CreateChild(name, parent);
+            control.Root = root;
+
+            // The tap target: a rounded panel with nothing underneath it to tint.
+            RectTransform hit = CreateChild("Hit", root);
+            Stretch(hit);
+
+            Image image = hit.gameObject.AddComponent<Image>();
             image.sprite = IconFactory.GetSprite(IconShape.Panel);
             image.type = Image.Type.Sliced;
             image.color = background;
             image.raycastTarget = true;
 
-            Button button = rect.gameObject.AddComponent<Button>();
+            Button button = hit.gameObject.AddComponent<Button>();
             button.targetGraphic = image;
             button.transition = Selectable.Transition.ColorTint;
 
@@ -861,16 +935,18 @@ namespace SliceBlast.UI
             colors.highlightedColor = Color.white;
             colors.selectedColor = Color.white;
             colors.pressedColor = new Color(0.74f, 0.74f, 0.74f, 1f);
-            colors.disabledColor = new Color(1f, 1f, 1f, 0.35f);
+            colors.disabledColor = Color.white;
             colors.colorMultiplier = 1f;
             colors.fadeDuration = 0.06f;
             button.colors = colors;
+
+            control.Button = button;
 
             bool hasLabel = !string.IsNullOrEmpty(label);
 
             if (icon != IconShape.None)
             {
-                Image glyph = CreateImage("Icon", rect, foreground);
+                Image glyph = CreateImage("Icon", root, foreground);
                 glyph.sprite = IconFactory.GetSprite(icon);
                 glyph.preserveAspect = true;
 
@@ -880,29 +956,21 @@ namespace SliceBlast.UI
                 glyphRect.pivot = new Vector2(0.5f, 0.5f);
                 glyphRect.sizeDelta = hasLabel ? new Vector2(74f, 74f) : new Vector2(62f, 62f);
                 glyphRect.anchoredPosition = hasLabel ? new Vector2(92f, 0f) : Vector2.zero;
+
+                control.Icon = glyph;
             }
 
             if (hasLabel)
             {
-                Text text = CreateText(name + "Label", rect, fontSize, FontStyle.Bold, foreground, TextAnchor.MiddleCenter);
+                Text text = CreateText(name + "Label", root, fontSize, FontStyle.Bold, foreground, TextAnchor.MiddleCenter, true);
                 Anchor(text.rectTransform, Vector2.zero, Vector2.one, new Vector2(160f, 0f), new Vector2(-40f, 0f));
+                control.Label = text;
             }
 
             // Leaving a control selected keeps it highlighted for the rest of the run.
             button.onClick.AddListener(Deselect);
 
-            return button;
-        }
-
-        private static Text FindLabel(Button button)
-        {
-            return button.GetComponentInChildren<Text>(true);
-        }
-
-        private static Image FindIcon(Button button)
-        {
-            Transform icon = button.transform.Find("Icon");
-            return icon != null ? icon.GetComponent<Image>() : null;
+            return control;
         }
 
         private static void Deselect()

@@ -9,3 +9,8 @@ ios
 .capacitor
 logs
 *.log
+unity/SliceBlast/Screenshots/
+unity/SliceBlast/Library/
+unity/SliceBlast/Temp/
+unity/SliceBlast/Logs/
+unity/SliceBlast/obj/
