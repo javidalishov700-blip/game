@@ -11,9 +11,22 @@ Unity builds the `.ipa`, Codemagic uploads it.
 3. Codemagic → environment variables → set `IPA_URL` (or leave the API key configured).
 4. Run the `deliver-ipa` workflow.
 
-**Its weakness:** a build can sit at *Sent to Builder* indefinitely when the free trial's
-build minutes run out or no macOS builder is free. Nothing on our side can speed that up —
-check Unity Cloud → Organization → Usage before waiting.
+### When a build sits at *Sent to Builder*
+
+That status means the job was dispatched but no machine in the pool can serve it. Waiting
+does not fix it. Two settings on the build target decide this, and both are worth comparing
+against a target whose builds used to succeed:
+
+- **Unity version.** If the target asks for an editor version the Mac fleet does not carry,
+  the job waits forever for a machine that will never exist. Pick any version the dropdown
+  actually offers — this project has no serialised assets beyond an empty scene and builds
+  its materials at runtime, so any Unity 6 editor works.
+- **Machine type.** A tier the plan does not include queues indefinitely. Use the standard
+  Mac option.
+
+Billing is a separate question and usually *not* the cause: Unity Cloud → Organization →
+Cost and usage shows spend and Mac minutes, and Usage allowance shows the free-tier bars.
+If those read zero, the queue is a scheduling problem, not a quota one.
 
 ## Route B — GitHub Actions + Codemagic (no Unity build farm)
 
