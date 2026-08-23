@@ -13,6 +13,8 @@ namespace SliceBlast.EditorTools
         private const string MaterialsFolder = ResourcesFolder + "/Materials";
         private const string LitMaterialPath = MaterialsFolder + "/BlockLit.mat";
         private const string UnlitMaterialPath = MaterialsFolder + "/BlastUnlit.mat";
+        private const string GlowMaterialPath = MaterialsFolder + "/Glow.mat";
+        private const string GlassMaterialPath = MaterialsFolder + "/GlassLit.mat";
         private const string IconFolder = "Assets/Icons";
         private const string IconPath = IconFolder + "/AppIcon.png";
 
@@ -35,19 +37,71 @@ namespace SliceBlast.EditorTools
             EnsureFolder("Assets", "Resources");
             EnsureFolder(ResourcesFolder, "Materials");
 
-            if (AssetDatabase.LoadAssetAtPath<Material>(LitMaterialPath) == null)
+            // Blocks: one lit material for the whole tower. Emission is enabled here so every
+            // block can drive _EmissionColor from its own property block — that is what makes
+            // a neon block glow in a pipeline with no post-processing.
+            Material lit = LoadOrCreate(LitMaterialPath, "Standard", "Legacy Shaders/Diffuse");
+
+            if (lit != null)
             {
-                Shader shader = Shader.Find("Standard") ?? Shader.Find("Legacy Shaders/Diffuse");
-                Material lit = new Material(shader) { enableInstancing = true };
-                AssetDatabase.CreateAsset(lit, LitMaterialPath);
+                lit.enableInstancing = true;
+                lit.EnableKeyword("_EMISSION");
+                lit.globalIlluminationFlags = MaterialGlobalIlluminationFlags.RealtimeEmissive;
+                lit.SetColor("_EmissionColor", Color.black);
+                EditorUtility.SetDirty(lit);
             }
 
-            if (AssetDatabase.LoadAssetAtPath<Material>(UnlitMaterialPath) == null)
+            LoadOrCreate(UnlitMaterialPath, "Sprites/Default", "Unlit/Transparent");
+
+            // Halos, arcs and burned-in symbols: additive, so they add light instead of
+            // painting over what is behind them.
+            LoadOrCreate(GlowMaterialPath, "Particles/Additive", "Legacy Shaders/Particles/Additive", "Mobile/Particles/Additive", "Sprites/Default");
+
+            // Glass: the Standard shader in transparent mode, lit and polished, so the block
+            // is genuinely see-through instead of a flat unlit quad colour.
+            Material glass = LoadOrCreate(GlassMaterialPath, "Standard", "Sprites/Default");
+
+            if (glass != null && glass.shader != null && glass.shader.name == "Standard")
             {
-                Shader shader = Shader.Find("Sprites/Default") ?? Shader.Find("Unlit/Transparent");
-                Material unlit = new Material(shader);
-                AssetDatabase.CreateAsset(unlit, UnlitMaterialPath);
+                glass.SetFloat("_Mode", 3f);
+                glass.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
+                glass.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+                glass.SetInt("_ZWrite", 0);
+                glass.SetFloat("_Glossiness", 0.9f);
+                glass.DisableKeyword("_ALPHATEST_ON");
+                glass.EnableKeyword("_ALPHABLEND_ON");
+                glass.DisableKeyword("_ALPHAPREMULTIPLY_ON");
+                glass.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
+                EditorUtility.SetDirty(glass);
             }
+        }
+
+        /// <summary>Loads the material if it is already there, creates it from the first shader that resolves if not.</summary>
+        private static Material LoadOrCreate(string path, params string[] shaderNames)
+        {
+            Material existing = AssetDatabase.LoadAssetAtPath<Material>(path);
+
+            if (existing != null)
+            {
+                return existing;
+            }
+
+            Shader shader = null;
+
+            for (int i = 0; i < shaderNames.Length && shader == null; i++)
+            {
+                shader = Shader.Find(shaderNames[i]);
+            }
+
+            if (shader == null)
+            {
+                Debug.LogWarning($"[SliceBlast] No shader found for {path}.");
+                return null;
+            }
+
+            Material material = new Material(shader);
+            AssetDatabase.CreateAsset(material, path);
+            return material;
         }
 
         public static void EnsureIcon(bool force)

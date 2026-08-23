@@ -8,8 +8,7 @@ namespace SliceBlast.Core
         Neon = 1,
         Electric = 2,
         Glass = 3,
-        Steel = 4,
-        Glitch = 5
+        Steel = 4
     }
 
     public struct BlockDefinition
@@ -25,6 +24,9 @@ namespace SliceBlast.Core
     /// <summary>Single source of truth for how each block looks, moves and how often it shows up.</summary>
     public static class BlockCatalogue
     {
+        /// <summary>Electric blue — the block, its arcs and the current it sends up the tower.</summary>
+        public static readonly Color ElectricBlue = new Color(0.45f, 0.85f, 1f);
+
         private static readonly BlockDefinition[] Definitions =
         {
             new BlockDefinition
@@ -32,14 +34,15 @@ namespace SliceBlast.Core
                 Type = BlockType.Standard,
                 Tint = Color.white,
                 SpeedMultiplier = 1f,
-                SpawnWeight = 100f,
+                SpawnWeight = 0f, // never in the lottery: standard is what fills the gaps
                 UsesPalette = true,
                 Label = "STANDARD"
             },
             new BlockDefinition
             {
                 Type = BlockType.Neon,
-                Tint = new Color(1f, 0.18f, 0.78f),
+                // No signature colour: the spawner rolls a new neon hue for every one of these.
+                Tint = Color.white,
                 SpeedMultiplier = 1f,
                 SpawnWeight = 3f,
                 UsesPalette = false,
@@ -48,7 +51,7 @@ namespace SliceBlast.Core
             new BlockDefinition
             {
                 Type = BlockType.Electric,
-                Tint = new Color(1f, 0.95f, 0.15f),
+                Tint = new Color(0.45f, 0.85f, 1f),
                 SpeedMultiplier = 1.1f,
                 SpawnWeight = 3f,
                 UsesPalette = false,
@@ -57,10 +60,9 @@ namespace SliceBlast.Core
             new BlockDefinition
             {
                 Type = BlockType.Glass,
-                // The rarest thing in the game: a shield should feel like a gift.
                 Tint = new Color(0.78f, 0.97f, 1f),
                 SpeedMultiplier = 0.95f,
-                SpawnWeight = 1.5f,
+                SpawnWeight = 2f,
                 UsesPalette = false,
                 Label = "GLASS"
             },
@@ -69,18 +71,9 @@ namespace SliceBlast.Core
                 Type = BlockType.Steel,
                 Tint = new Color(0.66f, 0.70f, 0.78f),
                 SpeedMultiplier = 1.5f,
-                SpawnWeight = 3f,
-                UsesPalette = false,
-                Label = "STEEL"
-            },
-            new BlockDefinition
-            {
-                Type = BlockType.Glitch,
-                Tint = new Color(0.58f, 0.32f, 1f),
-                SpeedMultiplier = 1.15f,
                 SpawnWeight = 2f,
                 UsesPalette = false,
-                Label = "GLITCH"
+                Label = "STEEL"
             }
         };
 
@@ -91,6 +84,9 @@ namespace SliceBlast.Core
         }
 
         public static int Count => Definitions.Length;
+
+        /// <summary>Index 0 is Standard; the lottery only ever runs over what follows it.</summary>
+        public const int FirstSpecial = 1;
 
         public static BlockDefinition At(int index) => Definitions[Mathf.Clamp(index, 0, Definitions.Length - 1)];
 

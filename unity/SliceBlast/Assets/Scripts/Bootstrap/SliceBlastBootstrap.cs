@@ -18,7 +18,9 @@ namespace SliceBlast.Bootstrap
         private const string SoundKey = "sliceblast.sound";
         private const string HapticsKey = "sliceblast.haptics";
 
-        private static readonly Color Gold = new Color(1f, 0.79f, 0.29f);
+        // Six is enough to read as a live discharge without looking like a swarm.
+        private const int ArcNodeCount = 6;
+
         private static readonly Color Mint = new Color(0.55f, 1f, 0.9f);
 
         [Header("Camera")]
@@ -70,8 +72,12 @@ namespace SliceBlast.Bootstrap
         {
             Material lit = LoadMaterial("Materials/BlockLit", "Standard");
             Material unlit = LoadMaterial("Materials/BlastUnlit", "Sprites/Default");
+            // Additive: with no post-processing in this pipeline, additive geometry is the
+            // only thing that actually reads as a glow.
+            Material glow = LoadMaterial("Materials/Glow", "Particles/Additive");
+            Material glass = LoadMaterial("Materials/GlassLit", "Sprites/Default");
 
-            MovingBlock blockTemplate = CreateBlockTemplate(lit, unlit);
+            MovingBlock blockTemplate = CreateBlockTemplate(lit, unlit, glow, glass);
             DebrisChunk debrisTemplate = CreateDebrisTemplate(lit);
             SparkBurst sparkTemplate = CreateSparkTemplate(lit);
             Shockwave shockwaveTemplate = CreateShockwaveTemplate(unlit);
@@ -160,7 +166,8 @@ namespace SliceBlast.Bootstrap
             GameEvents.MultiplierTimerChanged += OnMultiplierTimer;
             GameEvents.RunEnded += OnRunEnded;
             GameEvents.PauseChanged += OnPauseChanged;
-            GameEvents.GlitchPulsed += OnGlitchPulsed;
+            GameEvents.NeonCharged += OnNeonCharged;
+            GameEvents.CurrentPulsed += OnCurrentPulsed;
         }
 
         private void Unsubscribe()
@@ -175,7 +182,8 @@ namespace SliceBlast.Bootstrap
             GameEvents.MultiplierTimerChanged -= OnMultiplierTimer;
             GameEvents.RunEnded -= OnRunEnded;
             GameEvents.PauseChanged -= OnPauseChanged;
-            GameEvents.GlitchPulsed -= OnGlitchPulsed;
+            GameEvents.NeonCharged -= OnNeonCharged;
+            GameEvents.CurrentPulsed -= OnCurrentPulsed;
         }
 
         private void Update()
@@ -266,12 +274,8 @@ namespace SliceBlast.Bootstrap
                 case PlacementKind.Perfect:
                     _audio.PlayPerfect(placement.Streak);
                     _hud.ShowStreak(placement.Streak);
-                    EmitSparks(placement.Position, definition.UsesPalette ? Mint : definition.Tint, 3.4f, 0.09f);
-
-                    if (placement.Type == BlockType.Steel)
-                    {
-                        _audio.PlayPound();
-                    }
+                    EmitSparks(placement.Position, definition.UsesPalette ? Mint : placement.Color, 3.4f, 0.09f);
+                    PlayLandingVoice(placement.Type);
 
                     // First run: spell out the combo goal until the player has seen a blast.
                     if (_flow != null && _flow.BlastCount == 0)
@@ -288,16 +292,67 @@ namespace SliceBlast.Bootstrap
                     break;
 
                 case PlacementKind.Shielded:
-                    _audio.PlayShatter();
+                    _audio.PlayChime(1.3f);
                     _hud.Flash(0.25f);
                     EmitSparks(placement.Position, new Color(0.72f, 0.95f, 1f), 5f, 0.1f);
                     EmitShockwave(placement.Position, new Color(0.72f, 0.95f, 1f));
                     break;
 
                 case PlacementKind.SpecialFailed:
+                    PlayLostVoice(placement.Type);
+                    EmitSparks(placement.Position, placement.Color, 5.5f, 0.11f);
+                    EmitShockwave(placement.Position, placement.Color);
+                    break;
+            }
+        }
+
+        /// <summary>Each block says its own name when it lands.</summary>
+        private void PlayLandingVoice(BlockType type)
+        {
+            switch (type)
+            {
+                case BlockType.Electric:
+                    _audio.PlayZap();
+                    _audio.PlayCrackle(0.5f);
+                    break;
+
+                case BlockType.Glass:
+                    _audio.PlayChime();
+                    break;
+
+                case BlockType.Steel:
+                    _audio.PlayPound();
+                    _audio.PlayClank();
+                    break;
+            }
+        }
+
+        /// <summary>And its own name when it is fumbled.</summary>
+        private void PlayLostVoice(BlockType type)
+        {
+            switch (type)
+            {
+                case BlockType.Neon:
                     _audio.PlayShatter();
-                    EmitSparks(placement.Position, definition.Tint, 5.5f, 0.11f);
-                    EmitShockwave(placement.Position, definition.Tint);
+                    _audio.PlayCrackle(0.3f);
+                    break;
+
+                case BlockType.Electric:
+                    _audio.PlayShatter();
+                    _audio.PlayCrackle(0.45f);
+                    break;
+
+                case BlockType.Glass:
+                    _audio.PlayShatter();
+                    _audio.PlayChime(0.7f);
+                    break;
+
+                case BlockType.Steel:
+                    _audio.PlayClank(0.62f);
+                    break;
+
+                default:
+                    _audio.PlayShatter();
                     break;
             }
         }
@@ -305,11 +360,11 @@ namespace SliceBlast.Bootstrap
         private void OnBlastFired(BlastEvent blast)
         {
             _audio.PlayBlast();
-            _hud.ShowBanner(blast.FromNeon ? "NEON BLAST" : "BLAST x" + blast.Layers, "+" + blast.Bonus, Gold);
+            _hud.ShowBanner(blast.FromNeon ? "NEON BLAST" : "BLAST x" + blast.Layers, "+" + blast.Bonus, blast.Color);
             _hud.Flash(0.9f);
 
-            EmitSparks(blast.Epicenter, Gold, 8.5f, 0.15f);
-            EmitShockwave(blast.Epicenter, Gold);
+            EmitSparks(blast.Epicenter, blast.Color, 8.5f, 0.15f);
+            EmitShockwave(blast.Epicenter, blast.Color);
 
             // Mark where the tower now ends, so the next block never appears out of nowhere.
             EmitShockwave(blast.NextTop, Mint);
@@ -328,20 +383,11 @@ namespace SliceBlast.Bootstrap
                     EmitShockwave(reward.Position, reward.Color);
                     break;
 
-                case BlockType.Glitch:
-                    // The only pay-off big enough to interrupt the screen with a word.
-                    _audio.PlayJackpot();
-                    _hud.Flash(0.6f);
-                    _hud.ShowBanner("JACKPOT", "+" + reward.Points, reward.Color);
-                    EmitShockwave(reward.Position, reward.Color);
-                    break;
-
                 case BlockType.Steel:
                     EmitShockwave(reward.Position, reward.Color);
                     break;
 
                 case BlockType.Glass:
-                    _audio.PlayTick();
                     EmitShockwave(reward.Position, reward.Color);
                     break;
             }
@@ -357,10 +403,17 @@ namespace SliceBlast.Bootstrap
             _hud.SetElectric(remaining, total);
         }
 
-        private void OnGlitchPulsed(Vector3 position)
+        private void OnNeonCharged(Vector3 position, Color color)
         {
-            _audio.PlayGlitch();
-            EmitSparks(position, new Color(0.72f, 0.55f, 1f), 2.4f, 0.07f);
+            _audio.PlayNeonCharge();
+            _hud.Flash(0.3f);
+            EmitSparks(position, color, 5f, 0.11f);
+        }
+
+        private void OnCurrentPulsed(Vector3 position)
+        {
+            _audio.PlayCrackle();
+            EmitSparks(position, BlockCatalogue.ElectricBlue, 2.6f, 0.06f);
         }
 
         private void OnRunEnded(int score, int best)
@@ -479,7 +532,7 @@ namespace SliceBlast.Bootstrap
             return new Material(shader) { enableInstancing = true };
         }
 
-        private MovingBlock CreateBlockTemplate(Material material, Material auraMaterial)
+        private MovingBlock CreateBlockTemplate(Material material, Material unlitMaterial, Material glowMaterial, Material glassMaterial)
         {
             GameObject go = GameObject.CreatePrimitive(PrimitiveType.Cube);
             go.name = "BlockTemplate";
@@ -510,7 +563,7 @@ namespace SliceBlast.Bootstrap
             }
 
             MeshRenderer auraRenderer = aura.GetComponent<MeshRenderer>();
-            auraRenderer.sharedMaterial = auraMaterial;
+            auraRenderer.sharedMaterial = glowMaterial;
             auraRenderer.shadowCastingMode = ShadowCastingMode.Off;
             auraRenderer.receiveShadows = false;
 
@@ -531,7 +584,7 @@ namespace SliceBlast.Bootstrap
             }
 
             MeshRenderer decalRenderer = decal.GetComponent<MeshRenderer>();
-            decalRenderer.sharedMaterial = auraMaterial;
+            decalRenderer.sharedMaterial = unlitMaterial;
             decalRenderer.shadowCastingMode = ShadowCastingMode.Off;
             decalRenderer.receiveShadows = false;
 
@@ -540,7 +593,46 @@ namespace SliceBlast.Bootstrap
             decal.transform.localPosition = new Vector3(0f, 0.51f, 0f);
             decal.SetActive(false);
 
-            block.SetupVisuals(aura.transform, auraRenderer, auraMaterial, decal.transform, decalRenderer, CreateSymbolMaterials(auraMaterial));
+            // Live arcs for the Electric block: axis-aligned slivers that jump around its
+            // shell. Rotating them inside a non-uniformly scaled block would shear them.
+            GameObject arcRoot = new GameObject("Arcs");
+            arcRoot.transform.SetParent(go.transform, false);
+
+            Transform[] arcNodes = new Transform[ArcNodeCount];
+
+            for (int i = 0; i < ArcNodeCount; i++)
+            {
+                GameObject node = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                node.name = "Arc";
+
+                Collider nodeCollider = node.GetComponent<Collider>();
+
+                if (nodeCollider != null)
+                {
+                    DestroyImmediate(nodeCollider);
+                }
+
+                MeshRenderer nodeRenderer = node.GetComponent<MeshRenderer>();
+                nodeRenderer.sharedMaterial = glowMaterial;
+                nodeRenderer.shadowCastingMode = ShadowCastingMode.Off;
+                nodeRenderer.receiveShadows = false;
+
+                node.transform.SetParent(arcRoot.transform, false);
+                node.transform.localScale = Vector3.zero;
+                arcNodes[i] = node.transform;
+            }
+
+            arcRoot.SetActive(false);
+
+            block.SetupVisuals(
+                aura.transform,
+                auraRenderer,
+                glassMaterial,
+                decal.transform,
+                decalRenderer,
+                CreateSymbolMaterials(unlitMaterial, glowMaterial),
+                arcRoot.transform,
+                arcNodes);
 
             go.transform.SetParent(transform, false);
             go.SetActive(false);
@@ -551,23 +643,23 @@ namespace SliceBlast.Bootstrap
         /// One shared material per block type, indexed by <see cref="BlockType"/>. Six
         /// materials for the whole game — the symbols never cost a per-block instance.
         /// </summary>
-        private static Material[] CreateSymbolMaterials(Material unlitMaterial)
+        private static Material[] CreateSymbolMaterials(Material unlitMaterial, Material glowMaterial)
         {
             Material[] materials = new Material[BlockCatalogue.Count];
 
-            // Dark symbols on bright blocks, bright symbols on dark ones: always readable.
-            materials[(int)BlockType.Neon] = SymbolMaterial(unlitMaterial, IconShape.Burst, new Color(0.28f, 0f, 0.18f));
-            materials[(int)BlockType.Electric] = SymbolMaterial(unlitMaterial, IconShape.Bolt, new Color(0.16f, 0.12f, 0f));
-            materials[(int)BlockType.Glass] = SymbolMaterial(unlitMaterial, IconShape.Shield, new Color(0.06f, 0.36f, 0.55f));
-            materials[(int)BlockType.Steel] = SymbolMaterial(unlitMaterial, IconShape.Chevrons, new Color(0.16f, 0.18f, 0.24f));
-            materials[(int)BlockType.Glitch] = SymbolMaterial(unlitMaterial, IconShape.Glitch, new Color(0.95f, 0.9f, 1f));
+            // Neon and Electric burn their symbol into the face additively — the block is
+            // lit from inside. Glass and Steel take a dark engraved mark instead.
+            materials[(int)BlockType.Neon] = SymbolMaterial(glowMaterial, IconShape.Burst, Color.white);
+            materials[(int)BlockType.Electric] = SymbolMaterial(glowMaterial, IconShape.ElectricArcs, Color.white);
+            materials[(int)BlockType.Glass] = SymbolMaterial(unlitMaterial, IconShape.Shield, Color.white);
+            materials[(int)BlockType.Steel] = SymbolMaterial(unlitMaterial, IconShape.Chevrons, Color.white);
 
             return materials;
         }
 
-        private static Material SymbolMaterial(Material unlitMaterial, IconShape shape, Color color)
+        private static Material SymbolMaterial(Material source, IconShape shape, Color color)
         {
-            return new Material(unlitMaterial.shader)
+            return new Material(source.shader)
             {
                 name = "Symbol_" + shape,
                 mainTexture = IconFactory.GetTexture(shape),

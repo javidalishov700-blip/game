@@ -21,7 +21,7 @@ namespace SliceBlast.UI
         Bolt,
         Burst,
         Chevrons,
-        Glitch,
+        ElectricArcs,
         Crown,
         Home
     }
@@ -201,13 +201,26 @@ namespace SliceBlast.UI
                     return Mathf.Min(upper, lower);
                 }
 
-                case IconShape.Glitch:
-                    // Scan lines knocked out of alignment.
-                    return Mathf.Min(
+                case IconShape.ElectricArcs:
+                {
+                    // A branching discharge, not a single glyph: this is stamped across the
+                    // whole top face of the Electric block, so the surface itself crackles.
+                    float main = Mathf.Min(
                         Mathf.Min(
-                            Box(p - new Vector2(-0.14f, 0.42f), new Vector2(0.46f, 0.13f), 0.03f),
-                            Box(p - new Vector2(0.2f, 0.02f), new Vector2(0.38f, 0.13f), 0.03f)),
-                        Box(p - new Vector2(-0.24f, -0.38f), new Vector2(0.34f, 0.13f), 0.03f));
+                            Segment(p, new Vector2(-0.55f, 0.85f), new Vector2(0.05f, 0.25f), 0.055f),
+                            Segment(p, new Vector2(0.05f, 0.25f), new Vector2(-0.25f, 0f), 0.055f)),
+                        Segment(p, new Vector2(-0.25f, 0f), new Vector2(0.35f, -0.85f), 0.055f));
+
+                    float forks = Mathf.Min(
+                        Segment(p, new Vector2(0.05f, 0.25f), new Vector2(0.75f, 0.58f), 0.04f),
+                        Segment(p, new Vector2(-0.25f, 0f), new Vector2(-0.85f, -0.32f), 0.04f));
+
+                    float sparks = Mathf.Min(
+                        Segment(p, new Vector2(0.55f, -0.4f), new Vector2(0.85f, -0.18f), 0.035f),
+                        Segment(p, new Vector2(-0.8f, 0.45f), new Vector2(-0.55f, 0.62f), 0.035f));
+
+                    return Mathf.Min(main, Mathf.Min(forks, sparks));
+                }
 
                 case IconShape.Home:
                 {

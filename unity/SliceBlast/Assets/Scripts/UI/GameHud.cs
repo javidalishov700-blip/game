@@ -19,7 +19,7 @@ namespace SliceBlast.UI
         private static readonly Color Ink = new Color(0.04f, 0.05f, 0.09f);
         private static readonly Color Panel = new Color(0.16f, 0.18f, 0.3f);
         private static readonly Color ShieldBlue = new Color(0.72f, 0.95f, 1f);
-        private static readonly Color BoltYellow = new Color(1f, 0.93f, 0.2f);
+        private static readonly Color BoltBlue = new Color(0.45f, 0.85f, 1f);
 
         public event Action PauseToggled;
         public event Action RestartRequested;
@@ -156,7 +156,7 @@ namespace SliceBlast.UI
             shieldRect.anchoredPosition = new Vector2(40f, -40f);
             SetAlpha(_shieldIcon, 0f);
 
-            _electricIcon = CreateImage("ElectricIcon", _safeArea, BoltYellow);
+            _electricIcon = CreateImage("ElectricIcon", _safeArea, BoltBlue);
             _electricIcon.sprite = IconFactory.GetSprite(IconShape.Bolt);
             RectTransform boltRect = _electricIcon.rectTransform;
             boltRect.anchorMin = new Vector2(0f, 1f);
@@ -166,7 +166,7 @@ namespace SliceBlast.UI
             boltRect.anchoredPosition = new Vector2(40f, -140f);
             SetAlpha(_electricIcon, 0f);
 
-            _electricSeconds = CreateText("ElectricSeconds", _safeArea, 50, FontStyle.Bold, BoltYellow, TextAnchor.MiddleLeft);
+            _electricSeconds = CreateText("ElectricSeconds", _safeArea, 50, FontStyle.Bold, BoltBlue, TextAnchor.MiddleLeft);
             Anchor(_electricSeconds.rectTransform, new Vector2(0f, 1f), new Vector2(0.5f, 1f), new Vector2(128f, -224f), new Vector2(0f, -140f));
             _electricSeconds.text = string.Empty;
         }

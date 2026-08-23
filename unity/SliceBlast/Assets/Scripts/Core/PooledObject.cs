@@ -8,6 +8,12 @@ namespace SliceBlast.Core
         private static MaterialPropertyBlock s_propertyBlock;
         private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
         private static readonly int ColorId = Shader.PropertyToID("_Color");
+        private static readonly int EmissionId = Shader.PropertyToID("_EmissionColor");
+        private static readonly int MetallicId = Shader.PropertyToID("_Metallic");
+        private static readonly int SmoothnessId = Shader.PropertyToID("_Glossiness");
+
+        private const float DefaultMetallic = 0f;
+        private const float DefaultSmoothness = 0.35f;
 
         [SerializeField] private Renderer tintTarget;
 
@@ -97,12 +103,30 @@ namespace SliceBlast.Core
             }
         }
 
-        // MaterialPropertyBlock keeps every block on one material, so the whole tower
-        // stays in a single GPU-instanced draw call.
+        // One material for every block; colour, glow and surface all ride in the same
+        // MaterialPropertyBlock so a block can look like neon, metal or glass on its own.
         public void SetTint(Color color)
         {
             Tint = color;
 
+            // A recycled block must never inherit the last one's glow or sheen.
+            Write(color, Color.black, DefaultMetallic, DefaultSmoothness);
+        }
+
+        /// <summary>Colour plus emission, leaving <see cref="Tint"/> as the base to return to.</summary>
+        public void SetGlow(Color color, Color emission)
+        {
+            Write(color, emission, null, null);
+        }
+
+        /// <summary>Steel is metal, glass is polished: the surface is per block, not per material.</summary>
+        public void SetSurface(float metallic, float smoothness)
+        {
+            Write(null, null, metallic, smoothness);
+        }
+
+        private void Write(Color? color, Color? emission, float? metallic, float? smoothness)
+        {
             if (tintTarget == null)
             {
                 tintTarget = GetComponentInChildren<Renderer>(true);
@@ -118,9 +142,30 @@ namespace SliceBlast.Core
                 s_propertyBlock = new MaterialPropertyBlock();
             }
 
+            // Fetch first: every writer only touches the properties it cares about.
             tintTarget.GetPropertyBlock(s_propertyBlock);
-            s_propertyBlock.SetColor(BaseColorId, color);
-            s_propertyBlock.SetColor(ColorId, color);
+
+            if (color.HasValue)
+            {
+                s_propertyBlock.SetColor(BaseColorId, color.Value);
+                s_propertyBlock.SetColor(ColorId, color.Value);
+            }
+
+            if (emission.HasValue)
+            {
+                s_propertyBlock.SetColor(EmissionId, emission.Value);
+            }
+
+            if (metallic.HasValue)
+            {
+                s_propertyBlock.SetFloat(MetallicId, metallic.Value);
+            }
+
+            if (smoothness.HasValue)
+            {
+                s_propertyBlock.SetFloat(SmoothnessId, smoothness.Value);
+            }
+
             tintTarget.SetPropertyBlock(s_propertyBlock);
         }
     }

@@ -17,6 +17,7 @@ namespace SliceBlast.Core
         public BlockType Type;
         public PlacementKind Kind;
         public Vector3 Position;
+        public Color Color;
         public int Streak;
     }
 
@@ -27,6 +28,7 @@ namespace SliceBlast.Core
         public int Bonus;
         public Vector3 Epicenter;
         public Vector3 NextTop;
+        public Color Color;
         public bool FromNeon;
     }
 
@@ -57,7 +59,11 @@ namespace SliceBlast.Core
         public static event Action<float, float> MultiplierTimerChanged;
         public static event Action<int, int> RunEnded;
         public static event Action<bool> PauseChanged;
-        public static event Action<Vector3> GlitchPulsed;
+        /// <summary>Neon has marked the layers it is about to take, in its own colour.</summary>
+        public static event Action<Vector3, Color> NeonCharged;
+
+        /// <summary>One beat of the current running up the tower.</summary>
+        public static event Action<Vector3> CurrentPulsed;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         public static void Clear()
@@ -72,7 +78,8 @@ namespace SliceBlast.Core
             MultiplierTimerChanged = null;
             RunEnded = null;
             PauseChanged = null;
-            GlitchPulsed = null;
+            NeonCharged = null;
+            CurrentPulsed = null;
         }
 
         public static void RaiseHomeShown(int best) => HomeShown?.Invoke(best);
@@ -95,6 +102,8 @@ namespace SliceBlast.Core
 
         public static void RaisePauseChanged(bool paused) => PauseChanged?.Invoke(paused);
 
-        public static void RaiseGlitchPulse(Vector3 position) => GlitchPulsed?.Invoke(position);
+        public static void RaiseNeonCharged(Vector3 position, Color color) => NeonCharged?.Invoke(position, color);
+
+        public static void RaiseCurrentPulsed(Vector3 position) => CurrentPulsed?.Invoke(position);
     }
 }

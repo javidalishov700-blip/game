@@ -4,27 +4,31 @@ namespace SliceBlast.Core
 {
     /// <summary>
     /// Decides what slides in next and puts it there. Owns the type lottery, the opening
-    /// grace period, the no-two-specials-in-a-row rule and the forced Standard that follows
+    /// grace period, the random gap between specials and the forced Standard that follows
     /// a failed special.
     /// </summary>
     [DisallowMultipleComponent]
     public sealed class BlockSpawner : MonoBehaviour
     {
         [SerializeField] private int standardOnlyBlocks = 12;
-        // A special is an event, not a rhythm: this many plain blocks must pass between them.
-        [SerializeField] private int specialCooldown = 9;
+        // A special is an event, not a rhythm: this many plain blocks pass between them, and
+        // the exact number is rolled fresh every time so the pattern is never learnable.
+        [SerializeField] private int minSpecialGap = 12;
+        [SerializeField] private int maxSpecialGap = 22;
         [SerializeField] private float travelRange = 2f;
         [SerializeField] private float minTravelRange = 1.2f;
-        [SerializeField] private float glitchJump = 0.9f;
-        [SerializeField] private float hueStart = 0.55f;
-        [SerializeField] private float hueStep = 0.028f;
+        [SerializeField] private float hueStart = 0.45f;
+        [SerializeField] private float hueSpan = 0.4f;
+        [SerializeField] private float hueStep = 0.035f;
         [SerializeField, Range(0f, 1f)] private float saturation = 0.55f;
         [SerializeField, Range(0f, 1f)] private float brightness = 0.95f;
 
         private BlockPool _pool;
         private bool _forceStandard;
         private int _sinceSpecial;
+        private int _gap;
         private int _spawnCount;
+        private float _lastNeonHue = -1f;
 
         public float TravelRange => travelRange;
 
@@ -38,6 +42,8 @@ namespace SliceBlast.Core
             _forceStandard = false;
             _sinceSpecial = 0;
             _spawnCount = 0;
+            _lastNeonHue = -1f;
+            RollGap();
         }
 
         /// <summary>After a special is fumbled the rhythm resets with a plain block.</summary>
@@ -71,8 +77,8 @@ namespace SliceBlast.Core
             }
 
             MovingBlock block = (MovingBlock)_pool.Spawn(position, scale, Quaternion.identity);
-            block.SetTint(definition.UsesPalette ? PaletteColor(paletteIndex) : definition.Tint);
-            block.Configure(axisX, pivot, range, -side, type, definition.SpeedMultiplier, type == BlockType.Glitch ? glitchJump : 0f);
+            block.SetTint(TintFor(type, definition, paletteIndex));
+            block.Configure(axisX, pivot, range, -side, type, definition.SpeedMultiplier);
 
             _spawnCount++;
             _forceStandard = false;
@@ -80,6 +86,7 @@ namespace SliceBlast.Core
             if (BlockCatalogue.IsSpecial(type))
             {
                 _sinceSpecial = 0;
+                RollGap();
             }
             else
             {
@@ -89,22 +96,65 @@ namespace SliceBlast.Core
             return block;
         }
 
+        private Color TintFor(BlockType type, BlockDefinition definition, int paletteIndex)
+        {
+            if (type == BlockType.Neon)
+            {
+                return RollNeon();
+            }
+
+            return definition.UsesPalette ? PaletteColor(paletteIndex) : definition.Tint;
+        }
+
+        /// <summary>
+        /// A neon block has no signature colour — every one of them is a different hue, and
+        /// never one close to the last. Full saturation at full value is what makes it neon.
+        /// </summary>
+        private Color RollNeon()
+        {
+            float hue = Random.value;
+
+            for (int attempt = 0; attempt < 8 && _lastNeonHue >= 0f; attempt++)
+            {
+                float distance = Mathf.Abs(Mathf.DeltaAngle(hue * 360f, _lastNeonHue * 360f)) / 360f;
+
+                if (distance >= 0.15f)
+                {
+                    break;
+                }
+
+                hue = Random.value;
+            }
+
+            _lastNeonHue = hue;
+            return Color.HSVToRGB(hue, 0.85f, 1f);
+        }
+
+        private void RollGap()
+        {
+            int low = Mathf.Max(1, minSpecialGap);
+            _gap = Random.Range(low, Mathf.Max(low, maxSpecialGap) + 1);
+        }
+
         private BlockType PickType()
         {
-            if (_forceStandard || _spawnCount < standardOnlyBlocks || _sinceSpecial < specialCooldown)
+            if (_forceStandard || _spawnCount < standardOnlyBlocks || _sinceSpecial < _gap)
             {
                 return BlockType.Standard;
             }
 
+            // The gap has run out, so this one is a special: Standard never competes in the
+            // lottery, it just fills the space in between.
             float total = 0f;
-            for (int i = 0; i < BlockCatalogue.Count; i++)
+
+            for (int i = BlockCatalogue.FirstSpecial; i < BlockCatalogue.Count; i++)
             {
                 total += BlockCatalogue.At(i).SpawnWeight;
             }
 
             float roll = Random.value * total;
 
-            for (int i = 0; i < BlockCatalogue.Count; i++)
+            for (int i = BlockCatalogue.FirstSpecial; i < BlockCatalogue.Count; i++)
             {
                 BlockDefinition definition = BlockCatalogue.At(i);
                 roll -= definition.SpawnWeight;
@@ -118,9 +168,14 @@ namespace SliceBlast.Core
             return BlockType.Standard;
         }
 
+        /// <summary>
+        /// Ordinary blocks ping-pong through cyan → blue → violet. Bounded on purpose: no
+        /// plain block should ever drift into a neon hue and be mistaken for a special.
+        /// </summary>
         private Color PaletteColor(int index)
         {
-            return Color.HSVToRGB(Mathf.Repeat(hueStart + index * hueStep, 1f), saturation, brightness);
+            float hue = hueStart + Mathf.PingPong(index * hueStep, hueSpan);
+            return Color.HSVToRGB(Mathf.Repeat(hue, 1f), saturation, brightness);
         }
     }
 }

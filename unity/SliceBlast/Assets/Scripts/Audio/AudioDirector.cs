@@ -32,8 +32,10 @@ namespace SliceBlast.Audio
         private AudioClip _zap;
         private AudioClip _shatter;
         private AudioClip _pound;
-        private AudioClip _glitch;
+        private AudioClip _crackle;
         private AudioClip _jackpot;
+        private AudioClip _chime;
+        private AudioClip _clank;
 
         public bool Muted { get; set; }
 
@@ -49,8 +51,10 @@ namespace SliceBlast.Audio
             _zap = ProceduralSfx.Zap();
             _shatter = ProceduralSfx.Shatter();
             _pound = ProceduralSfx.Pound();
-            _glitch = ProceduralSfx.Glitch();
+            _crackle = ProceduralSfx.Crackle();
             _jackpot = ProceduralSfx.Jackpot();
+            _chime = ProceduralSfx.Chime();
+            _clank = ProceduralSfx.Clank();
 
             _voices = new AudioSource[Mathf.Max(2, voiceCount)];
             for (int i = 0; i < _voices.Length; i++)
@@ -129,14 +133,28 @@ namespace SliceBlast.Audio
             Play(_pound, 1f, 0.95f);
         }
 
-        public void PlayGlitch()
+        /// <summary>One beat of the current running through the tower.</summary>
+        public void PlayCrackle(float volume = 0.35f)
         {
-            Play(_glitch, Random.Range(0.9f, 1.2f), 0.6f);
+            Play(_crackle, Random.Range(1.3f, 1.9f), volume);
         }
 
-        public void PlayJackpot()
+        /// <summary>Neon marking the layers it is about to take.</summary>
+        public void PlayNeonCharge()
         {
-            Play(_jackpot, 1f, 0.85f);
+            Play(_jackpot, 1.35f, 0.7f);
+        }
+
+        /// <summary>Glass.</summary>
+        public void PlayChime(float pitch = 1f)
+        {
+            Play(_chime, pitch, 0.7f);
+        }
+
+        /// <summary>Steel.</summary>
+        public void PlayClank(float pitch = 1f)
+        {
+            Play(_clank, pitch, 0.8f);
         }
 
         private void Play(AudioClip clip, float pitch, float volume)

@@ -2,9 +2,14 @@ using UnityEngine;
 
 namespace SliceBlast.Core
 {
-    /// <summary>A tower layer. Ping-pongs along one axis until it is snapped, sliced or lost.</summary>
+    /// <summary>
+    /// A tower layer. Ping-pongs along one axis until it is snapped, sliced or lost, and
+    /// carries whatever look its type demands: a neon glow, live arcs, glass, or metal.
+    /// </summary>
     public sealed class MovingBlock : PooledObject
     {
+        private static readonly Color ArcWhite = new Color(0.78f, 0.95f, 1f);
+
         public bool MovingAxisX { get; private set; }
         public bool IsMoving { get; private set; }
         public BlockType Type { get; private set; }
@@ -14,26 +19,30 @@ namespace SliceBlast.Core
         private float _direction = 1f;
         private float _speedMultiplier = 1f;
 
-        private float _glitchJump;
-        private bool _glitched;
-        private bool _glitchPending;
-
         [SerializeField] private Transform aura;
         [SerializeField] private Renderer auraRenderer;
-        [SerializeField] private Material transparentMaterial;
+        [SerializeField] private Material glassMaterial;
         [SerializeField] private Transform decal;
         [SerializeField] private Renderer decalRenderer;
         [SerializeField] private Material[] decalMaterials;
+        [SerializeField] private Transform arcs;
+        [SerializeField] private Transform[] arcNodes;
 
-        private static MaterialPropertyBlock s_auraBlock;
-        private static readonly int AuraBaseColorId = Shader.PropertyToID("_BaseColor");
-        private static readonly int AuraColorId = Shader.PropertyToID("_Color");
+        private static MaterialPropertyBlock s_effectBlock;
+        private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
+        private static readonly int ColorId = Shader.PropertyToID("_Color");
+        private static readonly int TintColorId = Shader.PropertyToID("_TintColor");
 
         private Color _auraColor = Color.white;
         private float _auraPhase;
+        private float _arcTimer;
+        private float _charge;
+
+        // The colour the body actually wears, alpha included — glass is see-through, so
+        // every effect has to return to this rather than to the raw tint.
+        private Color _body = Color.white;
 
         private Vector3 _restScale;
-        private Color _restTint;
         private Color _flashTint;
         private float _impact;
         private float _impactStrength;
@@ -63,53 +72,121 @@ namespace SliceBlast.Core
             IsMoving = false;
             _direction = 1f;
             _speedMultiplier = 1f;
-            _glitchJump = 0f;
-            _glitched = false;
-            _glitchPending = false;
             _impact = 0f;
             _auraPhase = 0f;
+            _arcTimer = 0f;
+            _charge = 0f;
+            _body = Color.white;
             Type = BlockType.Standard;
 
             ResetMaterial();
             ShowAura(false);
             ShowDecal(false);
-        }
-
-        /// <summary>Called once on the pooled template so every clone carries the same assets.</summary>
-        public void SetupVisuals(Transform auraTransform, Renderer auraRend, Material transparent, Transform decalTransform, Renderer decalRend, Material[] symbols)
-        {
-            aura = auraTransform;
-            auraRenderer = auraRend;
-            transparentMaterial = transparent;
-            decal = decalTransform;
-            decalRenderer = decalRend;
-            decalMaterials = symbols;
+            ShowArcs(false);
         }
 
         /// <summary>
-        /// Each type has to be readable at a glance, without a label: colour, halo behaviour
-        /// and — for Glass — an actually see-through body.
+        /// Every pooled clone re-resolves its own children. Instantiate does remap internal
+        /// references, but the whole tower animating one template's halo is not a failure
+        /// worth risking on a device.
+        /// </summary>
+        protected override void CacheComponents()
+        {
+            Transform t = CachedTransform;
+
+            aura = t.Find("Aura");
+            auraRenderer = aura != null ? aura.GetComponent<Renderer>() : null;
+
+            decal = t.Find("Symbol");
+            decalRenderer = decal != null ? decal.GetComponent<Renderer>() : null;
+
+            arcs = t.Find("Arcs");
+
+            if (arcs != null)
+            {
+                arcNodes = new Transform[arcs.childCount];
+
+                for (int i = 0; i < arcNodes.Length; i++)
+                {
+                    arcNodes[i] = arcs.GetChild(i);
+                }
+            }
+        }
+
+        /// <summary>Called once on the pooled template so every clone carries the same assets.</summary>
+        public void SetupVisuals(
+            Transform auraTransform,
+            Renderer auraRend,
+            Material glass,
+            Transform decalTransform,
+            Renderer decalRend,
+            Material[] symbols,
+            Transform arcRoot,
+            Transform[] arcs6)
+        {
+            aura = auraTransform;
+            auraRenderer = auraRend;
+            glassMaterial = glass;
+            decal = decalTransform;
+            decalRenderer = decalRend;
+            decalMaterials = symbols;
+            arcs = arcRoot;
+            arcNodes = arcs6;
+        }
+
+        public void Configure(bool axisX, float pivot, float range, float direction, BlockType type, float speedMultiplier)
+        {
+            MovingAxisX = axisX;
+            _pivot = pivot;
+            _range = Mathf.Max(0.01f, range);
+            _direction = direction >= 0f ? 1f : -1f;
+            _speedMultiplier = Mathf.Max(0.1f, speedMultiplier);
+            Type = type;
+            IsMoving = true;
+
+            ApplyTypeVisual(type, Tint);
+        }
+
+        /// <summary>
+        /// Each type has to be readable at a glance, without a label: a neon body that glows,
+        /// a light-blue block spitting arcs, real glass, real metal.
         /// </summary>
         private void ApplyTypeVisual(BlockType type, Color tint)
         {
             _auraColor = tint;
+            _body = tint;
+            _charge = 0f;
 
             switch (type)
             {
-                case BlockType.Glass:
-                    if (transparentMaterial != null)
-                    {
-                        SetMaterial(transparentMaterial);
-                        SetTint(new Color(tint.r, tint.g, tint.b, 0.45f));
-                    }
-
+                case BlockType.Neon:
+                    SetGlow(tint, tint * 0.8f);
                     ShowAura(true);
                     break;
 
-                case BlockType.Neon:
                 case BlockType.Electric:
-                case BlockType.Glitch:
+                    SetGlow(tint, ArcWhite * 0.6f);
+                    _auraColor = ArcWhite;
                     ShowAura(true);
+                    ShowArcs(true);
+                    break;
+
+                case BlockType.Glass:
+                    if (glassMaterial != null)
+                    {
+                        SetMaterial(glassMaterial);
+                    }
+
+                    _body = new Color(tint.r, tint.g, tint.b, 0.45f);
+                    SetGlow(_body, Color.black);
+                    SetSurface(0f, 0.95f);
+                    ShowAura(true);
+                    break;
+
+                case BlockType.Steel:
+                    // Metal does not glow; it catches the key light instead.
+                    SetSurface(0.9f, 0.7f);
+                    ShowAura(false);
                     break;
 
                 default:
@@ -117,15 +194,14 @@ namespace SliceBlast.Core
                     break;
             }
 
-            ApplyDecal(type);
+            ApplyDecal(type, tint);
         }
 
         /// <summary>
-        /// The symbol printed on the top face — a bolt, a shield, a burst. From this camera
-        /// the top face is the biggest thing on screen, so the block says what it is before
-        /// the player has to think about colour.
+        /// The symbol printed on the top face — a burst, a lightning pattern, a shield. From
+        /// this camera the top face is what the player reads, so it says what the block is.
         /// </summary>
-        private void ApplyDecal(BlockType type)
+        private void ApplyDecal(BlockType type, Color tint)
         {
             if (decal == null || decalRenderer == null || decalMaterials == null)
             {
@@ -141,8 +217,34 @@ namespace SliceBlast.Core
             }
 
             decalRenderer.sharedMaterial = decalMaterials[index];
+
+            // The symbol renderer is reused across types, so its colour always comes from the
+            // property block — a neon block's symbol has to match whatever colour it rolled.
+            WriteEffectColor(decalRenderer, SymbolColor(type, tint));
+
             ShowDecal(true);
             FitDecal();
+        }
+
+        private static Color SymbolColor(BlockType type, Color tint)
+        {
+            switch (type)
+            {
+                case BlockType.Neon:
+                    return tint;
+
+                case BlockType.Electric:
+                    return ArcWhite;
+
+                case BlockType.Glass:
+                    return new Color(0.06f, 0.36f, 0.55f);
+
+                case BlockType.Steel:
+                    return new Color(0.16f, 0.18f, 0.24f);
+
+                default:
+                    return Color.white;
+            }
         }
 
         private void ShowDecal(bool visible)
@@ -174,110 +276,174 @@ namespace SliceBlast.Core
 
         private void ShowAura(bool visible)
         {
-            if (aura == null)
-            {
-                return;
-            }
-
-            if (aura.gameObject.activeSelf != visible)
+            if (aura != null && aura.gameObject.activeSelf != visible)
             {
                 aura.gameObject.SetActive(visible);
             }
         }
 
-        private void TickAura(float deltaTime)
+        private void ShowArcs(bool visible)
         {
-            if (aura == null || !aura.gameObject.activeSelf || auraRenderer == null)
+            if (arcs != null && arcs.gameObject.activeSelf != visible)
             {
-                return;
+                arcs.gameObject.SetActive(visible);
             }
+        }
 
+        private void TickEffects(float deltaTime)
+        {
             _auraPhase += deltaTime;
-
-            float scale;
-            float alpha;
-            Vector3 offset = Vector3.zero;
 
             switch (Type)
             {
                 case BlockType.Neon:
+                {
                     // A hard, fast pulse — the block that blows things up looks like it.
-                    // The halo stays translucent enough to read the symbol underneath.
-                    scale = 1.06f + Mathf.Sin(_auraPhase * 11f) * 0.05f;
-                    alpha = 0.34f + Mathf.Sin(_auraPhase * 11f) * 0.22f;
+                    float wave = Mathf.Sin(_auraPhase * 9f);
+                    SetGlow(_body, _body * (0.6f + wave * 0.4f));
+                    TickAura(1.06f + wave * 0.05f, 0.34f + wave * 0.22f);
                     break;
+                }
 
                 case BlockType.Electric:
-                    // Erratic flicker, like a bad contact.
-                    scale = 1.05f + Random.value * 0.04f;
-                    alpha = Random.value < 0.35f ? 0.12f : 0.34f + Random.value * 0.22f;
+                {
+                    // Erratic, like a bad contact.
+                    float flicker = Random.value < 0.3f ? 0.25f : 0.7f + Random.value * 0.5f;
+                    SetGlow(_body, ArcWhite * flicker);
+                    TickAura(1.05f + Random.value * 0.04f, 0.18f + flicker * 0.22f);
+                    TickArcs(deltaTime);
                     break;
-
-                case BlockType.Glitch:
-                    // Displacement: the halo tears away from the body at random.
-                    scale = 1.04f;
-                    alpha = 0.34f + Mathf.Sin(_auraPhase * 17f) * 0.22f;
-                    if (Random.value < 0.2f)
-                    {
-                        float jitter = (Random.value - 0.5f) * 0.35f;
-                        offset = MovingAxisX ? new Vector3(jitter, 0f, 0f) : new Vector3(0f, 0f, jitter);
-                    }
-
-                    break;
+                }
 
                 case BlockType.Glass:
+                {
                     // A slow, cold shimmer.
-                    scale = 1.03f + Mathf.Sin(_auraPhase * 2.4f) * 0.015f;
-                    alpha = 0.25f + Mathf.Sin(_auraPhase * 2.4f) * 0.12f;
+                    float wave = Mathf.Sin(_auraPhase * 2.4f);
+                    TickAura(1.03f + wave * 0.015f, 0.22f + wave * 0.12f);
                     break;
+                }
+            }
+        }
 
-                default:
-                    return;
+        private void TickAura(float scale, float alpha)
+        {
+            if (aura == null || auraRenderer == null || !aura.gameObject.activeSelf)
+            {
+                return;
             }
 
             aura.localScale = new Vector3(scale, scale * 1.02f, scale);
-            aura.localPosition = offset;
 
-            if (s_auraBlock == null)
-            {
-                s_auraBlock = new MaterialPropertyBlock();
-            }
+            // Additive: brightness is the alpha here, so it scales the colour itself.
+            float strength = Mathf.Clamp01(alpha);
+            Color c = _auraColor * strength;
+            c.a = strength;
 
-            Color c = _auraColor;
-            c.a = Mathf.Clamp01(alpha);
-
-            auraRenderer.GetPropertyBlock(s_auraBlock);
-            s_auraBlock.SetColor(AuraBaseColorId, c);
-            s_auraBlock.SetColor(AuraColorId, c);
-            auraRenderer.SetPropertyBlock(s_auraBlock);
+            WriteEffectColor(auraRenderer, c);
         }
 
-        public void Configure(bool axisX, float pivot, float range, float direction, BlockType type, float speedMultiplier, float glitchJump)
+        /// <summary>
+        /// Live arcs crawling over the shell. Axis-aligned on purpose: a rotated child inside
+        /// a non-uniformly scaled block would shear.
+        /// </summary>
+        private void TickArcs(float deltaTime)
         {
-            MovingAxisX = axisX;
-            _pivot = pivot;
-            _range = Mathf.Max(0.01f, range);
-            _direction = direction >= 0f ? 1f : -1f;
-            _speedMultiplier = Mathf.Max(0.1f, speedMultiplier);
-            _glitchJump = Mathf.Max(0f, glitchJump);
-            _glitched = false;
-            _glitchPending = false;
-            Type = type;
-            IsMoving = true;
-
-            ApplyTypeVisual(type, Tint);
-        }
-
-        /// <summary>True once, on the frame the glitch block jumps — for the sound and the flash.</summary>
-        public bool ConsumeGlitchPulse()
-        {
-            if (!_glitchPending)
+            if (arcs == null || arcNodes == null || !arcs.gameObject.activeSelf)
             {
-                return false;
+                return;
             }
 
-            _glitchPending = false;
-            return true;
+            _arcTimer -= deltaTime;
+
+            if (_arcTimer > 0f)
+            {
+                return;
+            }
+
+            _arcTimer = 0.04f;
+
+            Vector3 scale = CachedTransform.localScale;
+            float sx = Mathf.Max(0.001f, scale.x);
+            float sy = Mathf.Max(0.001f, scale.y);
+            float sz = Mathf.Max(0.001f, scale.z);
+
+            for (int i = 0; i < arcNodes.Length; i++)
+            {
+                Transform node = arcNodes[i];
+
+                if (node == null)
+                {
+                    continue;
+                }
+
+                if (Random.value < 0.25f)
+                {
+                    node.localScale = Vector3.zero; // gaps in the crackle
+                    continue;
+                }
+
+                bool alongX = Random.value < 0.5f;
+                float length = Random.Range(0.18f, 0.45f);
+                const float thickness = 0.045f;
+
+                node.localScale = alongX
+                    ? new Vector3(length / sx, thickness / sy, thickness / sz)
+                    : new Vector3(thickness / sx, thickness / sy, length / sz);
+
+                float along = Random.Range(-0.45f, 0.45f);
+                float height = Random.Range(-0.45f, 0.55f);
+                float face = Random.value < 0.5f ? -0.53f : 0.53f;
+
+                node.localPosition = alongX
+                    ? new Vector3(along, height, face)
+                    : new Vector3(face, height, along);
+            }
+        }
+
+        /// <summary>
+        /// The 15-second current running up the tower: 0 restores the block, 1 is the head of
+        /// the pulse. Cheap on purpose — nothing is written when the value has not moved.
+        /// </summary>
+        public void SetCharge(float amount)
+        {
+            amount = Mathf.Clamp01(amount);
+
+            if (Mathf.Abs(amount - _charge) < 0.01f)
+            {
+                return;
+            }
+
+            _charge = amount;
+
+            if (amount <= 0f)
+            {
+                SetGlow(_body, Type == BlockType.Neon ? _body * 0.8f : Color.black);
+                return;
+            }
+
+            Color lit = Color.Lerp(_body, BlockCatalogue.ElectricBlue, amount * 0.7f);
+            lit.a = _body.a;
+
+            SetGlow(lit, BlockCatalogue.ElectricBlue * (amount * 1.5f));
+        }
+
+        private static void WriteEffectColor(Renderer target, Color color)
+        {
+            if (target == null)
+            {
+                return;
+            }
+
+            if (s_effectBlock == null)
+            {
+                s_effectBlock = new MaterialPropertyBlock();
+            }
+
+            target.GetPropertyBlock(s_effectBlock);
+            s_effectBlock.SetColor(BaseColorId, color);
+            s_effectBlock.SetColor(ColorId, color);
+            s_effectBlock.SetColor(TintColorId, color); // legacy particle shaders
+            target.SetPropertyBlock(s_effectBlock);
         }
 
         public void Tick(float speed, float deltaTime)
@@ -287,21 +453,13 @@ namespace SliceBlast.Core
                 return;
             }
 
-            TickAura(deltaTime);
+            TickEffects(deltaTime);
 
             Transform t = CachedTransform;
             Vector3 position = t.position;
             float axis = MovingAxisX ? position.x : position.z;
 
             axis += _direction * speed * _speedMultiplier * deltaTime;
-
-            // Feint: halfway in, the block skips forward and the read the player had is gone.
-            if (_glitchJump > 0f && !_glitched && Mathf.Abs(axis - _pivot) <= _range * 0.5f)
-            {
-                axis += _direction * _glitchJump;
-                _glitched = true;
-                _glitchPending = true;
-            }
 
             float min = _pivot - _range;
             float max = _pivot + _range;
@@ -345,8 +503,7 @@ namespace SliceBlast.Core
             }
 
             t.position = position;
-            IsMoving = false;
-            ShowAura(false);
+            Settle();
         }
 
         /// <summary>Resize to the surviving overlap. Cheaper and cleaner than runtime mesh surgery.</summary>
@@ -369,15 +526,26 @@ namespace SliceBlast.Core
 
             t.position = position;
             t.localScale = scale;
-            IsMoving = false;
-            ShowAura(false);
+            Settle();
             FitDecal();
         }
 
         public void Freeze()
         {
+            Settle();
+        }
+
+        /// <summary>Landed: the travelling effects stop, the identity on the face stays.</summary>
+        private void Settle()
+        {
             IsMoving = false;
             ShowAura(false);
+            ShowArcs(false);
+
+            if (Type == BlockType.Electric)
+            {
+                SetGlow(_body, Color.black);
+            }
         }
 
         /// <summary>
@@ -389,7 +557,6 @@ namespace SliceBlast.Core
             if (_impact <= 0f)
             {
                 _restScale = CachedTransform.localScale;
-                _restTint = Tint;
             }
 
             _impactStrength = strength;
@@ -418,18 +585,20 @@ namespace SliceBlast.Core
                 _restScale.y * (1f - wobble),
                 _restScale.z * (1f + wobble * 0.45f));
 
-            if (_impactFlashes)
+            if (_impactFlashes && _charge <= 0f)
             {
-                SetTint(Color.Lerp(_restTint, _flashTint, decay * decay));
+                Color lit = Color.Lerp(_body, _flashTint, decay * decay);
+                lit.a = _body.a;
+                SetGlow(lit, _flashTint * (decay * decay));
             }
 
             if (_impact <= 0f)
             {
                 CachedTransform.localScale = _restScale;
 
-                if (_impactFlashes)
+                if (_impactFlashes && _charge <= 0f)
                 {
-                    SetTint(_restTint);
+                    SetGlow(_body, Type == BlockType.Neon ? _body * 0.8f : Color.black);
                 }
 
                 return false;

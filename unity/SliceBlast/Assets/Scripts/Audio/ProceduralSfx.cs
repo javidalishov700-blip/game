@@ -141,13 +141,13 @@ namespace SliceBlast.Audio
             });
         }
 
-        /// <summary>Glitch feint: a bit-crushed stutter.</summary>
-        public static AudioClip Glitch()
+        /// <summary>Electric arc: a bit-crushed crackle.</summary>
+        public static AudioClip Crackle()
         {
             float held = 0f;
             int counter = 0;
 
-            return Build("sfx_glitch", 0.22f, (t, duration) =>
+            return Build("sfx_crackle", 0.22f, (t, duration) =>
             {
                 if (counter++ % 220 == 0)
                 {
@@ -160,7 +160,7 @@ namespace SliceBlast.Audio
             });
         }
 
-        /// <summary>Glitch jackpot: a quick rising arpeggio.</summary>
+        /// <summary>Neon charge: a quick rising arpeggio, the layers lighting up.</summary>
         public static AudioClip Jackpot()
         {
             float[] steps = { 1f, 1.26f, 1.5f, 2f, 2.52f };
@@ -173,6 +173,45 @@ namespace SliceBlast.Audio
                 float f = 523.25f * steps[index];
                 float tone = Mathf.Sin(2f * Mathf.PI * f * t) + Mathf.Sin(2f * Mathf.PI * f * 2f * t) * 0.3f;
                 return tone * env * 0.5f;
+            });
+        }
+
+        /// <summary>Glass: an inharmonic bell that rings on well past the impact.</summary>
+        public static AudioClip Chime()
+        {
+            // Deliberately non-integer partials — that inharmonicity is what says "glass".
+            float[] partials = { 1f, 2.76f, 5.4f, 8.93f };
+            float[] gains = { 1f, 0.5f, 0.28f, 0.14f };
+
+            return Build("sfx_chime", 1.1f, (t, duration) =>
+            {
+                float value = 0f;
+
+                for (int i = 0; i < partials.Length; i++)
+                {
+                    float decay = Mathf.Exp(-(2.2f + i * 1.9f) * t);
+                    value += Mathf.Sin(2f * Mathf.PI * 1180f * partials[i] * t) * gains[i] * decay;
+                }
+
+                float strike = (UnityEngine.Random.value * 2f - 1f) * Mathf.Exp(-140f * t) * 0.3f;
+                return (value * 0.32f + strike) * Mathf.Clamp01(t * 900f);
+            });
+        }
+
+        /// <summary>Steel: a hard metallic clank with a short ringing tail.</summary>
+        public static AudioClip Clank()
+        {
+            float ring = 0f;
+
+            return Build("sfx_clank", 0.45f, (t, duration) =>
+            {
+                float hit = (UnityEngine.Random.value * 2f - 1f) * Mathf.Exp(-70f * t);
+                float high = Mathf.Sin(2f * Mathf.PI * 2100f * t) * Mathf.Exp(-9f * t) * 0.4f;
+                float mid = Mathf.Sin(2f * Mathf.PI * 1310f * t) * Mathf.Exp(-6.5f * t) * 0.35f;
+                float low = Mathf.Sin(2f * Mathf.PI * 320f * t) * Mathf.Exp(-13f * t) * 0.5f;
+
+                ring = Mathf.Lerp(ring, high + mid, 0.6f); // takes the edge off the top end
+                return (hit * 0.7f + ring + low) * 0.55f;
             });
         }
 

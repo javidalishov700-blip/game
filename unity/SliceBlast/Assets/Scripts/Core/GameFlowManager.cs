@@ -57,9 +57,12 @@ namespace SliceBlast.Core
         [SerializeField] private float electricDuration = 15f;
         [SerializeField] private int electricMultiplier = 2;
         [SerializeField, Range(0f, 1f)] private float steelExpansion = 0.15f;
-        [SerializeField, Range(0f, 2f)] private float glitchExpansion = 0.5f;
-        [SerializeField] private int glitchJackpot = 150;
         [SerializeField] private int specialPerfectBonus = 25;
+        // Neon marks the layers it is taking, holds for a beat, and only then breaks them.
+        [SerializeField] private float neonFuseSeconds = 0.4f;
+        [SerializeField] private float currentSpeed = 7f;
+        [SerializeField] private float currentWidth = 2.2f;
+        [SerializeField] private float currentPulseInterval = 0.55f;
 
         [Header("Scoring")]
         [SerializeField] private int perfectBonus = 2;
@@ -109,6 +112,14 @@ namespace SliceBlast.Core
         private float _electricTimer;
         private float _idleGuard;
         private float _inputLock;
+
+        private float _neonFuse;
+        private int _neonLayers;
+        private Color _neonColor = Color.white;
+
+        private float _currentPhase;
+        private float _currentPulse;
+        private bool _currentActive;
 
         public MovingBlock ActiveBlock => _active;
         public MovingBlock TopBlock => _stack.Count > 0 ? _stack[_stack.Count - 1] : null;
@@ -241,6 +252,10 @@ namespace SliceBlast.Core
             _electricTimer = 0f;
             _idleGuard = 0f;
             _inputLock = 0f;
+            _neonFuse = 0f;
+            _currentPhase = 0f;
+            _currentPulse = 0f;
+            _currentActive = false;
 
             _score = 0;
             _perfectStreak = 0;
@@ -362,21 +377,19 @@ namespace SliceBlast.Core
             UpdateDynamicSpeed(dt);
             GuardAgainstStall(dt);
 
+            TickNeonFuse(dt);
+
             if (_active != null)
             {
                 _active.Tick(_speed, dt);
-
-                if (_active.ConsumeGlitchPulse())
-                {
-                    GameEvents.RaiseGlitchPulse(_active.CachedTransform.position);
-                }
             }
         }
 
         // Deferred to LateUpdate so a blast reshapes the tower before the next block lands.
         private void LateUpdate()
         {
-            if (!_pendingSpawn || !_running || IsPaused)
+            // Nothing slides in while neon is holding the layers it is about to take.
+            if (!_pendingSpawn || !_running || IsPaused || _neonFuse > 0f)
             {
                 return;
             }
@@ -417,6 +430,11 @@ namespace SliceBlast.Core
         {
             if (_electricTimer <= 0f)
             {
+                if (_currentActive)
+                {
+                    ClearCurrent();
+                }
+
                 return;
             }
 
@@ -424,9 +442,108 @@ namespace SliceBlast.Core
             _electricTimer = Mathf.Max(0f, _electricTimer - deltaTime);
             GameEvents.RaiseMultiplierTimer(_electricTimer, electricDuration);
 
+            TickCurrent(deltaTime);
+
             if (_electricTimer <= 0f && previous > 0f)
             {
+                ClearCurrent();
                 GameEvents.RaiseScoreChanged(_score, TotalMultiplier);
+            }
+        }
+
+        /// <summary>
+        /// The current: a bright head running up the tower for as long as the Electric
+        /// multiplier lasts. Only the few layers around the head write anything.
+        /// </summary>
+        private void TickCurrent(float deltaTime)
+        {
+            int count = _stack.Count;
+
+            if (count == 0)
+            {
+                return;
+            }
+
+            _currentActive = true;
+            _currentPhase += deltaTime * currentSpeed;
+
+            float span = count + 3f;
+            float head = Mathf.Repeat(_currentPhase, span);
+
+            for (int i = 0; i < count; i++)
+            {
+                MovingBlock layer = _stack[i];
+
+                if (layer != null)
+                {
+                    layer.SetCharge(Mathf.Clamp01(1f - Mathf.Abs(i - head) / currentWidth));
+                }
+            }
+
+            _currentPulse -= deltaTime;
+
+            if (_currentPulse <= 0f)
+            {
+                _currentPulse = currentPulseInterval;
+
+                int index = Mathf.Clamp(Mathf.RoundToInt(head), 0, count - 1);
+                MovingBlock at = _stack[index];
+
+                if (at != null)
+                {
+                    GameEvents.RaiseCurrentPulsed(at.CachedTransform.position);
+                }
+            }
+        }
+
+        private void ClearCurrent()
+        {
+            _currentActive = false;
+            _currentPhase = 0f;
+            _currentPulse = 0f;
+
+            for (int i = 0; i < _stack.Count; i++)
+            {
+                if (_stack[i] != null)
+                {
+                    _stack[i].SetCharge(0f);
+                }
+            }
+        }
+
+        /// <summary>Neon: the marked layers hold for a beat, then go.</summary>
+        private void TickNeonFuse(float deltaTime)
+        {
+            if (_neonFuse <= 0f)
+            {
+                return;
+            }
+
+            _neonFuse -= deltaTime;
+
+            if (_neonFuse <= 0f)
+            {
+                _neonFuse = 0f;
+                TriggerBlast(_neonLayers, true);
+            }
+        }
+
+        /// <summary>Paints the layers neon is about to take in that block's own colour.</summary>
+        private void MarkNeonLayers(int count)
+        {
+            int marked = 0;
+
+            for (int i = _stack.Count - 1; i >= 1 && marked < count; i--, marked++)
+            {
+                MovingBlock layer = _stack[i];
+
+                if (layer == null)
+                {
+                    continue;
+                }
+
+                layer.SetGlow(_neonColor, _neonColor * 1.4f);
+                PlayImpact(layer, 0.18f, 4.5f, false, _neonColor);
             }
         }
 
@@ -537,6 +654,7 @@ namespace SliceBlast.Core
 
             Vector3 position = block.CachedTransform.position;
             BlockType type = block.Type;
+            Color tint = block.Tint;
 
             block.Freeze();
             _stack.Add(block);
@@ -580,6 +698,7 @@ namespace SliceBlast.Core
                 Type = type,
                 Kind = kind,
                 Position = position,
+                Color = tint,
                 Streak = _perfectStreak
             });
 
@@ -591,7 +710,7 @@ namespace SliceBlast.Core
             GameEvents.RaiseScoreChanged(_score, TotalMultiplier);
             _pendingSpawn = true;
 
-            if (kind == PlacementKind.Perfect && _perfectStreak >= blastStreak)
+            if (kind == PlacementKind.Perfect && _perfectStreak >= blastStreak && _neonFuse <= 0f)
             {
                 TriggerBlast(NextBlastLayers, false);
             }
@@ -603,14 +722,19 @@ namespace SliceBlast.Core
             {
                 case BlockType.Neon:
                     _score += specialPerfectBonus * TotalMultiplier;
-                    TriggerBlast(neonLayers, true);
+                    _neonColor = _stack.Count > 0 ? _stack[_stack.Count - 1].Tint : Color.white;
+                    _neonLayers = neonLayers;
+                    _neonFuse = Mathf.Max(0.05f, neonFuseSeconds);
+                    MarkNeonLayers(neonLayers);
+                    GameEvents.RaiseNeonCharged(position, _neonColor);
                     break;
 
                 case BlockType.Electric:
                     _electricTimer = electricDuration;
                     _score += specialPerfectBonus * TotalMultiplier;
+                    _currentPulse = 0f;
                     GameEvents.RaiseMultiplierTimer(_electricTimer, electricDuration);
-                    Reward(type, string.Empty, string.Empty, new Color(1f, 0.95f, 0.15f), position, 0);
+                    Reward(type, string.Empty, string.Empty, BlockCatalogue.ElectricBlue, position, 0);
                     break;
 
                 case BlockType.Glass:
@@ -628,14 +752,6 @@ namespace SliceBlast.Core
                     Reward(type, string.Empty, string.Empty, new Color(0.82f, 0.86f, 0.92f), position, 0);
                     break;
 
-                case BlockType.Glitch:
-                    int jackpot = glitchJackpot * TotalMultiplier;
-                    _score += jackpot;
-                    GrowByFraction(glitchExpansion);
-                    Shake(0.5f);
-                    Haptics.Heavy();
-                    Reward(type, string.Empty, string.Empty, new Color(0.72f, 0.55f, 1f), position, jackpot);
-                    break;
             }
         }
 
@@ -652,6 +768,7 @@ namespace SliceBlast.Core
 
             Vector3 position = block.CachedTransform.position;
             BlockType type = block.Type;
+            Color tint = block.Tint;
 
             ShatterLayer(block, position, 0.55f);
             block.Release();
@@ -672,6 +789,7 @@ namespace SliceBlast.Core
                 Type = type,
                 Kind = PlacementKind.SpecialFailed,
                 Position = position,
+                Color = tint,
                 Streak = 0
             });
 
@@ -756,6 +874,7 @@ namespace SliceBlast.Core
                 Bonus = bonus,
                 Epicenter = epicenter,
                 NextTop = nextTop,
+                Color = fromNeon ? _neonColor : Gold,
                 FromNeon = fromNeon
             });
 
@@ -860,7 +979,9 @@ namespace SliceBlast.Core
             _comboMultiplier = 1;
             _blastLevel = 0;
             _electricTimer = 0f;
+            _neonFuse = 0f;
             HasShield = false;
+            ClearCurrent();
 
             Transform t = block.CachedTransform;
             Vector3 fallDirection = (t.position - TopBlockCenter()).normalized;
