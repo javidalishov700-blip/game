@@ -10,11 +10,15 @@ namespace SliceBlast.EditorTools
 {
     public static class StoreScreenshots
     {
-        // App Store Connect's 6.9-inch iPhone slot, which is the only iPhone size still
-        // required. Either of these is accepted; the first is what the Game view preset in
-        // docs/APP_STORE.md sets up.
+        // App Store Connect's iPhone screenshot slot. Apple has shuffled which display size
+        // it insists on more than once, so this lists every portrait size seen requested
+        // (6.5" and 6.9") rather than betting on one — whichever the Game view is set to,
+        // capturing still works. The 6.5" pair (1242x2688 / 1284x2778) is what the "iPhone"
+        // row on the Media Manager page currently asks for.
         private static readonly Vector2Int[] AcceptedSizes =
         {
+            new Vector2Int(1242, 2688),
+            new Vector2Int(1284, 2778),
             new Vector2Int(1290, 2796),
             new Vector2Int(1320, 2868)
         };
@@ -43,7 +47,8 @@ namespace SliceBlast.EditorTools
                 // is still worth having. But say so, because App Store Connect will not.
                 Debug.LogWarning(
                     "[SliceBlast] Game view is " + width + "x" + height +
-                    ". App Store Connect only accepts 1290x2796 or 1320x2868 for iPhone. " +
+                    ". App Store Connect currently asks for 1242x2688 or 1284x2778 for iPhone " +
+                    "(check the exact numbers on the Media Manager page — Apple changes them). " +
                     "Game view → resolution dropdown → + → Fixed Resolution.");
             }
 

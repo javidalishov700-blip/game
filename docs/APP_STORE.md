@@ -144,16 +144,23 @@ content and no contests.
 
 ## 6. Screenshots
 
-Apple requires at least one **6.9-inch iPhone** screenshot set: **1290 × 2796** or
-**1320 × 2868** portrait, PNG or JPEG, no alpha channel. Three to five is the sensible number.
+Apple requires at least one iPhone screenshot set, and the exact pixel size it asks for has
+moved around over time — check the numbers printed on **App Store Connect → your app →
+Distribution → App Store → [version] → Previews and Screenshots → iPhone** (the "View All
+Sizes in Media Manager" link on that row) rather than trusting a fixed number here. As of this
+writing that row asks for the **6.5-inch** size: **1242 × 2688** or **1284 × 2778** portrait,
+PNG or JPEG, no alpha channel. Only the first 3 are shown on the App Store install sheet, but
+uploading up to 10 is fine; three to five is the sensible number.
 
 The easiest way to produce them at exactly the right size, from Windows:
 
 1. Unity → **Game** view → resolution dropdown → **+** → Type *Fixed Resolution*,
-   Width `1290`, Height `2796`.
+   Width `1242`, Height `2688` (match whatever the Media Manager page currently shows if it
+   differs from this).
 2. Press Play and get to the moment you want.
 3. **Slice & Blast → Capture App Store Screenshot** (or `Ctrl+Shift+S`). Files land in
-   `unity/SliceBlast/Screenshots/`.
+   `unity/SliceBlast/Screenshots/`. The tool accepts either 6.5" or 6.9" sizes and warns in
+   the Console if the Game view is set to neither.
 
 Worth capturing: the title screen, a tall tower mid-run, a blast going off, an electric block
 with the current running, and the run-over screen with a good score.
