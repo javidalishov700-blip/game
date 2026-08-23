@@ -22,7 +22,8 @@ namespace SliceBlast.UI
         Burst,
         Chevrons,
         Glitch,
-        Crown
+        Crown,
+        Home
     }
 
     public static class IconFactory
@@ -207,6 +208,14 @@ namespace SliceBlast.UI
                             Box(p - new Vector2(-0.14f, 0.42f), new Vector2(0.46f, 0.13f), 0.03f),
                             Box(p - new Vector2(0.2f, 0.02f), new Vector2(0.38f, 0.13f), 0.03f)),
                         Box(p - new Vector2(-0.24f, -0.38f), new Vector2(0.34f, 0.13f), 0.03f));
+
+                case IconShape.Home:
+                {
+                    float roof = Triangle(p, new Vector2(-0.78f, 0.06f), new Vector2(0.78f, 0.06f), new Vector2(0f, 0.8f));
+                    float body = Box(p - new Vector2(0f, -0.35f), new Vector2(0.5f, 0.42f), 0.06f);
+                    float door = Box(p - new Vector2(0f, -0.5f), new Vector2(0.16f, 0.27f), 0.03f);
+                    return Mathf.Max(Mathf.Min(roof, body), -door);
+                }
 
                 case IconShape.Crown:
                 {

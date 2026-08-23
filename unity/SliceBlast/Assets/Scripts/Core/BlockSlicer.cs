@@ -16,11 +16,11 @@ namespace SliceBlast.Core
         [Header("Ego Boost (near-miss forgiveness)")]
         // The magnet scales with the block: a wide platform forgives more than a sliver,
         // so late-game precision still matters while early taps feel effortless.
-        [SerializeField] private float perfectThreshold = 0.045f;
-        [SerializeField, Range(0f, 0.3f)] private float magnetFraction = 0.045f;
-        [SerializeField, Range(0f, 0.6f)] private float maxThresholdFraction = 0.22f;
-        [SerializeField] private float thresholdPerStreak = 0.004f;
-        [SerializeField] private float snapSpeedScale = 0.006f;
+        [SerializeField] private float perfectThreshold = 0.028f;
+        [SerializeField, Range(0f, 0.3f)] private float magnetFraction = 0.022f;
+        [SerializeField, Range(0f, 0.6f)] private float maxThresholdFraction = 0.09f;
+        [SerializeField] private float thresholdPerStreak = 0.0015f;
+        [SerializeField] private float snapSpeedScale = 0.003f;
 
         [Header("Slice")]
         [SerializeField] private float minChunkSize = 0.02f;

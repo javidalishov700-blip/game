@@ -23,6 +23,7 @@ namespace SliceBlast.UI
 
         public event Action PauseToggled;
         public event Action RestartRequested;
+        public event Action HomeRequested;
         public event Action<bool> SoundToggled;
         public event Action<bool> HapticsToggled;
 
@@ -48,9 +49,22 @@ namespace SliceBlast.UI
         private Image _electricIcon;
         private Image _soundIcon;
         private Image _hapticsIcon;
+        private Image _homeSoundIcon;
+        private Image _homeHapticsIcon;
 
         private CanvasGroup _gameOver;
         private CanvasGroup _pause;
+        private CanvasGroup _home;
+        private CanvasGroup _chrome;
+
+        private RectTransform _titleSlice;
+        private RectTransform _titleBlast;
+        private RectTransform _titleCut;
+        private Image _homeCrown;
+        private Text _homeBest;
+        private Text _homeStart;
+        private Vector2 _titleSliceRest;
+        private Vector2 _titleBlastRest;
 
         private float _scorePunch;
         private float _streakLife;
@@ -60,6 +74,9 @@ namespace SliceBlast.UI
         private float _hintAlpha;
         private float _gameOverAlpha;
         private float _pauseAlpha;
+        private float _homeAlpha;
+        private float _chromeAlpha;
+        private float _introTime;
         private bool _shieldActive;
         private bool _electricActive;
 
@@ -90,6 +107,11 @@ namespace SliceBlast.UI
             Stretch(_safeArea);
             ApplySafeArea();
 
+            // Everything that belongs to a run lives under one group, so the title screen
+            // can hide the lot without touching a single element.
+            _chrome = _safeArea.gameObject.AddComponent<CanvasGroup>();
+            _chrome.alpha = 0f;
+
             _score = CreateText("Score", _safeArea, 150, FontStyle.Bold, Color.white, TextAnchor.UpperCenter);
             Anchor(_score.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0f, -240f), new Vector2(0f, -60f));
 
@@ -116,8 +138,9 @@ namespace SliceBlast.UI
 
             BuildStatusBadges();
             BuildPauseButton();
-            BuildPauseSheet();
             BuildGameOverScreen();
+            BuildPauseSheet();
+            BuildHomeScreen();
         }
 
         /// <summary>Shield and multiplier read as badges, not sentences.</summary>
@@ -187,8 +210,12 @@ namespace SliceBlast.UI
             PlaceMenuButton(restart, 80f);
             restart.onClick.AddListener(() => RestartRequested?.Invoke());
 
+            Button home = CreateButton("Home", sheet, "HOME", 58, Panel, Color.white, IconShape.Home);
+            PlaceMenuButton(home, -80f);
+            home.onClick.AddListener(() => HomeRequested?.Invoke());
+
             Button sound = CreateButton("Sound", sheet, "SOUND", 52, Panel, Color.white, IconShape.SoundOn);
-            PlaceMenuButton(sound, -80f);
+            PlaceMenuButton(sound, -240f);
             _soundLabel = FindLabel(sound);
             _soundIcon = FindIcon(sound);
             sound.onClick.AddListener(() =>
@@ -198,7 +225,7 @@ namespace SliceBlast.UI
             });
 
             Button haptics = CreateButton("Haptics", sheet, "VIBRATION", 52, Panel, Color.white, IconShape.VibrateOn);
-            PlaceMenuButton(haptics, -240f);
+            PlaceMenuButton(haptics, -400f);
             _hapticsLabel = FindLabel(haptics);
             _hapticsIcon = FindIcon(haptics);
             haptics.onClick.AddListener(() =>
@@ -212,6 +239,88 @@ namespace SliceBlast.UI
             credit.text = "SLICE BLAST";
         }
 
+        /// <summary>
+        /// The title screen. The wordmark arrives in two halves that meet on a slice line —
+        /// the game's whole idea in one gesture — and the platform stays visible behind it.
+        /// </summary>
+        private void BuildHomeScreen()
+        {
+            RectTransform screen = CreateChild("Home", transform);
+            Stretch(screen);
+
+            _home = screen.gameObject.AddComponent<CanvasGroup>();
+            _home.alpha = 0f;
+            _home.blocksRaycasts = false;
+            _home.interactable = false;
+
+            Image dim = CreateImage("Dim", screen, new Color(Ink.r, Ink.g, Ink.b, 0.55f));
+            Stretch(dim.rectTransform);
+
+            Text slice = CreateText("TitleSlice", screen, 175, FontStyle.Bold, Color.white, TextAnchor.MiddleCenter);
+            Anchor(slice.rectTransform, new Vector2(0f, 0.5f), new Vector2(1f, 0.5f), new Vector2(0f, 170f), new Vector2(0f, 380f));
+            slice.text = "SLICE";
+            _titleSlice = slice.rectTransform;
+
+            Image cut = CreateImage("TitleCut", screen, Mint);
+            Anchor(cut.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, Vector2.zero);
+            cut.rectTransform.pivot = new Vector2(0.5f, 0.5f);
+            cut.rectTransform.sizeDelta = new Vector2(0f, 12f);
+            cut.rectTransform.anchoredPosition = new Vector2(0f, 150f);
+            _titleCut = cut.rectTransform;
+
+            Text blast = CreateText("TitleBlast", screen, 175, FontStyle.Bold, Gold, TextAnchor.MiddleCenter);
+            Anchor(blast.rectTransform, new Vector2(0f, 0.5f), new Vector2(1f, 0.5f), new Vector2(0f, -80f), new Vector2(0f, 130f));
+            blast.text = "BLAST";
+            _titleBlast = blast.rectTransform;
+
+            _homeStart = CreateText("TapToStart", screen, 66, FontStyle.Bold, Color.white, TextAnchor.MiddleCenter);
+            Anchor(_homeStart.rectTransform, new Vector2(0f, 0.5f), new Vector2(1f, 0.5f), new Vector2(0f, -330f), new Vector2(0f, -230f));
+            _homeStart.text = "TAP TO START";
+
+            Image crown = CreateImage("HomeCrown", screen, Gold);
+            crown.sprite = IconFactory.GetSprite(IconShape.Crown);
+            crown.rectTransform.anchorMin = new Vector2(0.5f, 0.5f);
+            crown.rectTransform.anchorMax = new Vector2(0.5f, 0.5f);
+            crown.rectTransform.pivot = new Vector2(0.5f, 0.5f);
+            crown.rectTransform.sizeDelta = new Vector2(58f, 58f);
+            crown.rectTransform.anchoredPosition = new Vector2(-130f, -450f);
+            _homeCrown = crown;
+
+            _homeBest = CreateText("HomeBest", screen, 54, FontStyle.Bold, Gold, TextAnchor.MiddleCenter);
+            Anchor(_homeBest.rectTransform, new Vector2(0f, 0.5f), new Vector2(1f, 0.5f), new Vector2(60f, -490f), new Vector2(0f, -410f));
+
+            Button sound = CreateButton("HomeSound", screen, string.Empty, 0, new Color(1f, 1f, 1f, 0.16f), Color.white, IconShape.SoundOn);
+            PlaceHomeToggle(sound, -110f);
+            _homeSoundIcon = FindIcon(sound);
+            sound.onClick.AddListener(() =>
+            {
+                SetSoundLabel(!_soundOn);
+                SoundToggled?.Invoke(_soundOn);
+            });
+
+            Button haptics = CreateButton("HomeHaptics", screen, string.Empty, 0, new Color(1f, 1f, 1f, 0.16f), Color.white, IconShape.VibrateOn);
+            PlaceHomeToggle(haptics, 110f);
+            _homeHapticsIcon = FindIcon(haptics);
+            haptics.onClick.AddListener(() =>
+            {
+                SetHapticsLabel(!_hapticsOn);
+                HapticsToggled?.Invoke(_hapticsOn);
+            });
+
+            _titleSliceRest = _titleSlice.anchoredPosition;
+            _titleBlastRest = _titleBlast.anchoredPosition;
+        }
+
+        private static void PlaceHomeToggle(Button button, float x)
+        {
+            RectTransform rect = button.GetComponent<RectTransform>();
+            rect.anchorMin = new Vector2(0.5f, 0f);
+            rect.anchorMax = new Vector2(0.5f, 0f);
+            rect.pivot = new Vector2(0.5f, 0.5f);
+            rect.sizeDelta = new Vector2(140f, 140f);
+            rect.anchoredPosition = new Vector2(x, 220f);
+        }
+
         private void BuildGameOverScreen()
         {
             RectTransform screen = CreateChild("GameOver", transform);
@@ -222,35 +331,48 @@ namespace SliceBlast.UI
             _gameOver.blocksRaycasts = false;
             _gameOver.interactable = false;
 
-            // Full-bleed curtain: the run is over, nothing behind it competes for attention.
-            Image dim = CreateImage("Dim", screen, new Color(Ink.r, Ink.g, Ink.b, 0.93f));
+            // Full-bleed, but see-through: the camera has just pulled back to show the
+            // tower and the curtain must not be the thing hiding it.
+            Image dim = CreateImage("Dim", screen, new Color(Ink.r, Ink.g, Ink.b, 0.42f));
             Stretch(dim.rectTransform);
 
-            Text title = CreateText("Title", screen, 92, FontStyle.Bold, Color.white, TextAnchor.MiddleCenter);
-            Anchor(title.rectTransform, new Vector2(0f, 0.5f), new Vector2(1f, 0.5f), new Vector2(0f, 300f), new Vector2(0f, 430f));
+            // The readable content sits on solid panels in the top and bottom thirds; the
+            // middle band stays clear.
+            Image header = CreateImage("HeaderPanel", screen, new Color(Ink.r, Ink.g, Ink.b, 0.88f));
+            header.sprite = IconFactory.GetSprite(IconShape.Panel);
+            header.type = Image.Type.Sliced;
+            Anchor(header.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(60f, -760f), new Vector2(-60f, -200f));
+
+            Text title = CreateText("Title", screen, 80, FontStyle.Bold, new Color(1f, 1f, 1f, 0.75f), TextAnchor.UpperCenter);
+            Anchor(title.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0f, -360f), new Vector2(0f, -260f));
             title.text = "RUN OVER";
 
-            _finalScore = CreateText("FinalScore", screen, 230, FontStyle.Bold, Color.white, TextAnchor.MiddleCenter);
-            Anchor(_finalScore.rectTransform, new Vector2(0f, 0.5f), new Vector2(1f, 0.5f), new Vector2(0f, 40f), new Vector2(0f, 290f));
+            _finalScore = CreateText("FinalScore", screen, 210, FontStyle.Bold, Color.white, TextAnchor.UpperCenter);
+            Anchor(_finalScore.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0f, -620f), new Vector2(0f, -370f));
 
             Image crown = CreateImage("Crown", screen, Gold);
             crown.sprite = IconFactory.GetSprite(IconShape.Crown);
             RectTransform crownRect = crown.rectTransform;
-            crownRect.anchorMin = new Vector2(0.5f, 0.5f);
-            crownRect.anchorMax = new Vector2(0.5f, 0.5f);
+            crownRect.anchorMin = new Vector2(0.5f, 1f);
+            crownRect.anchorMax = new Vector2(0.5f, 1f);
             crownRect.pivot = new Vector2(0.5f, 0.5f);
-            crownRect.sizeDelta = new Vector2(72f, 72f);
-            crownRect.anchoredPosition = new Vector2(-210f, -18f);
+            crownRect.sizeDelta = new Vector2(62f, 62f);
+            crownRect.anchoredPosition = new Vector2(-150f, -665f);
 
-            _bestScore = CreateText("BestScore", screen, 58, FontStyle.Bold, Gold, TextAnchor.MiddleCenter);
-            Anchor(_bestScore.rectTransform, new Vector2(0f, 0.5f), new Vector2(1f, 0.5f), new Vector2(0f, -60f), new Vector2(0f, 30f));
+            _bestScore = CreateText("BestScore", screen, 54, FontStyle.Bold, Gold, TextAnchor.MiddleCenter);
+            Anchor(_bestScore.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(40f, -700f), new Vector2(0f, -630f));
 
             Button again = CreateButton("PlayAgain", screen, "PLAY AGAIN", 60, Mint, Ink, IconShape.Replay);
-            PlaceMenuButton(again, -240f);
+            RectTransform againRect = again.GetComponent<RectTransform>();
+            againRect.anchorMin = new Vector2(0.5f, 0f);
+            againRect.anchorMax = new Vector2(0.5f, 0f);
+            againRect.pivot = new Vector2(0.5f, 0.5f);
+            againRect.sizeDelta = new Vector2(700f, 132f);
+            againRect.anchoredPosition = new Vector2(0f, 320f);
             again.onClick.AddListener(() => RestartRequested?.Invoke());
 
             _restart = CreateText("RestartHint", screen, 44, FontStyle.Bold, new Color(1f, 1f, 1f, 0.7f), TextAnchor.MiddleCenter);
-            Anchor(_restart.rectTransform, new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(0f, 180f), new Vector2(0f, 260f));
+            Anchor(_restart.rectTransform, new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(0f, 170f), new Vector2(0f, 250f));
             _restart.text = "OR TAP ANYWHERE";
         }
 
@@ -345,6 +467,48 @@ namespace SliceBlast.UI
             }
         }
 
+        public void ShowHome(int best)
+        {
+            _homeAlpha = 1f;
+            _chromeAlpha = 0f;
+            _introTime = 0f;
+
+            if (_home != null)
+            {
+                _home.blocksRaycasts = true;
+                _home.interactable = true;
+            }
+
+            bool hasBest = best > 0;
+
+            if (_homeBest != null)
+            {
+                _homeBest.text = hasBest ? best.ToString() : string.Empty;
+            }
+
+            if (_homeCrown != null && _homeCrown.gameObject.activeSelf != hasBest)
+            {
+                _homeCrown.gameObject.SetActive(hasBest);
+            }
+        }
+
+        public void HideHome()
+        {
+            _homeAlpha = 0f;
+
+            if (_home != null)
+            {
+                _home.blocksRaycasts = false;
+                _home.interactable = false;
+            }
+        }
+
+        /// <summary>Score, combo and the pause button only belong to a live run.</summary>
+        public void ShowRunChrome(bool visible)
+        {
+            _chromeAlpha = visible ? 1f : 0f;
+        }
+
         public void ShowGameOver(int score, int best)
         {
             if (_finalScore != null)
@@ -359,6 +523,7 @@ namespace SliceBlast.UI
             }
 
             _gameOverAlpha = 1f;
+            _chromeAlpha = 0f;
 
             if (_gameOver != null)
             {
@@ -398,11 +563,8 @@ namespace SliceBlast.UI
                 _soundLabel.text = on ? "SOUND" : "MUTED";
             }
 
-            if (_soundIcon != null)
-            {
-                _soundIcon.sprite = IconFactory.GetSprite(on ? IconShape.SoundOn : IconShape.SoundOff);
-                _soundIcon.color = on ? Color.white : new Color(1f, 1f, 1f, 0.4f);
-            }
+            ApplyToggleIcon(_soundIcon, on, IconShape.SoundOn, IconShape.SoundOff);
+            ApplyToggleIcon(_homeSoundIcon, on, IconShape.SoundOn, IconShape.SoundOff);
         }
 
         public void SetHapticsLabel(bool on)
@@ -414,11 +576,19 @@ namespace SliceBlast.UI
                 _hapticsLabel.text = on ? "VIBRATION" : "NO VIBRATION";
             }
 
-            if (_hapticsIcon != null)
+            ApplyToggleIcon(_hapticsIcon, on, IconShape.VibrateOn, IconShape.VibrateOff);
+            ApplyToggleIcon(_homeHapticsIcon, on, IconShape.VibrateOn, IconShape.VibrateOff);
+        }
+
+        private static void ApplyToggleIcon(Image target, bool on, IconShape onShape, IconShape offShape)
+        {
+            if (target == null)
             {
-                _hapticsIcon.sprite = IconFactory.GetSprite(on ? IconShape.VibrateOn : IconShape.VibrateOff);
-                _hapticsIcon.color = on ? Color.white : new Color(1f, 1f, 1f, 0.4f);
+                return;
             }
+
+            target.sprite = IconFactory.GetSprite(on ? onShape : offShape);
+            target.color = on ? Color.white : new Color(1f, 1f, 1f, 0.4f);
         }
 
         private void Update()
@@ -493,6 +663,77 @@ namespace SliceBlast.UI
             {
                 _pause.alpha = Mathf.MoveTowards(_pause.alpha, _pauseAlpha, dt * 6f);
             }
+
+            if (_chrome != null)
+            {
+                _chrome.alpha = Mathf.MoveTowards(_chrome.alpha, _chromeAlpha, dt * 4f);
+                _chrome.blocksRaycasts = _chromeAlpha > 0.5f;
+            }
+
+            if (_home != null)
+            {
+                _home.alpha = Mathf.MoveTowards(_home.alpha, _homeAlpha, dt * 4.5f);
+
+                if (_home.alpha > 0.001f)
+                {
+                    TickIntro(dt);
+                }
+            }
+        }
+
+        /// <summary>
+        /// The intro: the two halves of the wordmark fly in from opposite sides and land on
+        /// a slice line that wipes open between them.
+        /// </summary>
+        private void TickIntro(float dt)
+        {
+            _introTime += dt;
+
+            float slice = EaseOut(Mathf.Clamp01(_introTime / 0.5f));
+            float blast = EaseOut(Mathf.Clamp01((_introTime - 0.12f) / 0.5f));
+            float cut = EaseOut(Mathf.Clamp01((_introTime - 0.32f) / 0.4f));
+            float tail = Mathf.Clamp01((_introTime - 0.6f) / 0.35f);
+
+            if (_titleSlice != null)
+            {
+                _titleSlice.anchoredPosition = new Vector2(_titleSliceRest.x - (1f - slice) * 1200f, _titleSliceRest.y);
+                float pop = 1f + Mathf.Sin(slice * Mathf.PI) * 0.07f;
+                _titleSlice.localScale = new Vector3(pop, pop, 1f);
+            }
+
+            if (_titleBlast != null)
+            {
+                _titleBlast.anchoredPosition = new Vector2(_titleBlastRest.x + (1f - blast) * 1200f, _titleBlastRest.y);
+                float pop = 1f + Mathf.Sin(blast * Mathf.PI) * 0.07f;
+                _titleBlast.localScale = new Vector3(pop, pop, 1f);
+            }
+
+            if (_titleCut != null)
+            {
+                _titleCut.sizeDelta = new Vector2(cut * 780f, 12f);
+            }
+
+            if (_homeStart != null)
+            {
+                float pulse = 0.55f + Mathf.Sin(Time.unscaledTime * 3.2f) * 0.45f;
+                SetAlpha(_homeStart, tail * pulse);
+            }
+
+            if (_homeBest != null)
+            {
+                SetAlpha(_homeBest, tail);
+            }
+
+            if (_homeCrown != null)
+            {
+                SetAlpha(_homeCrown, tail);
+            }
+        }
+
+        private static float EaseOut(float t)
+        {
+            float inverse = 1f - t;
+            return 1f - inverse * inverse * inverse;
         }
 
         private void TickBadges(float dt)

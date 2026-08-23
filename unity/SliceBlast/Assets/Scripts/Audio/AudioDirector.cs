@@ -94,6 +94,21 @@ namespace SliceBlast.Audio
             Play(_fail, 1f, 0.9f);
         }
 
+        /// <summary>Title screen: a low swell with two notes settling on top of it.</summary>
+        public void PlayIntro()
+        {
+            Play(_rise, 0.55f, 0.55f);
+            Play(_note, Ladder[0], 0.45f);
+            Play(_note, Ladder[4], 0.35f);
+        }
+
+        /// <summary>The tap that starts a run.</summary>
+        public void PlayStart()
+        {
+            Play(_rise, 1.15f, 0.7f);
+            Play(_note, Ladder[5], 0.6f);
+        }
+
         public void PlayTick()
         {
             Play(_tick, 1f, 0.5f);

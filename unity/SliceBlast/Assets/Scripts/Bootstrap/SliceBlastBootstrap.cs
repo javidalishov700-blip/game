@@ -37,6 +37,8 @@ namespace SliceBlast.Bootstrap
 
         [Header("Flow")]
         [SerializeField] private float restartDelay = 0.55f;
+        // Long enough that the tap which opened the app cannot also start the run.
+        [SerializeField] private float homeInputDelay = 0.45f;
 
         private GameFlowManager _flow;
         private AudioDirector _audio;
@@ -45,6 +47,8 @@ namespace SliceBlast.Bootstrap
 
         private bool _gameOver;
         private float _gameOverTime;
+        private bool _home;
+        private float _homeTime;
 
         /// <summary>
         /// The shipped scene is deliberately empty — the game builds itself here. That keeps
@@ -108,6 +112,7 @@ namespace SliceBlast.Bootstrap
 
             _hud.PauseToggled += OnPauseToggled;
             _hud.RestartRequested += OnRestartRequested;
+            _hud.HomeRequested += OnHomeRequested;
             _hud.SoundToggled += OnSoundToggled;
             _hud.HapticsToggled += OnHapticsToggled;
 
@@ -137,6 +142,7 @@ namespace SliceBlast.Bootstrap
             {
                 _hud.PauseToggled -= OnPauseToggled;
                 _hud.RestartRequested -= OnRestartRequested;
+                _hud.HomeRequested -= OnHomeRequested;
                 _hud.SoundToggled -= OnSoundToggled;
                 _hud.HapticsToggled -= OnHapticsToggled;
             }
@@ -144,6 +150,7 @@ namespace SliceBlast.Bootstrap
 
         private void Subscribe()
         {
+            GameEvents.HomeShown += OnHomeShown;
             GameEvents.RunStarted += OnRunStarted;
             GameEvents.ScoreChanged += OnScoreChanged;
             GameEvents.BlockPlaced += OnBlockPlaced;
@@ -158,6 +165,7 @@ namespace SliceBlast.Bootstrap
 
         private void Unsubscribe()
         {
+            GameEvents.HomeShown -= OnHomeShown;
             GameEvents.RunStarted -= OnRunStarted;
             GameEvents.ScoreChanged -= OnScoreChanged;
             GameEvents.BlockPlaced -= OnBlockPlaced;
@@ -177,6 +185,21 @@ namespace SliceBlast.Bootstrap
                 _pools.Tick(Time.deltaTime);
             }
 
+            if (_home)
+            {
+                if (Time.unscaledTime - _homeTime < homeInputDelay)
+                {
+                    return;
+                }
+
+                if (BlockSlicer.TapPressedThisFrame() && !BlockSlicer.PointerOverUi())
+                {
+                    BeginRun();
+                }
+
+                return;
+            }
+
             if (!_gameOver || Time.unscaledTime - _gameOverTime < restartDelay)
             {
                 return;
@@ -190,9 +213,33 @@ namespace SliceBlast.Bootstrap
             OnRestartRequested();
         }
 
+        private void BeginRun()
+        {
+            _home = false;
+            _hud.HideHome();
+            _audio.PlayStart();
+            _flow.StartGame();
+        }
+
+        private void OnHomeShown(int best)
+        {
+            _home = true;
+            _gameOver = false;
+            _homeTime = Time.unscaledTime;
+
+            _hud.HideGameOver();
+            _hud.ShowPaused(false);
+            _hud.ShowHint(false);
+            _hud.ShowHome(best);
+            _audio.PlayIntro();
+        }
+
         private void OnRunStarted()
         {
             _gameOver = false;
+            _home = false;
+            _hud.HideHome();
+            _hud.ShowRunChrome(true);
             _hud.HideGameOver();
             _hud.ShowPaused(false);
             _hud.SetHintText("TAP TO DROP");
@@ -358,6 +405,14 @@ namespace SliceBlast.Bootstrap
             _gameOver = false;
             _flow.SetPaused(false);
             _flow.Restart();
+        }
+
+        private void OnHomeRequested()
+        {
+            _audio.PlayTick();
+            _gameOver = false;
+            _flow.SetPaused(false);
+            _flow.ShowHome();
         }
 
         private void OnSoundToggled(bool on)

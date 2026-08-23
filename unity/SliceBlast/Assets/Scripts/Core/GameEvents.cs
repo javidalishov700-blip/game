@@ -47,6 +47,7 @@ namespace SliceBlast.Core
     /// </summary>
     public static class GameEvents
     {
+        public static event Action<int> HomeShown;
         public static event Action RunStarted;
         public static event Action<int, int> ScoreChanged;
         public static event Action<PlacementEvent> BlockPlaced;
@@ -61,6 +62,7 @@ namespace SliceBlast.Core
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         public static void Clear()
         {
+            HomeShown = null;
             RunStarted = null;
             ScoreChanged = null;
             BlockPlaced = null;
@@ -72,6 +74,8 @@ namespace SliceBlast.Core
             PauseChanged = null;
             GlitchPulsed = null;
         }
+
+        public static void RaiseHomeShown(int best) => HomeShown?.Invoke(best);
 
         public static void RaiseRunStarted() => RunStarted?.Invoke();
 

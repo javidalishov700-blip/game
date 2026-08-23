@@ -13,7 +13,8 @@ namespace SliceBlast.Core
         [SerializeField] private int standardOnlyBlocks = 12;
         // A special is an event, not a rhythm: this many plain blocks must pass between them.
         [SerializeField] private int specialCooldown = 9;
-        [SerializeField] private float travelRange = 3.2f;
+        [SerializeField] private float travelRange = 2f;
+        [SerializeField] private float minTravelRange = 1.2f;
         [SerializeField] private float glitchJump = 0.9f;
         [SerializeField] private float hueStart = 0.55f;
         [SerializeField] private float hueStep = 0.028f;
@@ -56,18 +57,22 @@ namespace SliceBlast.Core
             float side = (_spawnCount & 1) == 0 ? -1f : 1f;
             float pivot = axisX ? topPosition.x : topPosition.z;
 
+            // The swing scales with the tower: a sliver of a platform does not deserve a
+            // full-width fly-in, and the block has to stay inside the frame at both ends.
+            float range = Mathf.Clamp(Mathf.Max(size.x, size.y) * 0.8f, minTravelRange, travelRange);
+
             if (axisX)
             {
-                position.x = pivot + side * travelRange;
+                position.x = pivot + side * range;
             }
             else
             {
-                position.z = pivot + side * travelRange;
+                position.z = pivot + side * range;
             }
 
             MovingBlock block = (MovingBlock)_pool.Spawn(position, scale, Quaternion.identity);
             block.SetTint(definition.UsesPalette ? PaletteColor(paletteIndex) : definition.Tint);
-            block.Configure(axisX, pivot, travelRange, -side, type, definition.SpeedMultiplier, type == BlockType.Glitch ? glitchJump : 0f);
+            block.Configure(axisX, pivot, range, -side, type, definition.SpeedMultiplier, type == BlockType.Glitch ? glitchJump : 0f);
 
             _spawnCount++;
             _forceStandard = false;

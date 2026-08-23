@@ -10,7 +10,9 @@ namespace SliceBlast.EditorTools
 {
     /// <summary>
     /// Runs for every player build, including cloud builds: guarantees the Resources
-    /// materials exist so the shaders they reference survive build-time stripping.
+    /// materials exist so the shaders they reference survive build-time stripping, and
+    /// that the Unity splash is off. This is the only hook the cloud build is guaranteed
+    /// to call — the pre-export method only runs when the target is configured for it.
     /// </summary>
     public sealed class SliceBlastBuildPreprocessor : IPreprocessBuildWithReport
     {
@@ -21,10 +23,11 @@ namespace SliceBlast.EditorTools
             try
             {
                 SliceBlastAssets.EnsureMaterials();
+                SliceBlastBuild.ApplySplashSettings();
             }
             catch (System.Exception exception)
             {
-                Debug.LogWarning($"[SliceBlast] Material pass skipped: {exception.Message}");
+                Debug.LogWarning($"[SliceBlast] Build pre-pass skipped: {exception.Message}");
             }
         }
     }
@@ -44,6 +47,7 @@ namespace SliceBlast.EditorTools
             try
             {
                 SliceBlastAssets.EnsureMaterials();
+                SliceBlastBuild.ApplySplashSettings();
                 EnsureSceneRegistered();
             }
             catch (System.Exception exception)

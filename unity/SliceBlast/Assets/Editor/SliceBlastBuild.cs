@@ -145,6 +145,8 @@ namespace SliceBlast.EditorTools
             PlayerSettings.SetScriptingBackend(named, ScriptingImplementation.IL2CPP);
             QualitySettings.vSyncCount = 0;
 
+            ApplySplashSettings();
+
             if (target != BuildTarget.iOS)
             {
                 return;
@@ -160,6 +162,18 @@ namespace SliceBlast.EditorTools
             {
                 PlayerSettings.iOS.appleDeveloperTeamID = teamId;
             }
+        }
+
+        /// <summary>
+        /// The game opens on its own title screen, not on a Unity logo. ProjectSettings.asset
+        /// is not in the repository, so the build machine starts from Unity's defaults and
+        /// this has to be applied from code on every build path.
+        /// </summary>
+        public static void ApplySplashSettings()
+        {
+            PlayerSettings.SplashScreen.show = false;
+            PlayerSettings.SplashScreen.showUnityLogo = false;
+            PlayerSettings.SplashScreen.backgroundColor = new Color(0.03f, 0.03f, 0.06f);
         }
 
         private static string EnvOr(string key, string fallback)

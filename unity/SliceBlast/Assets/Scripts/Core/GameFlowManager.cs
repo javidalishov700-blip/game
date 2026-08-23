@@ -30,7 +30,7 @@ namespace SliceBlast.Core
         [SerializeField] private float tutorialBlendSeconds = 2.2f;
         // Until the player has seen their first blast the magnet is wide open, so the
         // opening three taps land perfectly and the reward teaches itself.
-        [SerializeField, Range(0f, 0.5f)] private float tutorialAssistFraction = 0.22f;
+        [SerializeField, Range(0f, 0.5f)] private float tutorialAssistFraction = 0.1f;
 
         [Header("Dynamic Speed")]
         [SerializeField] private float baseSpeed = 2.4f;
@@ -47,8 +47,6 @@ namespace SliceBlast.Core
         [SerializeField] private int blastBaseLayers = 3;
         [SerializeField] private int blastLayerStep = 2;
         [SerializeField] private int neonLayers = 3;
-        [SerializeField] private float blastGrowth = 0.3f;
-        [SerializeField] private float neonGrowth = 0.45f;
         [SerializeField] private int maxMultiplier = 9;
         [SerializeField] private float blastShake = 0.95f;
         [SerializeField] private float blastImpulse = 7f;
@@ -78,6 +76,9 @@ namespace SliceBlast.Core
 
         [Header("Runtime")]
         [SerializeField] private bool autoStart = true;
+        // The tap that starts a run must not also drop its first block.
+        [SerializeField] private float startInputLock = 0.3f;
+        [SerializeField] private float homeZoom = 1.16f;
         [SerializeField] private int targetFrameRate = 60;
 
         private static readonly Color Gold = new Color(1f, 0.79f, 0.29f);
@@ -107,11 +108,13 @@ namespace SliceBlast.Core
         private float _spawnDelay;
         private float _electricTimer;
         private float _idleGuard;
+        private float _inputLock;
 
         public MovingBlock ActiveBlock => _active;
         public MovingBlock TopBlock => _stack.Count > 0 ? _stack[_stack.Count - 1] : null;
-        public bool AcceptsInput => _running && !IsPaused && _active != null && _active.IsMoving;
+        public bool AcceptsInput => _running && !IsPaused && _inputLock <= 0f && _active != null && _active.IsMoving;
         public bool IsRunning => _running;
+        public bool IsHome { get; private set; }
         public bool IsPaused { get; private set; }
         public bool HasShield { get; private set; }
         public int PerfectStreak => _perfectStreak;
@@ -189,11 +192,45 @@ namespace SliceBlast.Core
         {
             if (autoStart)
             {
-                StartGame();
+                ShowHome();
             }
         }
 
+        /// <summary>
+        /// The title screen state: the board is reset and the base platform is standing,
+        /// but nothing moves until the player taps. Also where a run returns on restart.
+        /// </summary>
+        public void ShowHome()
+        {
+            ResetBoard(true);
+            IsHome = true;
+
+            if (cameraRig != null)
+            {
+                cameraRig.ZoomTo(homeZoom, true);
+            }
+
+            GameEvents.RaiseHomeShown(_bestScore);
+        }
+
         public void StartGame()
+        {
+            // Not snapped: the camera eases in from the title framing (or from the pulled
+            // back end-of-run shot) while the first block slides on.
+            ResetBoard(false);
+
+            IsHome = false;
+            _running = true;
+            _inputLock = Mathf.Max(0f, startInputLock);
+
+            GameEvents.RaiseRunStarted();
+            GameEvents.RaiseScoreChanged(_score, TotalMultiplier);
+
+            SpawnNext();
+        }
+
+        /// <summary>Everything both the title screen and a fresh run need: one clean board.</summary>
+        private void ResetBoard(bool snapCamera)
         {
             ClearBoard();
 
@@ -202,6 +239,8 @@ namespace SliceBlast.Core
             _deathHold = 0f;
             _spawnDelay = 0f;
             _electricTimer = 0f;
+            _idleGuard = 0f;
+            _inputLock = 0f;
 
             _score = 0;
             _perfectStreak = 0;
@@ -215,6 +254,9 @@ namespace SliceBlast.Core
             _axisX = false;
             _nextSize = new Vector2(basePlatformSize.x, basePlatformSize.z);
 
+            _running = false;
+            _pendingSpawn = false;
+
             HasShield = false;
             spawner.ResetRun();
 
@@ -223,21 +265,33 @@ namespace SliceBlast.Core
             platform.Freeze();
             _stack.Add(platform);
 
+            // The platform lands rather than appears.
+            PlayImpact(platform, 0.3f, 3.5f, false, Color.white);
+
             if (cameraRig != null)
             {
-                cameraRig.SnapToHeight(baseOrigin.y + basePlatformSize.y);
-            }
+                // Camera yawed 45°: a block of half-extent a spans 1.414a across the screen
+                // and a swing of t moves its centre 0.707t. Fit the swing plus most of the
+                // block — only the widest opening block clips a corner at full extension.
+                float requiredHalfWidth = 0.707f * spawner.TravelRange
+                                          + 1.13f * (basePlatformSize.x * 0.5f)
+                                          + 0.2f;
 
-            _running = true;
-            _pendingSpawn = false;
+                cameraRig.FitPlaySize(requiredHalfWidth, snapCamera);
+
+                if (snapCamera)
+                {
+                    cameraRig.SnapToHeight(baseOrigin.y + basePlatformSize.y);
+                }
+                else
+                {
+                    cameraRig.SetTargetHeight(baseOrigin.y + basePlatformSize.y);
+                }
+            }
 
             GameEvents.RaisePauseChanged(false);
             GameEvents.RaiseShieldChanged(false);
             GameEvents.RaiseMultiplierTimer(0f, electricDuration);
-            GameEvents.RaiseRunStarted();
-            GameEvents.RaiseScoreChanged(_score, TotalMultiplier);
-
-            SpawnNext();
         }
 
         public void Restart()
@@ -293,6 +347,11 @@ namespace SliceBlast.Core
 
             TickImpacts(dt);
             RecoverFromDeathSlowMotion();
+
+            if (_inputLock > 0f)
+            {
+                _inputLock = Mathf.Max(0f, _inputLock - Time.unscaledDeltaTime);
+            }
 
             if (!_running || IsPaused)
             {
@@ -682,8 +741,6 @@ namespace SliceBlast.Core
                 }
             }
 
-            Grow(blastGrowth + (fromNeon ? neonGrowth : 0f));
-
             Shake(blastShake);
 
             // Hold the next spawn so the explosion, the camera drop and the new top all
@@ -711,13 +768,6 @@ namespace SliceBlast.Core
             _nextSize = new Vector2(
                 Mathf.Min(_nextSize.x * (1f + fraction), basePlatformSize.x),
                 Mathf.Min(_nextSize.y * (1f + fraction), basePlatformSize.z));
-        }
-
-        private void Grow(float amount)
-        {
-            _nextSize = new Vector2(
-                Mathf.Min(_nextSize.x + amount, basePlatformSize.x),
-                Mathf.Min(_nextSize.y + amount, basePlatformSize.z));
         }
 
         private void Reward(BlockType source, string headline, string detail, Color color, Vector3 position, int points)
@@ -822,6 +872,17 @@ namespace SliceBlast.Core
                 _bestScore = _score;
                 PlayerPrefs.SetInt(BestScoreKey, _bestScore);
                 PlayerPrefs.Save();
+            }
+
+            // Pull back far enough to show the run: base platform to the last layer placed.
+            if (cameraRig != null)
+            {
+                MovingBlock top = TopBlock;
+                float topY = top != null
+                    ? top.CachedTransform.position.y + basePlatformSize.y
+                    : baseOrigin.y + basePlatformSize.y;
+
+                cameraRig.FrameTower(baseOrigin.y - basePlatformSize.y, topY);
             }
 
             // A beat of slow motion sells the failure and gives the eye time to follow the fall.
