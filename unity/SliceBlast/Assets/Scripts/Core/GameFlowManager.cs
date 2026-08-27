@@ -1017,6 +1017,25 @@ namespace SliceBlast.Core
             GameEvents.RaiseRunEnded(_score, _bestScore);
         }
 
+        /// <summary>
+        /// The rewarded-ad "double score" grant on the run-over screen. Only ever raises the
+        /// score that already stood at the end of the run — never something a rewarded ad
+        /// could be farmed for mid-run.
+        /// </summary>
+        public int DoubleFinalScore()
+        {
+            _score *= 2;
+
+            if (_score > _bestScore)
+            {
+                _bestScore = _score;
+                PlayerPrefs.SetInt(BestScoreKey, _bestScore);
+                PlayerPrefs.Save();
+            }
+
+            return _score;
+        }
+
         private Vector3 TopBlockCenter()
         {
             MovingBlock top = TopBlock;

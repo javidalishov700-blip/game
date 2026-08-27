@@ -193,3 +193,35 @@ The three rejections this app's shape usually attracts, and where each is alread
 - *Missing icon / Info.plist value* → an iOS build made while the Unity editor's active build
   target was still Windows. Switch the platform, let scripts recompile, then build again —
   `SliceBlastBuild.Run()` refuses the first attempt on purpose for exactly this reason.
+
+## 9. Turning on ads (a later version, not this one)
+
+`AdsManager.cs` (interstitial after every 3rd run, plus an optional rewarded "double score" on
+the run-over screen) is already written, but sits inert behind the `SLICEBLAST_ADS_ENABLED`
+scripting define until three real, one-time steps happen — none of them possible without a
+human at a keyboard, and none of them belong in the version already submitted above:
+
+1. **Import the plugin.** Download the Google Mobile Ads Unity Plugin `.unitypackage` from
+   the releases page of `github.com/googleads/googleads-mobile-unity` and import it via
+   Unity → Assets → Import Package → Custom Package.
+2. **Get real IDs.** Create an app at admob.google.com, take its App ID and the interstitial
+   and rewarded ad unit IDs. Put the App ID in `IosPostProcess.AdMobAppId`, and the two ad
+   unit IDs in `AdsManager`'s `InterstitialAdUnitId`/`RewardedAdUnitId` — both files say
+   exactly where. Until then the code runs on Google's public test IDs, which always serve a
+   test ad and never pay out.
+3. **Flip the switch.** Unity → Project Settings → Player → iOS tab → Scripting Define
+   Symbols → add `SLICEBLAST_ADS_ENABLED`. Nothing above does anything until this is set.
+
+Then, before submitting that build:
+
+- **App Privacy** answer changes from "No" to declaring data collected — Identifiers
+  (Advertising Data / IDFA) and Usage Data, "used for third-party advertising", collection
+  linked to the user, no data used to track across other companies' apps beyond what AdMob
+  itself does. Google publishes the exact answers to give at
+  `support.google.com/admob/answer/9760862` — copy them in rather than guessing.
+- **Privacy Policy** text needs a paragraph naming Google AdMob, the advertising identifier,
+  and a link to Google's own privacy policy. The live pages are in the `steady-site`
+  repository at `public/sliceblast/legal/privacy.html` (see section 1) — update that file,
+  not `docs/privacy-policy.html` in this repository, which is the unused spare copy.
+- Ship this as its **own version** (e.g. 1.1) once 1.0 has cleared review — an app already in
+  Apple's review queue cannot have its behaviour or its App Privacy answers changed under it.

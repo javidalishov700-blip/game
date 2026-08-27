@@ -34,6 +34,8 @@ namespace SliceBlast.UI
         public event Action HomeRequested;
         public event Action<bool> SoundToggled;
         public event Action<bool> HapticsToggled;
+        /// <summary>The player chose to watch a rewarded ad to double the run's final score.</summary>
+        public event Action DoubleScoreRequested;
 
         private RectTransform _safeArea;
         private Rect _appliedSafeArea;
@@ -48,6 +50,7 @@ namespace SliceBlast.UI
         private Text _finalScore;
         private Text _bestScore;
         private Text _restart;
+        private MenuControl _doubleScore;
         private Text _electricSeconds;
         private Text _soundLabel;
         private Text _hapticsLabel;
@@ -418,9 +421,51 @@ namespace SliceBlast.UI
             againRect.anchoredPosition = new Vector2(0f, 320f);
             again.Button.onClick.AddListener(() => RestartRequested?.Invoke());
 
+            // Hidden until an ad is actually loaded and ready — never a button that promises
+            // a reward it cannot deliver.
+            _doubleScore = CreateButton("DoubleScore", screen, "DOUBLE SCORE", 50, new Color(1f, 1f, 1f, 0.1f), Gold, IconShape.Bolt);
+            RectTransform doubleRect = _doubleScore.Root;
+            doubleRect.anchorMin = new Vector2(0.5f, 0f);
+            doubleRect.anchorMax = new Vector2(0.5f, 0f);
+            doubleRect.pivot = new Vector2(0.5f, 0.5f);
+            doubleRect.sizeDelta = new Vector2(560f, 104f);
+            doubleRect.anchoredPosition = new Vector2(0f, 470f);
+            _doubleScore.Button.onClick.AddListener(() => DoubleScoreRequested?.Invoke());
+            _doubleScore.Root.gameObject.SetActive(false);
+
             _restart = CreateText("RestartHint", screen, 44, FontStyle.Bold, new Color(1f, 1f, 1f, 0.7f), TextAnchor.MiddleCenter);
             Anchor(_restart.rectTransform, new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(0f, 170f), new Vector2(0f, 250f));
             _restart.text = "OR TAP ANYWHERE";
+        }
+
+        /// <summary>
+        /// The rewarded-ad offer on the run-over screen. The bootstrap calls this once a
+        /// rewarded ad has actually finished loading, and again with false the moment it is
+        /// spent or fails, so the button is never shown without something behind it.
+        /// </summary>
+        public void SetDoubleScoreAvailable(bool available)
+        {
+            if (_doubleScore != null)
+            {
+                _doubleScore.Root.gameObject.SetActive(available);
+            }
+        }
+
+        /// <summary>Reflects the score after a successful rewarded-ad double, and retires the offer.</summary>
+        public void ApplyDoubledScore(int newScore, int best)
+        {
+            if (_finalScore != null)
+            {
+                _finalScore.text = newScore.ToString();
+            }
+
+            if (_bestScore != null && newScore >= best)
+            {
+                _bestScore.text = "NEW BEST!";
+                _bestScore.color = Gold;
+            }
+
+            SetDoubleScoreAvailable(false);
         }
 
         private static void PlaceMenuButton(MenuControl control, float y)

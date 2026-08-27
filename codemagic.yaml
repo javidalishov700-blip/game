@@ -224,11 +224,31 @@ workflows:
           cd "$XCODE_DIR"
           agvtool new-version -all "$BUILD_NUMBER"
 
+      - name: Install CocoaPods dependencies (if the project needs them)
+        script: |
+          # A no-op today. The moment a native SDK gets pulled in through Unity's External
+          # Dependency Manager (Google Mobile Ads, for one), it drops a Podfile into the
+          # generated Xcode project, and without this step the build would link fine but
+          # crash on launch for want of the actual native framework.
+          if [ -f "$XCODE_DIR/Podfile" ]; then
+            cd "$XCODE_DIR"
+            pod install --repo-update
+          fi
+
       - name: Build the .ipa
         script: |
-          xcode-project build-ipa \
-            --project "$XCODE_PROJECT" \
-            --scheme "$XCODE_SCHEME"
+          # CocoaPods, once it runs, replaces the project with a workspace that also loads
+          # the Pods target — building the bare .xcodeproj after that would silently drop
+          # every pod.
+          if [ -f "$XCODE_DIR/Unity-iPhone.xcworkspace/contents.xcworkspacedata" ]; then
+            xcode-project build-ipa \
+              --workspace "$XCODE_DIR/Unity-iPhone.xcworkspace" \
+              --scheme "$XCODE_SCHEME"
+          else
+            xcode-project build-ipa \
+              --project "$XCODE_PROJECT" \
+              --scheme "$XCODE_SCHEME"
+          fi
 
     artifacts:
       - build/ios/ipa/*.ipa

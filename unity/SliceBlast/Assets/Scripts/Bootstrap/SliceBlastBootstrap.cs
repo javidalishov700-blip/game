@@ -1,6 +1,7 @@
 // Composition root: builds the camera rig, lighting, backdrop, pools, spawner, audio, HUD
 // and flow manager, then wires presentation to the signal bus. Nothing else knows about
 // anything else.
+using SliceBlast.Ads;
 using SliceBlast.Audio;
 using SliceBlast.Core;
 using SliceBlast.Feedback;
@@ -122,6 +123,9 @@ namespace SliceBlast.Bootstrap
             _hud.HomeRequested += OnHomeRequested;
             _hud.SoundToggled += OnSoundToggled;
             _hud.HapticsToggled += OnHapticsToggled;
+            _hud.DoubleScoreRequested += OnDoubleScoreRequested;
+
+            AdsManager.EnsureInstance();
 
             GameObject spawnerObject = new GameObject("Spawner");
             spawnerObject.transform.SetParent(transform, false);
@@ -152,6 +156,7 @@ namespace SliceBlast.Bootstrap
                 _hud.HomeRequested -= OnHomeRequested;
                 _hud.SoundToggled -= OnSoundToggled;
                 _hud.HapticsToggled -= OnHapticsToggled;
+                _hud.DoubleScoreRequested -= OnDoubleScoreRequested;
             }
         }
 
@@ -428,6 +433,21 @@ namespace SliceBlast.Bootstrap
             _audio.PlayGameOver();
             _hud.ShowHint(false);
             _hud.ShowGameOver(score, best);
+
+            AdsManager.Instance.NotifyRunEnded();
+            _hud.SetDoubleScoreAvailable(AdsManager.Instance.IsRewardedReady);
+        }
+
+        /// <summary>The run-over screen's optional rewarded-ad offer.</summary>
+        private void OnDoubleScoreRequested()
+        {
+            AdsManager.Instance.ShowRewarded(
+                onEarned: () =>
+                {
+                    int newScore = _flow.DoubleFinalScore();
+                    _hud.ApplyDoubledScore(newScore, _flow.BestScore);
+                },
+                onUnavailable: () => _hud.SetDoubleScoreAvailable(false));
         }
 
         private void OnPauseChanged(bool paused)
