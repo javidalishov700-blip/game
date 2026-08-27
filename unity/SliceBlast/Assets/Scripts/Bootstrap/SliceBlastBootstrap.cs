@@ -54,6 +54,34 @@ namespace SliceBlast.Bootstrap
         private bool _home;
         private float _homeTime;
 
+        // A 7/9/11-block blast is rare enough to mark, so the sky itself changes to say so —
+        // each tier a little more intense than the last, held for the rest of the run rather
+        // than reverting on a smaller blast, and reset only when a fresh run actually starts.
+        private const float SkyTransitionSeconds = 1.1f;
+
+        private static readonly Color[] BlastSkyTop =
+        {
+            new Color(0.36f, 0.19f, 0.08f), // 7 — the sky starts to glow, amber dusk
+            new Color(0.30f, 0.06f, 0.34f), // 9 — neon night
+            new Color(0.04f, 0.30f, 0.44f)  // 11+ — electric storm
+        };
+
+        private static readonly Color[] BlastSkyBottom =
+        {
+            new Color(0.12f, 0.05f, 0.02f),
+            new Color(0.10f, 0.02f, 0.14f),
+            new Color(0.01f, 0.09f, 0.15f)
+        };
+
+        private Camera _camera;
+        private Texture2D _skyTexture;
+        private int _skyTier;
+        private float _skyBlend = 1f;
+        private Color _skyTopFrom;
+        private Color _skyBottomFrom;
+        private Color _skyTopTo;
+        private Color _skyBottomTo;
+
         /// <summary>
         /// The shipped scene is deliberately empty — the game builds itself here. That keeps
         /// the build independent of scene contents, serialized references and CI settings.
@@ -194,6 +222,8 @@ namespace SliceBlast.Bootstrap
 
         private void Update()
         {
+            TickSky();
+
             if (_pools != null)
             {
                 _pools.Tick(Time.deltaTime);
@@ -246,6 +276,7 @@ namespace SliceBlast.Bootstrap
             _hud.ShowHint(false);
             _hud.ShowHome(best);
             _audio.PlayIntro();
+            SetSkyTier(0, true);
         }
 
         private void OnRunStarted()
@@ -258,6 +289,7 @@ namespace SliceBlast.Bootstrap
             _hud.ShowPaused(false);
             _hud.SetHintText("TAP TO DROP");
             _hud.ShowHint(true);
+            SetSkyTier(0, true);
         }
 
         private void OnScoreChanged(int score, int multiplier)
@@ -373,6 +405,13 @@ namespace SliceBlast.Bootstrap
             // reads as a score bonus until it says "block" somewhere.
             _hud.ShowBanner(blast.FromNeon ? "NEON BLAST" : blast.Layers + " BLOCK BLAST", "+" + blast.Bonus, blast.Color);
             _hud.Flash(0.9f);
+
+            int tier = SkyTierForBlast(blast.Layers);
+
+            if (tier > _skyTier)
+            {
+                SetSkyTier(tier, false);
+            }
 
             EmitSparks(blast.Epicenter, blast.Color, 8.5f, 0.15f);
             EmitShockwave(blast.Epicenter, blast.Color);
@@ -814,6 +853,11 @@ namespace SliceBlast.Bootstrap
             cameraObject.AddComponent<AudioListener>();
             CreateBackdrop(cameraObject.transform, unlitMaterial);
 
+            _camera = camera;
+            _skyTopFrom = _skyTopTo = skyTop;
+            _skyBottomFrom = _skyBottomTo = skyBottom;
+            _skyBlend = 1f;
+
             return rigObject.AddComponent<CameraRig>();
         }
 
@@ -834,6 +878,7 @@ namespace SliceBlast.Bootstrap
             }
 
             gradient.Apply();
+            _skyTexture = gradient;
 
             GameObject quad = GameObject.CreatePrimitive(PrimitiveType.Quad);
             quad.name = "Backdrop";
@@ -856,6 +901,92 @@ namespace SliceBlast.Bootstrap
             quad.transform.localPosition = new Vector3(0f, 0f, 60f);
             quad.transform.localRotation = Quaternion.identity;
             quad.transform.localScale = new Vector3(80f, 80f, 1f);
+        }
+
+        /// <summary>
+        /// Eases the backdrop toward whatever SetSkyTier last targeted. Runs unconditionally,
+        /// paused game or not — it is pure background colour, nothing gameplay depends on it.
+        /// </summary>
+        private void TickSky()
+        {
+            if (_skyBlend >= 1f)
+            {
+                return;
+            }
+
+            _skyBlend = Mathf.Min(1f, _skyBlend + Time.unscaledDeltaTime / SkyTransitionSeconds);
+            ApplySky(Color.Lerp(_skyBottomFrom, _skyBottomTo, _skyBlend), Color.Lerp(_skyTopFrom, _skyTopTo, _skyBlend));
+        }
+
+        private void ApplySky(Color bottom, Color top)
+        {
+            if (_camera != null)
+            {
+                _camera.backgroundColor = bottom;
+            }
+
+            if (_skyTexture == null)
+            {
+                return;
+            }
+
+            for (int y = 0; y < _skyTexture.height; y++)
+            {
+                float t = y / (float)(_skyTexture.height - 1);
+                _skyTexture.SetPixel(0, y, Color.Lerp(bottom, top, t * t));
+            }
+
+            _skyTexture.Apply();
+        }
+
+        /// <summary>
+        /// Tier 0 is the default sky. 1/2/3 are the 7/9/11-block blast palettes. A run only
+        /// ever moves up through them — reaching 9 keeps the 7 tier's drama rather than
+        /// losing it to a smaller blast later in the same run — and resets to 0 only when a
+        /// fresh run actually starts.
+        /// </summary>
+        private void SetSkyTier(int tier, bool immediate)
+        {
+            if (tier == _skyTier && !immediate)
+            {
+                return;
+            }
+
+            _skyTier = tier;
+
+            Color targetTop = tier <= 0 ? skyTop : BlastSkyTop[Mathf.Clamp(tier, 1, BlastSkyTop.Length) - 1];
+            Color targetBottom = tier <= 0 ? skyBottom : BlastSkyBottom[Mathf.Clamp(tier, 1, BlastSkyBottom.Length) - 1];
+
+            if (immediate)
+            {
+                _skyTopFrom = _skyTopTo = targetTop;
+                _skyBottomFrom = _skyBottomTo = targetBottom;
+                _skyBlend = 1f;
+                ApplySky(targetBottom, targetTop);
+                return;
+            }
+
+            _skyTopFrom = Color.Lerp(_skyTopFrom, _skyTopTo, _skyBlend);
+            _skyBottomFrom = Color.Lerp(_skyBottomFrom, _skyBottomTo, _skyBlend);
+            _skyTopTo = targetTop;
+            _skyBottomTo = targetBottom;
+            _skyBlend = 0f;
+        }
+
+        /// <summary>7, 9 and 11 blocks are the three milestones the sky itself marks.</summary>
+        private static int SkyTierForBlast(int layers)
+        {
+            if (layers >= 11)
+            {
+                return 3;
+            }
+
+            if (layers >= 9)
+            {
+                return 2;
+            }
+
+            return layers >= 7 ? 1 : 0;
         }
 
         private static void CreateLighting()

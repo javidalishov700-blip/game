@@ -93,6 +93,12 @@ namespace SliceBlast.Core
         [SerializeField] private float deathTimeScale = 0.32f;
         [SerializeField] private float deathHoldSeconds = 0.45f;
 
+        // A 7-block blast or bigger earns a beat of freeze-frame — short enough to read as a
+        // punch, not a stutter, and only for the handful of blasts a run actually escalates to.
+        [SerializeField] private int hitstopBlastThreshold = 7;
+        [SerializeField] private float hitstopSeconds = 0.15f;
+        [SerializeField] private float hitstopTimeScale = 0.02f;
+
         [Header("Runtime")]
         [SerializeField] private bool autoStart = true;
         // The tap that starts a run must not also drop its first block.
@@ -124,6 +130,7 @@ namespace SliceBlast.Core
         private float _tutorialProgress;
         private float _slowdown;
         private float _deathHold;
+        private float _hitstopHold;
         private float _spawnDelay;
         private float _electricTimer;
         private float _idleGuard;
@@ -264,6 +271,7 @@ namespace SliceBlast.Core
             IsPaused = false;
             Time.timeScale = 1f;
             _deathHold = 0f;
+            _hitstopHold = 0f;
             _spawnDelay = 0f;
             _electricTimer = 0f;
             _idleGuard = 0f;
@@ -378,6 +386,7 @@ namespace SliceBlast.Core
 
             TickImpacts(dt);
             RecoverFromDeathSlowMotion();
+            TickHitstop();
 
             if (_inputLock > 0f)
             {
@@ -606,6 +615,27 @@ namespace SliceBlast.Core
             }
 
             Time.timeScale = Mathf.MoveTowards(Time.timeScale, 1f, Time.unscaledDeltaTime * 1.4f);
+        }
+
+        /// <summary>
+        /// A hard freeze rather than an eased one — a hitstop reads as a punch precisely
+        /// because it lets go all at once instead of ramping back up. Runs independently of
+        /// death's slow motion and of pause, both of which own Time.timeScale in their own
+        /// states; a blast never fires in either of those, so the two never actually collide.
+        /// </summary>
+        private void TickHitstop()
+        {
+            if (_hitstopHold <= 0f)
+            {
+                return;
+            }
+
+            _hitstopHold -= Time.unscaledDeltaTime;
+
+            if (_hitstopHold <= 0f && !IsPaused)
+            {
+                Time.timeScale = 1f;
+            }
         }
 
         private void UpdateDynamicSpeed(float dt)
@@ -890,6 +920,12 @@ namespace SliceBlast.Core
             }
 
             Shake(blastShake);
+
+            if (removable >= hitstopBlastThreshold)
+            {
+                _hitstopHold = hitstopSeconds;
+                Time.timeScale = hitstopTimeScale;
+            }
 
             // Hold the next spawn so the explosion, the camera drop and the new top all
             // read before another block slides in.
