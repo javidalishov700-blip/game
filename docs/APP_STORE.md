@@ -196,7 +196,7 @@ The three rejections this app's shape usually attracts, and where each is alread
 
 ## 9. Turning on ads (a later version, not this one)
 
-`AdsManager.cs` (interstitial after every 3rd run, plus an optional rewarded "double score" on
+`AdsManager.cs` (interstitial after every 3rd run, plus an optional rewarded "continue" on
 the run-over screen) is already written, but sits inert behind the `SLICEBLAST_ADS_ENABLED`
 scripting define until three real, one-time steps happen — none of them possible without a
 human at a keyboard, and none of them belong in the version already submitted above:

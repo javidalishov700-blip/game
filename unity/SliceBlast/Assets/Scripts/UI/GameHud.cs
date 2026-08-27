@@ -34,8 +34,8 @@ namespace SliceBlast.UI
         public event Action HomeRequested;
         public event Action<bool> SoundToggled;
         public event Action<bool> HapticsToggled;
-        /// <summary>The player chose to watch a rewarded ad to double the run's final score.</summary>
-        public event Action DoubleScoreRequested;
+        /// <summary>The player chose to watch a rewarded ad for one more block to continue on.</summary>
+        public event Action ContinueRequested;
 
         private RectTransform _safeArea;
         private Rect _appliedSafeArea;
@@ -50,7 +50,7 @@ namespace SliceBlast.UI
         private Text _finalScore;
         private Text _bestScore;
         private Text _restart;
-        private MenuControl _doubleScore;
+        private MenuControl _continueButton;
         private Text _electricSeconds;
         private Text _soundLabel;
         private Text _hapticsLabel;
@@ -423,15 +423,15 @@ namespace SliceBlast.UI
 
             // Hidden until an ad is actually loaded and ready — never a button that promises
             // a reward it cannot deliver.
-            _doubleScore = CreateButton("DoubleScore", screen, "DOUBLE SCORE", 50, new Color(1f, 1f, 1f, 0.1f), Gold, IconShape.Bolt);
-            RectTransform doubleRect = _doubleScore.Root;
-            doubleRect.anchorMin = new Vector2(0.5f, 0f);
-            doubleRect.anchorMax = new Vector2(0.5f, 0f);
-            doubleRect.pivot = new Vector2(0.5f, 0.5f);
-            doubleRect.sizeDelta = new Vector2(560f, 104f);
-            doubleRect.anchoredPosition = new Vector2(0f, 470f);
-            _doubleScore.Button.onClick.AddListener(() => DoubleScoreRequested?.Invoke());
-            _doubleScore.Root.gameObject.SetActive(false);
+            _continueButton = CreateButton("Continue", screen, "CONTINUE", 50, new Color(1f, 1f, 1f, 0.1f), Gold, IconShape.Bolt);
+            RectTransform continueRect = _continueButton.Root;
+            continueRect.anchorMin = new Vector2(0.5f, 0f);
+            continueRect.anchorMax = new Vector2(0.5f, 0f);
+            continueRect.pivot = new Vector2(0.5f, 0.5f);
+            continueRect.sizeDelta = new Vector2(560f, 104f);
+            continueRect.anchoredPosition = new Vector2(0f, 470f);
+            _continueButton.Button.onClick.AddListener(() => ContinueRequested?.Invoke());
+            _continueButton.Root.gameObject.SetActive(false);
 
             _restart = CreateText("RestartHint", screen, 44, FontStyle.Bold, new Color(1f, 1f, 1f, 0.7f), TextAnchor.MiddleCenter);
             Anchor(_restart.rectTransform, new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(0f, 170f), new Vector2(0f, 250f));
@@ -441,31 +441,15 @@ namespace SliceBlast.UI
         /// <summary>
         /// The rewarded-ad offer on the run-over screen. The bootstrap calls this once a
         /// rewarded ad has actually finished loading, and again with false the moment it is
-        /// spent or fails, so the button is never shown without something behind it.
+        /// spent, fails, or the run actually resumes — so the button is never shown without
+        /// something behind it.
         /// </summary>
-        public void SetDoubleScoreAvailable(bool available)
+        public void SetContinueAvailable(bool available)
         {
-            if (_doubleScore != null)
+            if (_continueButton != null)
             {
-                _doubleScore.Root.gameObject.SetActive(available);
+                _continueButton.Root.gameObject.SetActive(available);
             }
-        }
-
-        /// <summary>Reflects the score after a successful rewarded-ad double, and retires the offer.</summary>
-        public void ApplyDoubledScore(int newScore, int best)
-        {
-            if (_finalScore != null)
-            {
-                _finalScore.text = newScore.ToString();
-            }
-
-            if (_bestScore != null && newScore >= best)
-            {
-                _bestScore.text = "NEW BEST!";
-                _bestScore.color = Gold;
-            }
-
-            SetDoubleScoreAvailable(false);
         }
 
         private static void PlaceMenuButton(MenuControl control, float y)

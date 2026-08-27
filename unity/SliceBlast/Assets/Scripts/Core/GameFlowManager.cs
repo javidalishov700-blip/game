@@ -24,6 +24,11 @@ namespace SliceBlast.Core
         [SerializeField] private Vector3 basePlatformSize = new Vector3(3f, 0.4f, 3f);
         [SerializeField] private Vector3 baseOrigin = Vector3.zero;
 
+        // The rewarded-ad "keep going": a real second chance, not a free one — the next block
+        // comes in noticeably smaller than whatever was standing at death, and never wider
+        // than the tower's own opening platform no matter how wide that last layer was.
+        [SerializeField, Range(0.1f, 1f)] private float reviveSizeFraction = 0.6f;
+
         [Header("Invisible Tutorial")]
         [SerializeField] private int tutorialBlocks = 3;
         [SerializeField, Range(0.2f, 1f)] private float tutorialSpeedScale = 0.5f;
@@ -1043,22 +1048,47 @@ namespace SliceBlast.Core
         }
 
         /// <summary>
-        /// The rewarded-ad "double score" grant on the run-over screen. Only ever raises the
-        /// score that already stood at the end of the run — never something a rewarded ad
-        /// could be farmed for mid-run.
+        /// The rewarded-ad "keep going": a real second chance, not a free one. The next block
+        /// lands noticeably smaller than whatever was standing at death — capped so it is
+        /// never wider than the tower's own opening platform, however wide that layer was —
+        /// and play resumes exactly where it stopped rather than restarting the tower.
         /// </summary>
-        public int DoubleFinalScore()
+        public bool TryRevive()
         {
-            _score *= 2;
+            MovingBlock top = TopBlock;
 
-            if (_score > _bestScore)
+            if (_running || top == null)
             {
-                _bestScore = _score;
-                PlayerPrefs.SetInt(BestScoreKey, _bestScore);
-                PlayerPrefs.Save();
+                return false;
             }
 
-            return _score;
+            _nextSize = new Vector2(
+                Mathf.Min(_nextSize.x * reviveSizeFraction, basePlatformSize.x),
+                Mathf.Min(_nextSize.y * reviveSizeFraction, basePlatformSize.z));
+
+            // A continued run is a fresh mini-run for streak purposes — carrying a pre-death
+            // streak across the revive would hand out blasts and bonuses it was not earned.
+            _perfectStreak = 0;
+
+            _running = true;
+            _pendingSpawn = true;
+            _spawnDelay = 0f;
+            Time.timeScale = 1f;
+            _deathHold = 0f;
+
+            if (cameraRig != null)
+            {
+                // Same fit as a fresh board (see ResetBoard) — the pulled-back run-over shot
+                // has to zoom back in to a normal play view before the next block can swing.
+                float requiredHalfWidth = 0.707f * spawner.TravelRange
+                                          + 1.13f * (basePlatformSize.x * 0.5f)
+                                          + 0.2f;
+
+                cameraRig.FitPlaySize(requiredHalfWidth, false);
+                cameraRig.SetTargetHeight(top.CachedTransform.position.y + basePlatformSize.y);
+            }
+
+            return true;
         }
 
         private Vector3 TopBlockCenter()

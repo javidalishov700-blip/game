@@ -123,7 +123,7 @@ namespace SliceBlast.Bootstrap
             _hud.HomeRequested += OnHomeRequested;
             _hud.SoundToggled += OnSoundToggled;
             _hud.HapticsToggled += OnHapticsToggled;
-            _hud.DoubleScoreRequested += OnDoubleScoreRequested;
+            _hud.ContinueRequested += OnContinueRequested;
 
             AdsManager.EnsureInstance();
 
@@ -156,7 +156,7 @@ namespace SliceBlast.Bootstrap
                 _hud.HomeRequested -= OnHomeRequested;
                 _hud.SoundToggled -= OnSoundToggled;
                 _hud.HapticsToggled -= OnHapticsToggled;
-                _hud.DoubleScoreRequested -= OnDoubleScoreRequested;
+                _hud.ContinueRequested -= OnContinueRequested;
             }
         }
 
@@ -435,19 +435,33 @@ namespace SliceBlast.Bootstrap
             _hud.ShowGameOver(score, best);
 
             AdsManager.Instance.NotifyRunEnded();
-            _hud.SetDoubleScoreAvailable(AdsManager.Instance.IsRewardedReady);
+            _hud.SetContinueAvailable(AdsManager.Instance.IsRewardedReady);
         }
 
-        /// <summary>The run-over screen's optional rewarded-ad offer.</summary>
-        private void OnDoubleScoreRequested()
+        /// <summary>
+        /// The run-over screen's optional rewarded-ad offer: one more, smaller block rather
+        /// than a free pass. TryRevive can still say no (e.g. the stack somehow emptied under
+        /// it), in which case the offer just goes away instead of leaving the run stuck
+        /// between the game-over screen and a game that never resumes.
+        /// </summary>
+        private void OnContinueRequested()
         {
             AdsManager.Instance.ShowRewarded(
                 onEarned: () =>
                 {
-                    int newScore = _flow.DoubleFinalScore();
-                    _hud.ApplyDoubledScore(newScore, _flow.BestScore);
+                    if (!_flow.TryRevive())
+                    {
+                        _hud.SetContinueAvailable(false);
+                        return;
+                    }
+
+                    _gameOver = false;
+                    _hud.HideGameOver();
+                    _hud.ShowRunChrome(true);
+                    _hud.SetHintText("TAP TO DROP");
+                    _hud.ShowHint(true);
                 },
-                onUnavailable: () => _hud.SetDoubleScoreAvailable(false));
+                onUnavailable: () => _hud.SetContinueAvailable(false));
         }
 
         private void OnPauseChanged(bool paused)
