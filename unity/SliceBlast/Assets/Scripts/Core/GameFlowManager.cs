@@ -32,12 +32,18 @@ namespace SliceBlast.Core
         // opening three taps land perfectly and the reward teaches itself.
         [SerializeField, Range(0f, 0.5f)] private float tutorialAssistFraction = 0.1f;
 
+        // Toned down from 0.1/8.5/0.22: the old ramp reached max speed by layer ~60 and piled
+        // a further +22% per combo level on top of that, so a tall, confident run stacked two
+        // separate speed penalties on exactly the player who least deserved a punishing one.
+        // Special blocks' own speedMultiplier (BlockCatalogue) then multiplied whatever this
+        // produced — Steel at old maxSpeed was already close to double baseSpeed. The curve
+        // still climbs to a real late-game challenge; it no longer compounds into one.
         [Header("Dynamic Speed")]
         [SerializeField] private float baseSpeed = 2.4f;
-        [SerializeField] private float speedPerLayer = 0.1f;
-        [SerializeField] private float maxSpeed = 8.5f;
+        [SerializeField] private float speedPerLayer = 0.085f;
+        [SerializeField] private float maxSpeed = 7.6f;
         [SerializeField] private float speedSmoothing = 1.5f;
-        [SerializeField] private float comboSpeedBonus = 0.22f;
+        [SerializeField] private float comboSpeedBonus = 0.16f;
         [SerializeField, Range(0f, 0.5f)] private float comboBreakSlowdown = 0.16f;
         [SerializeField, Range(0f, 0.6f)] private float maxSlowdown = 0.32f;
         [SerializeField] private float slowdownRecovery = 0.1f;
@@ -62,7 +68,12 @@ namespace SliceBlast.Core
         [SerializeField] private float neonFuseSeconds = 0.4f;
         [SerializeField] private float currentSpeed = 7f;
         [SerializeField] private float currentWidth = 2.2f;
-        [SerializeField] private float currentPulseInterval = 0.55f;
+        [SerializeField] private float currentPulseInterval = 0.35f;
+        // The camera only ever frames the top of a tall tower — a sweep that starts at the
+        // true bottom spends its first several seconds climbing through layers nobody can
+        // see. Confining it to the top slice of the stack means it is on screen, and visibly
+        // finishing a lap, from the moment the current starts.
+        [SerializeField] private int currentVisibleLayers = 14;
 
         [Header("Scoring")]
         [SerializeField] private int perfectBonus = 2;
@@ -467,17 +478,31 @@ namespace SliceBlast.Core
             _currentActive = true;
             _currentPhase += deltaTime * currentSpeed;
 
-            float span = count + 3f;
+            // Loop inside the top slice of the tower rather than the whole height: on a tall
+            // tower the base is off camera, and a sweep that has to climb all the way from it
+            // burns most of the 15 seconds before it is ever visible.
+            int windowSize = Mathf.Min(count, currentVisibleLayers);
+            int windowStart = count - windowSize;
+            float span = windowSize + 3f;
             float head = Mathf.Repeat(_currentPhase, span);
 
             for (int i = 0; i < count; i++)
             {
                 MovingBlock layer = _stack[i];
 
-                if (layer != null)
+                if (layer == null)
                 {
-                    layer.SetCharge(Mathf.Clamp01(1f - Mathf.Abs(i - head) / currentWidth));
+                    continue;
                 }
+
+                if (i < windowStart)
+                {
+                    layer.SetCharge(0f);
+                    continue;
+                }
+
+                float local = i - windowStart;
+                layer.SetCharge(Mathf.Clamp01(1f - Mathf.Abs(local - head) / currentWidth));
             }
 
             _currentPulse -= deltaTime;
@@ -486,8 +511,8 @@ namespace SliceBlast.Core
             {
                 _currentPulse = currentPulseInterval;
 
-                int index = Mathf.Clamp(Mathf.RoundToInt(head), 0, count - 1);
-                MovingBlock at = _stack[index];
+                int localIndex = Mathf.Clamp(Mathf.RoundToInt(head), 0, windowSize - 1);
+                MovingBlock at = _stack[windowStart + localIndex];
 
                 if (at != null)
                 {

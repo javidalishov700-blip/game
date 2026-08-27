@@ -52,7 +52,7 @@ namespace SliceBlast.Core
             {
                 Type = BlockType.Electric,
                 Tint = new Color(0.45f, 0.85f, 1f),
-                SpeedMultiplier = 1.1f,
+                SpeedMultiplier = 1.05f,
                 SpawnWeight = 3f,
                 UsesPalette = false,
                 Label = "ELECTRIC"
@@ -70,7 +70,7 @@ namespace SliceBlast.Core
             {
                 Type = BlockType.Steel,
                 Tint = new Color(0.66f, 0.70f, 0.78f),
-                SpeedMultiplier = 1.5f,
+                SpeedMultiplier = 1.3f,
                 SpawnWeight = 2f,
                 UsesPalette = false,
                 Label = "STEEL"

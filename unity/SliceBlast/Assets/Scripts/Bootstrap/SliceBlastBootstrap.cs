@@ -422,7 +422,7 @@ namespace SliceBlast.Bootstrap
         private void OnCurrentPulsed(Vector3 position)
         {
             _audio.PlayCrackle();
-            EmitSparks(position, BlockCatalogue.ElectricBlue, 2.6f, 0.06f);
+            EmitSparks(position, BlockCatalogue.ElectricBlue, 4.2f, 0.09f);
         }
 
         private void OnRunEnded(int score, int best)
