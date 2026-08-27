@@ -369,7 +369,9 @@ namespace SliceBlast.Bootstrap
         private void OnBlastFired(BlastEvent blast)
         {
             _audio.PlayBlast();
-            _hud.ShowBanner(blast.FromNeon ? "NEON BLAST" : "BLAST x" + blast.Layers, "+" + blast.Bonus, blast.Color);
+            // Spell out the count rather than just the multiplier — a 3/5/7/9 escalation
+            // reads as a score bonus until it says "block" somewhere.
+            _hud.ShowBanner(blast.FromNeon ? "NEON BLAST" : blast.Layers + " BLOCK BLAST", "+" + blast.Bonus, blast.Color);
             _hud.Flash(0.9f);
 
             EmitSparks(blast.Epicenter, blast.Color, 8.5f, 0.15f);
