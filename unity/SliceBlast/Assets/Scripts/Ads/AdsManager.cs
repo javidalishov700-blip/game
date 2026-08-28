@@ -45,13 +45,11 @@ namespace SliceBlast.Ads
         }
 
 #if SLICEBLAST_ADS_ENABLED
-        // Google's own published sample IDs — they always serve a test ad and never earn or
-        // cost anything. Replace with the real ad unit IDs from your AdMob console before
-        // shipping a build that is meant to earn revenue; shipping with these is safe, it
-        // just never pays out.
+        // Real ad unit IDs from the Slice & Blast AdMob app (iOS-only — this project never
+        // ships Android, so that branch below is still Google's public test IDs).
 #if UNITY_IOS
-        private const string InterstitialAdUnitId = "ca-app-pub-3940256099942544/4411468910";
-        private const string RewardedAdUnitId = "ca-app-pub-3940256099942544/1712485313";
+        private const string InterstitialAdUnitId = "ca-app-pub-4448830215845263/4186164698";
+        private const string RewardedAdUnitId = "ca-app-pub-4448830215845263/3977341780";
 #elif UNITY_ANDROID
         private const string InterstitialAdUnitId = "ca-app-pub-3940256099942544/1033173712";
         private const string RewardedAdUnitId = "ca-app-pub-3940256099942544/5224354917";
@@ -194,23 +192,23 @@ namespace SliceBlast.Ads
 }
 
 // ---------------------------------------------------------------------------------------------
-// Turning ads on — three real steps, none of them possible from source code alone:
+// Turning ads on:
 //
-// 1. Download the Google Mobile Ads Unity Plugin (.unitypackage) from the releases page of
+// 1. [DONE] AdMob app + ad unit IDs. Real App ID and the interstitial/rewarded ad unit IDs
+//    are already wired in above and in IosPostProcess.AdMobAppId.
+// 2. [TODO — real Unity Editor step] Download the Google Mobile Ads Unity Plugin
+//    (.unitypackage) from the releases page of
 //    https://github.com/googleads/googleads-mobile-unity and import it: Unity → Assets →
 //    Import Package → Custom Package… This brings in the GoogleMobileAds namespace and the
-//    External Dependency Manager (EDM4U) that resolves the native iOS/Android SDKs at build
-//    time — it writes a Podfile into the generated Xcode project, which Codemagic's
-//    xcode-to-testflight workflow now runs `pod install` for automatically.
-// 2. Create an AdMob account at admob.google.com, add the app, and take its App ID and the
-//    two ad unit IDs (interstitial, rewarded). Put the App ID in SliceBlastBuild's
-//    GadApplicationId field (or directly where IosPostProcess writes GADApplicationIdentifier)
-//    and swap the test ad unit IDs above for the real ones.
-// 3. Unity → Project Settings → Player → Scripting Define Symbols → add
-//    SLICEBLAST_ADS_ENABLED (for the iOS, and separately Android, tab). Only once this define
-//    is set does any of the code above run instead of compiling to a no-op.
+//    External Dependency Manager (EDM4U) that resolves the native iOS SDK at build time — it
+//    writes a Podfile into the generated Xcode project, which Codemagic's xcode-to-testflight
+//    workflow already runs `pod install` for automatically. Commit and push whatever new
+//    Assets/ folders this adds, .meta files included, so Unity Cloud Build sees them too.
+// 3. Unity → Project Settings → Player → iOS tab → Scripting Define Symbols → add
+//    SLICEBLAST_ADS_ENABLED. Only once this define is set — and only once step 2 has actually
+//    landed — does any of the code above run instead of compiling to a no-op; setting it
+//    before the plugin is imported breaks the build (GoogleMobileAds does not exist yet).
 //
-// Do this on a version *after* whatever is currently submitted to Apple — it changes the App
-// Privacy answer from "No" to "Yes, this app collects data" (advertising identifiers), which
-// needs its own App Store Connect update and cannot be folded into a build already in review.
+// App Privacy answers and the Privacy Policy / Terms of Use updates this needs are already
+// done — see docs/APP_STORE.md section 9.
 // ---------------------------------------------------------------------------------------------

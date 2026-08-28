@@ -16,11 +16,8 @@ namespace SliceBlast.EditorTools
         private const string AppIconName = "AppIcon";
 
 #if SLICEBLAST_ADS_ENABLED
-        // From admob.google.com → Apps → your app → App settings, once one exists. This
-        // placeholder is syntactically well-formed but not a real ID — the SDK will fail to
-        // initialize until it is replaced, which is exactly the point: a build should never
-        // silently ship with a fake one.
-        private const string AdMobAppId = "ca-app-pub-0000000000000000~0000000000";
+        // From admob.google.com → Apps → Slice & Blast (iOS) → App settings.
+        private const string AdMobAppId = "ca-app-pub-4448830215845263~6624625776";
 #endif
 
         // The "universal" entry is Xcode 14's single-size icon feature, which supplies the
