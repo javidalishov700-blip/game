@@ -18,11 +18,11 @@ namespace SliceBlast.Core
         // so late-game precision still matters while early taps feel effortless. Nudged up
         // slightly across the board — still a near-miss forgiveness window, not a wide one —
         // to take the edge off small blocks at high speed without making placement trivial.
-        [SerializeField] private float perfectThreshold = 0.032f;
-        [SerializeField, Range(0f, 0.3f)] private float magnetFraction = 0.026f;
-        [SerializeField, Range(0f, 0.6f)] private float maxThresholdFraction = 0.1f;
-        [SerializeField] private float thresholdPerStreak = 0.0017f;
-        [SerializeField] private float snapSpeedScale = 0.0038f;
+        [SerializeField] private float perfectThreshold = 0.036f;
+        [SerializeField, Range(0f, 0.3f)] private float magnetFraction = 0.03f;
+        [SerializeField, Range(0f, 0.6f)] private float maxThresholdFraction = 0.11f;
+        [SerializeField] private float thresholdPerStreak = 0.002f;
+        [SerializeField] private float snapSpeedScale = 0.0045f;
 
         [Header("Slice")]
         [SerializeField] private float minChunkSize = 0.02f;
@@ -96,18 +96,21 @@ namespace SliceBlast.Core
                 return;
             }
 
-            // Missing a special never damages the tower — it vanishes and costs the combo.
-            if (BlockCatalogue.IsSpecial(moving.Type))
-            {
-                flow.FailSpecial(moving);
-                return;
-            }
-
-            // A held shield eats the mistake whole: no slice, no lost width.
+            // A held shield eats the mistake whole: no slice, no lost width, no broken combo.
+            // Checked before the special-miss case below so a shield genuinely absorbs *any*
+            // miss — previously a missed special silently skipped this check and the shield
+            // sat there doing nothing, which is what made it read as non-functional.
             if (flow.ConsumeShield())
             {
                 moving.SnapAxis(topCenter);
                 flow.CommitPlacement(PlacementKind.Shielded, moving);
+                return;
+            }
+
+            // Missing a special never damages the tower — it vanishes and costs the combo.
+            if (BlockCatalogue.IsSpecial(moving.Type))
+            {
+                flow.FailSpecial(moving);
                 return;
             }
 

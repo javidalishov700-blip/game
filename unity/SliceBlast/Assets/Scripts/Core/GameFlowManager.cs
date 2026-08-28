@@ -67,7 +67,7 @@ namespace SliceBlast.Core
         [Header("Special Blocks")]
         [SerializeField] private float electricDuration = 15f;
         [SerializeField] private int electricMultiplier = 2;
-        [SerializeField, Range(0f, 1f)] private float steelExpansion = 0.15f;
+        [SerializeField, Range(0f, 1f)] private float steelExpansion = 0.22f;
         [SerializeField] private int specialPerfectBonus = 25;
         // Neon marks the layers it is taking, holds for a beat, and only then breaks them.
         [SerializeField] private float neonFuseSeconds = 0.4f;
@@ -152,7 +152,9 @@ namespace SliceBlast.Core
         public bool IsPaused { get; private set; }
         public bool HasShield { get; private set; }
         public int PerfectStreak => _perfectStreak;
-        public int BlastStreakRequirement => blastStreak;
+        // The very first blast needs the full streak; every escalation after that (5x, 7x, …)
+        // only needs blastLayerStep more perfects on top of a streak that just reset to zero.
+        public int BlastStreakRequirement => _blastLevel == 0 ? blastStreak : blastLayerStep;
         public int Score => _score;
         public int BestScore => _bestScore;
         public int ComboMultiplier => _comboMultiplier;
@@ -649,9 +651,17 @@ namespace SliceBlast.Core
             _slowdown = Mathf.MoveTowards(_slowdown, 0f, slowdownRecovery * dt);
 
             // Combo raises the stakes, but gently: the target creeps up and the block eases
-            // into it over a couple of seconds rather than jumping.
+            // into it over a couple of seconds rather than jumping. The raw ramp is uncapped
+            // and fed through an exponential saturation rather than a hard Mathf.Min — a hard
+            // clamp has an elbow where the climb suddenly stops, which is exactly the "sudden
+            // speed-up" a fast, high-combo run used to hit right as it neared maxSpeed. This
+            // curve only ever approaches maxSpeed, so the back half of a run keeps smoothly
+            // slowing its own acceleration instead of snapping onto a ceiling.
             float combo = comboSpeedBonus * (_comboMultiplier - 1);
-            float target = Mathf.Min(baseSpeed + speedPerLayer * _spawnCount + combo, maxSpeed) * tutorialFactor * (1f - _slowdown);
+            float raw = speedPerLayer * _spawnCount + combo;
+            float span = Mathf.Max(0.01f, maxSpeed - baseSpeed);
+            float eased = maxSpeed - span * Mathf.Exp(-raw / span);
+            float target = eased * tutorialFactor * (1f - _slowdown);
             _speed = Mathf.LerpUnclamped(_speed, target, 1f - Mathf.Exp(-speedSmoothing * dt));
         }
 
@@ -770,7 +780,7 @@ namespace SliceBlast.Core
             GameEvents.RaiseScoreChanged(_score, TotalMultiplier);
             _pendingSpawn = true;
 
-            if (kind == PlacementKind.Perfect && _perfectStreak >= blastStreak && _neonFuse <= 0f)
+            if (kind == PlacementKind.Perfect && _perfectStreak >= BlastStreakRequirement && _neonFuse <= 0f)
             {
                 TriggerBlast(NextBlastLayers, false);
             }
