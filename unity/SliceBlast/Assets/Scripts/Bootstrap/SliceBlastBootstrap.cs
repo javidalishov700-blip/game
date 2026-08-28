@@ -32,6 +32,13 @@ namespace SliceBlast.Bootstrap
         [SerializeField] private Color skyTop = new Color(0.1f, 0.11f, 0.22f);
         [SerializeField] private Color skyBottom = new Color(0.03f, 0.03f, 0.06f);
 
+        [Header("Star Field")]
+        // The tower barely climbs on screen since a blast keeps clearing it back down, so a
+        // classic scrolling star layer would just sit there. This one drifts and twinkles in
+        // place instead, which reads as "alive" without needing the camera to travel anywhere.
+        [SerializeField] private int starCount = 34;
+        [SerializeField] private Color starTint = new Color(0.85f, 0.9f, 1f);
+
         [Header("Pools")]
         [SerializeField] private int blockPrewarm = 48;
         [SerializeField] private int blockCap = 220;
@@ -75,6 +82,7 @@ namespace SliceBlast.Bootstrap
 
         private Camera _camera;
         private Texture2D _skyTexture;
+        private StarField _starField;
         private int _skyTier;
         private float _skyBlend = 1f;
         private Color _skyTopFrom;
@@ -124,6 +132,7 @@ namespace SliceBlast.Bootstrap
             _pools.Register(PoolManager.Shockwaves, shockwavePool, true);
 
             CameraRig rig = CreateCameraRig(unlit);
+            CreateStarField(glow);
             CreateLighting();
 
             GameObject audioObject = new GameObject("Audio");
@@ -223,6 +232,11 @@ namespace SliceBlast.Bootstrap
         private void Update()
         {
             TickSky();
+
+            if (_starField != null)
+            {
+                _starField.Tick(Time.unscaledDeltaTime);
+            }
 
             if (_pools != null)
             {
@@ -419,6 +433,11 @@ namespace SliceBlast.Bootstrap
             // Mark where the tower now ends, so the next block never appears out of nowhere.
             EmitShockwave(blast.NextTop, Mint);
             _hud.ShowHint(false);
+
+            if (_starField != null)
+            {
+                _starField.Pulse(Mathf.Lerp(0.6f, 1.4f, Mathf.InverseLerp(3f, 9f, blast.Layers)));
+            }
         }
 
         private void OnReward(RewardEvent reward)
@@ -901,6 +920,17 @@ namespace SliceBlast.Bootstrap
             quad.transform.localPosition = new Vector3(0f, 0f, 60f);
             quad.transform.localRotation = Quaternion.identity;
             quad.transform.localScale = new Vector3(80f, 80f, 1f);
+        }
+
+        // Ambient depth behind the tower: cheap, camera-parented, and reactive to a blast
+        // rather than tied to how high the tower actually climbs.
+        private void CreateStarField(Material glowMaterial)
+        {
+            GameObject go = new GameObject("StarField");
+            go.transform.SetParent(transform, false);
+
+            _starField = go.AddComponent<StarField>();
+            _starField.Build(_camera.transform, glowMaterial, starCount, starTint);
         }
 
         /// <summary>
