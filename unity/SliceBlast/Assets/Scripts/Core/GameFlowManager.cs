@@ -1113,8 +1113,10 @@ namespace SliceBlast.Core
                 Mathf.Min(_nextSize.y * reviveSizeFraction, basePlatformSize.z));
 
             // A continued run is a fresh mini-run for streak purposes — carrying a pre-death
-            // streak across the revive would hand out blasts and bonuses it was not earned.
+            // streak or blast level across the revive would hand out blasts and bonuses (an
+            // easier 2-perfect escalation instead of the full 3) it was not earned.
             _perfectStreak = 0;
+            _blastLevel = 0;
 
             _running = true;
             _pendingSpawn = true;

@@ -194,34 +194,50 @@ The three rejections this app's shape usually attracts, and where each is alread
   target was still Windows. Switch the platform, let scripts recompile, then build again —
   `SliceBlastBuild.Run()` refuses the first attempt on purpose for exactly this reason.
 
-## 9. Turning on ads (a later version, not this one)
+## 9. Turning on ads
 
 `AdsManager.cs` (interstitial after every 3rd run, plus an optional rewarded "continue" on
 the run-over screen) is already written, but sits inert behind the `SLICEBLAST_ADS_ENABLED`
 scripting define until three real, one-time steps happen — none of them possible without a
-human at a keyboard, and none of them belong in the version already submitted above:
+human at a keyboard:
 
 1. **Import the plugin.** Download the Google Mobile Ads Unity Plugin `.unitypackage` from
    the releases page of `github.com/googleads/googleads-mobile-unity` and import it via
-   Unity → Assets → Import Package → Custom Package.
-2. **Get real IDs.** Create an app at admob.google.com, take its App ID and the interstitial
-   and rewarded ad unit IDs. Put the App ID in `IosPostProcess.AdMobAppId`, and the two ad
-   unit IDs in `AdsManager`'s `InterstitialAdUnitId`/`RewardedAdUnitId` — both files say
-   exactly where. Until then the code runs on Google's public test IDs, which always serve a
-   test ad and never pay out.
-3. **Flip the switch.** Unity → Project Settings → Player → iOS tab → Scripting Define
-   Symbols → add `SLICEBLAST_ADS_ENABLED`. Nothing above does anything until this is set.
+   Unity → Assets → Import Package → Custom Package. Commit and push the new
+   `Assets/GoogleMobileAds` (and similar) folders it adds, `.meta` files included, so Unity
+   Cloud Build sees them too.
+2. **Get real IDs.** Create an app at admob.google.com (answer "No" when it asks whether it is
+   already listed on a store, and **No** to "Tag for child-directed treatment" — this app is
+   not in a kids category), then take its App ID and the interstitial and rewarded ad unit
+   IDs from Ad units. Send all three here so they can be put in `IosPostProcess.AdMobAppId`
+   and `AdsManager`'s `InterstitialAdUnitId`/`RewardedAdUnitId` — both files say exactly
+   where. Until real IDs land the code runs on Google's public test IDs, which always serve a
+   test ad and never pay out — safe to build with, just never worth shipping to real users on
+   purpose.
+3. **Flip the switch.** Once the plugin is in and the real IDs are wired in, add
+   `SLICEBLAST_ADS_ENABLED` to Player Settings → iOS tab → Scripting Define Symbols, or bake
+   it into `SliceBlastBuild.ApplyPlayerSettings` so every build carries it automatically.
+   Nothing above does anything until this define is set — and setting it before step 1 is
+   done breaks the build outright, since the `GoogleMobileAds` namespace won't exist yet.
 
-Then, before submitting that build:
+Before submitting a build with ads on:
 
-- **App Privacy** answer changes from "No" to declaring data collected — Identifiers
-  (Advertising Data / IDFA) and Usage Data, "used for third-party advertising", collection
-  linked to the user, no data used to track across other companies' apps beyond what AdMob
-  itself does. Google publishes the exact answers to give at
-  `support.google.com/admob/answer/9760862` — copy them in rather than guessing.
-- **Privacy Policy** text needs a paragraph naming Google AdMob, the advertising identifier,
-  and a link to Google's own privacy policy. The live pages are in the `steady-site`
-  repository at `public/sliceblast/legal/privacy.html` (see section 1) — update that file,
-  not `docs/privacy-policy.html` in this repository, which is the unused spare copy.
-- Ship this as its **own version** (e.g. 1.1) once 1.0 has cleared review — an app already in
-  Apple's review queue cannot have its behaviour or its App Privacy answers changed under it.
+- **App Privacy** (App Store Connect → your app → App Privacy → Edit) changes from the
+  section-4 "No" to declaring data collected. Google's exact recommended answers are at
+  `support.google.com/admob/answer/9760862` — the short version:
+  - **Identifiers → Device ID**: collected, linked to the user = **No**, used for
+    **Third-Party Advertising** and **Analytics**.
+  - **Usage Data → Advertising Data**: collected, linked to the user = **No**, used for
+    **Third-Party Advertising**.
+  - Do **not** check "Used for Tracking" unless AdMob is actually configured for
+    cross-app/cross-site tracking beyond its own ad serving — for a single AdMob-only
+    integration like this one, the answer is No.
+- **Privacy Policy and Terms of Use** are already updated and live — `steady-site` repository,
+  `public/sliceblast/legal/privacy.html` and `terms.html` — covering AdMob, the advertising
+  identifier, the iOS App Tracking Transparency prompt, and links to Google's own privacy
+  controls. Nothing left to do here unless the ad setup changes (e.g. a mediated network
+  added later, which needs its own `SKAdNetworkItems` entry in `IosPostProcess.StampAdsKeys`
+  too).
+- **App Review Notes** (section 7 above) should mention the app now shows ads: add a line like
+  "Slice & Blast shows interstitial and rewarded ads served by Google AdMob between and after
+  runs" so the reviewer isn't surprised by one appearing mid-review.

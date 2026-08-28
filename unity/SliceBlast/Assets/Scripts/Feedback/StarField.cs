@@ -62,7 +62,7 @@ namespace SliceBlast.Feedback
 
                 if (collider != null)
                 {
-                    Destroy(collider);
+                    DestroyImmediate(collider);
                 }
 
                 MeshRenderer renderer = star.GetComponent<MeshRenderer>();
