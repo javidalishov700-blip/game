@@ -196,19 +196,13 @@ namespace SliceBlast.Ads
 //
 // 1. [DONE] AdMob ad unit IDs. The interstitial/rewarded ad unit IDs are wired in above.
 // 2. [DONE] Google Mobile Ads Unity Plugin imported (Assets/GoogleMobileAds).
-// 3. [TODO — real Unity Editor step, one time] The plugin's own build step
-//    (GoogleMobileAds.Editor.PListProcessor) writes GADApplicationIdentifier,
-//    NSUserTrackingUsageDescription and SKAdNetworkItems into Info.plist itself — do NOT
-//    duplicate that here. It reads the App ID and tracking description from its own settings
-//    asset, which only the Unity menu can create correctly: Assets → Google Mobile Ads →
-//    Settings… → iOS App ID: ca-app-pub-4448830215845263~6624625776 → User Tracking Usage
-//    Description: "Slice Blast uses this to show ads that are more relevant to you. Ads still
-//    show if you decline." → save. This writes Assets/GoogleMobileAds/Resources/
-//    GoogleMobileAdsSettings.asset — commit and push it. Skipping this step means every iOS
-//    build fails outright (PListProcessor throws when the App ID field is empty).
-// 4. Unity → Project Settings → Player → iOS tab → Scripting Define Symbols → add
-//    SLICEBLAST_ADS_ENABLED. Only once this define is set does any of the code above run
-//    instead of compiling to a no-op.
+// 3. [DONE] GoogleMobileAdsSettings.asset configured via Assets → Google Mobile Ads →
+//    Settings… (App ID + tracking description) and pushed. The plugin's own build step
+//    (GoogleMobileAds.Editor.PListProcessor) reads it to write GADApplicationIdentifier,
+//    NSUserTrackingUsageDescription and SKAdNetworkItems into Info.plist — nothing of ours
+//    duplicates that any more.
+// 4. [DONE] SLICEBLAST_ADS_ENABLED is baked into SliceBlastBuild.ApplyPlayerSettings, so
+//    every build path carries it automatically. Ads are live from here on.
 //
 // App Privacy answers and the Privacy Policy / Terms of Use updates this needs are already
 // done — see docs/APP_STORE.md section 9.

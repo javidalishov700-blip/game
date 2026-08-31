@@ -178,6 +178,11 @@ namespace SliceBlast.EditorTools
             PlayerSettings.SetScriptingBackend(named, ScriptingImplementation.IL2CPP);
             QualitySettings.vSyncCount = 0;
 
+            // The Google Mobile Ads Unity Plugin is in the repo and its own settings asset is
+            // configured (Assets/GoogleMobileAds/Resources/GoogleMobileAdsSettings.asset) — no
+            // manual per-machine "Scripting Define Symbols" step needed any more.
+            AddScriptingDefine(named, "SLICEBLAST_ADS_ENABLED");
+
             ApplySplashSettings();
 
             if (target != BuildTarget.iOS)
@@ -197,6 +202,21 @@ namespace SliceBlast.EditorTools
             {
                 PlayerSettings.iOS.appleDeveloperTeamID = teamId;
             }
+        }
+
+        /// <summary>Adds a scripting define if it is not already present — never clobbers others.</summary>
+        private static void AddScriptingDefine(NamedBuildTarget named, string define)
+        {
+            string existing = PlayerSettings.GetScriptingDefineSymbols(named);
+            string[] symbols = existing.Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries);
+
+            if (Array.IndexOf(symbols, define) >= 0)
+            {
+                return;
+            }
+
+            string updated = existing.Length > 0 ? existing + ";" + define : define;
+            PlayerSettings.SetScriptingDefineSymbols(named, updated);
         }
 
         /// <summary>

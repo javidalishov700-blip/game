@@ -194,32 +194,18 @@ The three rejections this app's shape usually attracts, and where each is alread
   target was still Windows. Switch the platform, let scripts recompile, then build again —
   `SliceBlastBuild.Run()` refuses the first attempt on purpose for exactly this reason.
 
-## 9. Turning on ads
+## 9. Ads are on
 
 `AdsManager.cs` (interstitial after every 3rd run, plus an optional rewarded "continue" on
-the run-over screen) is already written and the plugin is imported, but sits inert behind the
-`SLICEBLAST_ADS_ENABLED` scripting define until one real, one-time step happens — not possible
-without a human at a Unity Editor keyboard:
+the run-over screen) is live: the plugin is imported, the ad unit IDs are wired in, the
+plugin's own `GoogleMobileAdsSettings.asset` has the real App ID and tracking description, and
+`SLICEBLAST_ADS_ENABLED` is baked into `SliceBlastBuild.ApplyPlayerSettings` — every build path
+carries it automatically now, no per-machine Editor step left.
 
-1. ~~Import the plugin~~ — done, `Assets/GoogleMobileAds` is in the repo.
-2. ~~Get real IDs~~ — done, the interstitial and rewarded ad unit IDs are wired into
-   `AdsManager`'s `InterstitialAdUnitId`/`RewardedAdUnitId`.
-3. **Configure the plugin's own settings asset.** The App ID does *not* go in our code — the
-   plugin's own build step (`GoogleMobileAds.Editor.PListProcessor`) writes
-   `GADApplicationIdentifier`, `NSUserTrackingUsageDescription` and `SKAdNetworkItems` into
-   Info.plist itself, reading them from a settings asset only its own menu can create
-   correctly: Unity → **Assets → Google Mobile Ads → Settings…** →
-   - iOS App ID: `ca-app-pub-4448830215845263~6624625776`
-   - User Tracking Usage Description: "Slice Blast uses this to show ads that are more
-     relevant to you. Ads still show if you decline."
-   → save. This writes `Assets/GoogleMobileAds/Resources/GoogleMobileAdsSettings.asset` —
-   commit and push it. **Skipping this step fails every iOS build outright** — the plugin's
-   processor throws a `BuildMethodException` when the App ID field is empty, which is exactly
-   what it does today.
-4. **Flip the switch.** Once step 3 is pushed, add `SLICEBLAST_ADS_ENABLED` to Player Settings
-   → iOS tab → Scripting Define Symbols, or bake it into
-   `SliceBlastBuild.ApplyPlayerSettings` so every build carries it automatically. Nothing above
-   does anything until this define is set.
+Info.plist's `GADApplicationIdentifier`, `NSUserTrackingUsageDescription` and
+`SKAdNetworkItems` are written by the plugin's own build step
+(`GoogleMobileAds.Editor.PListProcessor`), not by anything in this repo's own code — do not add
+a duplicate writer for any of those keys.
 
 Before submitting a build with ads on:
 
