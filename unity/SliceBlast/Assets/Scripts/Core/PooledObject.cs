@@ -46,16 +46,16 @@ namespace SliceBlast.Core
             Owner = owner;
             _cachedTransform = transform;
 
-            if (ReferenceEquals(tintTarget, null))
+            if (tintTarget == null)
             {
                 tintTarget = GetComponentInChildren<Renderer>(true);
             }
 
-            if (!ReferenceEquals(tintTarget, null))
-            {
-                _defaultMaterial = tintTarget.sharedMaterial;
-            }
-
+            // _defaultMaterial is captured lazily in ResetMaterial rather than here: a freshly
+            // Instantiate()-d pooled clone is cloned from an inactive template and is itself
+            // still inactive at this point, never having gone through Unity's own Awake/
+            // OnEnable — reading sharedMaterial that early throws UnassignedReferenceException
+            // even though tintTarget itself is a perfectly valid reference.
             CacheComponents();
         }
 
@@ -70,7 +70,19 @@ namespace SliceBlast.Core
 
         public void ResetMaterial()
         {
-            if (tintTarget != null && _defaultMaterial != null)
+            if (tintTarget == null)
+            {
+                return;
+            }
+
+            // First real call happens from OnSpawned, after the pool has already activated
+            // this instance — safe to read sharedMaterial by then.
+            if (_defaultMaterial == null)
+            {
+                _defaultMaterial = tintTarget.sharedMaterial;
+            }
+
+            if (_defaultMaterial != null)
             {
                 tintTarget.sharedMaterial = _defaultMaterial;
             }
