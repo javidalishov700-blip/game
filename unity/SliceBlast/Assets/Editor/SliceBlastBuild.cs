@@ -167,7 +167,9 @@ namespace SliceBlast.EditorTools
             PlayerSettings.companyName = EnvOr("COMPANY_NAME", "Slice Blast Games");
             PlayerSettings.productName = ProductName;
             PlayerSettings.SetApplicationIdentifier(named, bundleId);
-            PlayerSettings.bundleVersion = EnvOr("APP_VERSION", "1.0.0");
+            // 1.0 already cleared App Store review — Apple rejects any new build still
+            // stamped 1.0.0 (code 90062/90186), so every build from here on is 1.1.0.
+            PlayerSettings.bundleVersion = EnvOr("APP_VERSION", "1.1.0");
 
             PlayerSettings.defaultInterfaceOrientation = UIOrientation.Portrait;
             PlayerSettings.allowedAutorotateToPortrait = true;
