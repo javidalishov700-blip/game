@@ -197,28 +197,29 @@ The three rejections this app's shape usually attracts, and where each is alread
 ## 9. Turning on ads
 
 `AdsManager.cs` (interstitial after every 3rd run, plus an optional rewarded "continue" on
-the run-over screen) is already written, but sits inert behind the `SLICEBLAST_ADS_ENABLED`
-scripting define until three real, one-time steps happen — none of them possible without a
-human at a keyboard:
+the run-over screen) is already written and the plugin is imported, but sits inert behind the
+`SLICEBLAST_ADS_ENABLED` scripting define until one real, one-time step happens — not possible
+without a human at a Unity Editor keyboard:
 
-1. **Import the plugin.** Download the Google Mobile Ads Unity Plugin `.unitypackage` from
-   the releases page of `github.com/googleads/googleads-mobile-unity` and import it via
-   Unity → Assets → Import Package → Custom Package. Commit and push the new
-   `Assets/GoogleMobileAds` (and similar) folders it adds, `.meta` files included, so Unity
-   Cloud Build sees them too.
-2. **Get real IDs.** Create an app at admob.google.com (answer "No" when it asks whether it is
-   already listed on a store, and **No** to "Tag for child-directed treatment" — this app is
-   not in a kids category), then take its App ID and the interstitial and rewarded ad unit
-   IDs from Ad units. Send all three here so they can be put in `IosPostProcess.AdMobAppId`
-   and `AdsManager`'s `InterstitialAdUnitId`/`RewardedAdUnitId` — both files say exactly
-   where. Until real IDs land the code runs on Google's public test IDs, which always serve a
-   test ad and never pay out — safe to build with, just never worth shipping to real users on
-   purpose.
-3. **Flip the switch.** Once the plugin is in and the real IDs are wired in, add
-   `SLICEBLAST_ADS_ENABLED` to Player Settings → iOS tab → Scripting Define Symbols, or bake
-   it into `SliceBlastBuild.ApplyPlayerSettings` so every build carries it automatically.
-   Nothing above does anything until this define is set — and setting it before step 1 is
-   done breaks the build outright, since the `GoogleMobileAds` namespace won't exist yet.
+1. ~~Import the plugin~~ — done, `Assets/GoogleMobileAds` is in the repo.
+2. ~~Get real IDs~~ — done, the interstitial and rewarded ad unit IDs are wired into
+   `AdsManager`'s `InterstitialAdUnitId`/`RewardedAdUnitId`.
+3. **Configure the plugin's own settings asset.** The App ID does *not* go in our code — the
+   plugin's own build step (`GoogleMobileAds.Editor.PListProcessor`) writes
+   `GADApplicationIdentifier`, `NSUserTrackingUsageDescription` and `SKAdNetworkItems` into
+   Info.plist itself, reading them from a settings asset only its own menu can create
+   correctly: Unity → **Assets → Google Mobile Ads → Settings…** →
+   - iOS App ID: `ca-app-pub-4448830215845263~6624625776`
+   - User Tracking Usage Description: "Slice Blast uses this to show ads that are more
+     relevant to you. Ads still show if you decline."
+   → save. This writes `Assets/GoogleMobileAds/Resources/GoogleMobileAdsSettings.asset` —
+   commit and push it. **Skipping this step fails every iOS build outright** — the plugin's
+   processor throws a `BuildMethodException` when the App ID field is empty, which is exactly
+   what it does today.
+4. **Flip the switch.** Once step 3 is pushed, add `SLICEBLAST_ADS_ENABLED` to Player Settings
+   → iOS tab → Scripting Define Symbols, or bake it into
+   `SliceBlastBuild.ApplyPlayerSettings` so every build carries it automatically. Nothing above
+   does anything until this define is set.
 
 Before submitting a build with ads on:
 
@@ -235,9 +236,9 @@ Before submitting a build with ads on:
 - **Privacy Policy and Terms of Use** are already updated and live — `steady-site` repository,
   `public/sliceblast/legal/privacy.html` and `terms.html` — covering AdMob, the advertising
   identifier, the iOS App Tracking Transparency prompt, and links to Google's own privacy
-  controls. Nothing left to do here unless the ad setup changes (e.g. a mediated network
-  added later, which needs its own `SKAdNetworkItems` entry in `IosPostProcess.StampAdsKeys`
-  too).
+  controls. Nothing left to do here unless the ad setup changes — a mediated network added
+  later ships its own `SKAdNetworkItems` entries via the plugin's own resolver, no manual edit
+  needed on our side.
 - **App Review Notes** (section 7 above) should mention the app now shows ads: add a line like
   "Slice & Blast shows interstitial and rewarded ads served by Google AdMob between and after
   runs" so the reviewer isn't surprised by one appearing mid-review.

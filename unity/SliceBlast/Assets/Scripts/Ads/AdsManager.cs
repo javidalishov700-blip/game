@@ -194,20 +194,21 @@ namespace SliceBlast.Ads
 // ---------------------------------------------------------------------------------------------
 // Turning ads on:
 //
-// 1. [DONE] AdMob app + ad unit IDs. Real App ID and the interstitial/rewarded ad unit IDs
-//    are already wired in above and in IosPostProcess.AdMobAppId.
-// 2. [TODO — real Unity Editor step] Download the Google Mobile Ads Unity Plugin
-//    (.unitypackage) from the releases page of
-//    https://github.com/googleads/googleads-mobile-unity and import it: Unity → Assets →
-//    Import Package → Custom Package… This brings in the GoogleMobileAds namespace and the
-//    External Dependency Manager (EDM4U) that resolves the native iOS SDK at build time — it
-//    writes a Podfile into the generated Xcode project, which Codemagic's xcode-to-testflight
-//    workflow already runs `pod install` for automatically. Commit and push whatever new
-//    Assets/ folders this adds, .meta files included, so Unity Cloud Build sees them too.
-// 3. Unity → Project Settings → Player → iOS tab → Scripting Define Symbols → add
-//    SLICEBLAST_ADS_ENABLED. Only once this define is set — and only once step 2 has actually
-//    landed — does any of the code above run instead of compiling to a no-op; setting it
-//    before the plugin is imported breaks the build (GoogleMobileAds does not exist yet).
+// 1. [DONE] AdMob ad unit IDs. The interstitial/rewarded ad unit IDs are wired in above.
+// 2. [DONE] Google Mobile Ads Unity Plugin imported (Assets/GoogleMobileAds).
+// 3. [TODO — real Unity Editor step, one time] The plugin's own build step
+//    (GoogleMobileAds.Editor.PListProcessor) writes GADApplicationIdentifier,
+//    NSUserTrackingUsageDescription and SKAdNetworkItems into Info.plist itself — do NOT
+//    duplicate that here. It reads the App ID and tracking description from its own settings
+//    asset, which only the Unity menu can create correctly: Assets → Google Mobile Ads →
+//    Settings… → iOS App ID: ca-app-pub-4448830215845263~6624625776 → User Tracking Usage
+//    Description: "Slice Blast uses this to show ads that are more relevant to you. Ads still
+//    show if you decline." → save. This writes Assets/GoogleMobileAds/Resources/
+//    GoogleMobileAdsSettings.asset — commit and push it. Skipping this step means every iOS
+//    build fails outright (PListProcessor throws when the App ID field is empty).
+// 4. Unity → Project Settings → Player → iOS tab → Scripting Define Symbols → add
+//    SLICEBLAST_ADS_ENABLED. Only once this define is set does any of the code above run
+//    instead of compiling to a no-op.
 //
 // App Privacy answers and the Privacy Policy / Terms of Use updates this needs are already
 // done — see docs/APP_STORE.md section 9.
