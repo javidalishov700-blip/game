@@ -15,11 +15,6 @@ namespace SliceBlast.EditorTools
     {
         private const string AppIconName = "AppIcon";
 
-#if SLICEBLAST_ADS_ENABLED
-        // From admob.google.com → Apps → Slice & Blast (iOS) → App settings.
-        private const string AdMobAppId = "ca-app-pub-4448830215845263~6624625776";
-#endif
-
         // The "universal" entry is Xcode 14's single-size icon feature, which supplies the
         // home-screen icon once ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS is on. The
         // "ios-marketing" entry is listed explicitly too, rather than left for that feature
@@ -89,10 +84,6 @@ namespace SliceBlast.EditorTools
                 string build = ((int)(DateTime.UtcNow - new DateTime(2024, 1, 1)).TotalMinutes).ToString();
                 plist.root.SetString("CFBundleVersion", build);
 
-#if SLICEBLAST_ADS_ENABLED
-                StampAdsKeys(plist);
-#endif
-
                 plist.WriteToFile(plistPath);
                 Debug.Log("[SliceBlast] CFBundleVersion set to " + build);
             }
@@ -101,30 +92,6 @@ namespace SliceBlast.EditorTools
                 Debug.LogWarning($"[SliceBlast] Info.plist stamp skipped: {exception.Message}");
             }
         }
-
-#if SLICEBLAST_ADS_ENABLED
-        /// <summary>
-        /// Everything Google Mobile Ads and Apple's own ad-attribution both need in the
-        /// binary. Only ever written when ads are actually compiled in — see AdsManager.cs
-        /// for what turns that on.
-        /// </summary>
-        private static void StampAdsKeys(PlistDocument plist)
-        {
-            plist.root.SetString("GADApplicationIdentifier", AdMobAppId);
-
-            // Shown once, the first time an ad request would want the advertising identifier;
-            // declining just means AdMob serves non-personalized ads instead.
-            plist.root.SetString(
-                "NSUserTrackingUsageDescription",
-                "Slice Blast uses this to show ads that are more relevant to you. Ads still show if you decline.");
-
-            // The one AdMob needs for its own ads with no mediation adapters. Adding a
-            // mediated network later (Meta, Unity Ads, …) means adding its ID here too.
-            PlistElementArray networks = plist.root.CreateArray("SKAdNetworkItems");
-            PlistElementDict google = networks.AddDict();
-            google.SetString("SKAdNetworkIdentifier", "cstr6suwn9.skadnetwork");
-        }
-#endif
 
         /// <summary>
         /// App Store Connect rejects uploads without a 1024 icon (error 91111). Writing it
