@@ -4,7 +4,7 @@
   <projectSetting name="com.google.external-dependency-managerAnalyticsEnabled" value="True" />
   <projectSetting name="Google.IOSResolver.AllowEmptyPodfileGeneration" value="True" />
   <projectSetting name="Google.IOSResolver.AutoPodToolInstallInEditor" value="True" />
-  <projectSetting name="Google.IOSResolver.CocoapodsIntegrationMethod" value="1" />
+  <projectSetting name="Google.IOSResolver.CocoapodsIntegrationMethod" value="0" />
   <projectSetting name="Google.IOSResolver.PodfileAddUseFrameworks" value="True" />
   <projectSetting name="Google.IOSResolver.PodfileAllowPodsInMultipleTargets" value="True" />
   <projectSetting name="Google.IOSResolver.PodfileAlwaysAddMainTarget" value="True" />
