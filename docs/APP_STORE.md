@@ -98,16 +98,17 @@ they are worth waiting for.
 BUILT TO BE PICKED UP
 • One tap, no tutorial, no menus in the way
 • Sixty frames a second, every frame
-• Completely offline
-• No ads, no purchases, no accounts, no data collected
+• No purchases, no accounts, no data collected of its own
+• Free with the occasional ad — a quick one between runs, and an optional one for a bigger
+  continue block if you'd rather not restart
 
-Free, finished, and the same game every time you open it.
+Free, finished, and always the same precise game underneath.
 ```
 
 **Keywords** (100 characters max, comma separated, no spaces after commas)
 
 ```
-stack,tower,block,slice,arcade,casual,one tap,offline,no ads,reflex,precision,combo,neon,blast
+stack,tower,block,slice,arcade,casual,one tap,reflex,precision,combo,neon,blast,free game
 ```
 
 **Support URL** → `https://javidalishov700-blip.github.io/steady-site/sliceblast/legal/support.html`
@@ -174,9 +175,10 @@ with the current running, and the run-over screen with a good score.
 4. **App Review Information**: no sign-in required, so leave the account fields empty. Notes:
 
 ```
-Slice & Blast is a single-player offline arcade game. No account, no network access, no
-purchases, no ads. Tap anywhere on screen to drop the moving block. The Privacy Policy and
-Terms of Use links on the title screen open pages in Safari.
+Slice & Blast is a single-player arcade game. No account, no purchases. It shows interstitial
+and rewarded ads served by Google AdMob between and after runs. Tap anywhere on screen to drop
+the moving block. The Privacy Policy and Terms of Use links on the title screen open pages in
+Safari.
 ```
 
 5. **Version Release** → *Automatically release this version*.
@@ -213,18 +215,24 @@ Before submitting a build with ads on:
   section-4 "No" to declaring data collected. Google's exact recommended answers are at
   `support.google.com/admob/answer/9760862` — the short version:
   - **Identifiers → Device ID**: collected, linked to the user = **No**, used for
-    **Third-Party Advertising** and **Analytics**.
+    **Third-Party Advertising**.
   - **Usage Data → Advertising Data**: collected, linked to the user = **No**, used for
     **Third-Party Advertising**.
-  - Do **not** check "Used for Tracking" unless AdMob is actually configured for
-    cross-app/cross-site tracking beyond its own ad serving — for a single AdMob-only
-    integration like this one, the answer is No.
-- **Privacy Policy and Terms of Use** are already updated and live — `steady-site` repository,
-  `public/sliceblast/legal/privacy.html` and `terms.html` — covering AdMob, the advertising
-  identifier, the iOS App Tracking Transparency prompt, and links to Google's own privacy
-  controls. Nothing left to do here unless the ad setup changes — a mediated network added
-  later ships its own `SKAdNetworkItems` entries via the plugin's own resolver, no manual edit
-  needed on our side.
-- **App Review Notes** (section 7 above) should mention the app now shows ads: add a line like
-  "Slice & Blast shows interstitial and rewarded ads served by Google AdMob between and after
-  runs" so the reviewer isn't surprised by one appearing mid-review.
+  - **Used for Tracking = Yes.** The binary ships with `NSUserTrackingUsageDescription` (the
+    plugin's own `PListProcessor` writes it from `GoogleMobileAdsSettings`), and App Store
+    Connect validates the Privacy answers against that — leaving every data type "not used for
+    tracking" while the binary requests ATT permission gets flagged as inconsistent. AdMob's
+    own personalized-ad serving links this app's device ID with activity from other AdMob
+    publishers, which is exactly Apple's definition of tracking, so **Yes** is also the
+    accurate answer, not just the one that satisfies the validator.
+- **Privacy Policy, Terms of Use and the Support page** are already updated and live —
+  `steady-site` repository, `public/sliceblast/legal/privacy.html`, `terms.html` and
+  `support.html` — covering AdMob, the advertising identifier, the iOS App Tracking
+  Transparency prompt, and links to Google's own privacy controls.
+- **The App Store description and keywords must stop claiming "completely offline" / "no
+  ads"** — this exact mismatch got a real submission rejected under **Guideline 2.3.6
+  (Performance: Accurate Metadata)**. Section 3 above already has the corrected copy; if this
+  doc and the live App Store Connect listing ever drift apart again, the listing is what a
+  reviewer actually checks, so update it to match this file, not the other way around.
+- **App Review Notes** (section 7 above) already mentions the ads — nothing extra needed here
+  once that section's Notes text is pasted in.
