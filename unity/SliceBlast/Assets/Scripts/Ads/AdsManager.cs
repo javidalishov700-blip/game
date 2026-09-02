@@ -72,6 +72,10 @@ namespace SliceBlast.Ads
 
             _initialized = true;
 
+            // Must happen before any ad request that could use the advertising identifier —
+            // see AppTrackingTransparency.cs.
+            AppTrackingTransparency.RequestIfNeeded();
+
             GoogleMobileAds.Api.MobileAds.Initialize(_ =>
             {
                 LoadInterstitial();
