@@ -10,6 +10,7 @@
 // that was not ready. With the define left off, everything below compiles to inert stubs: ads
 // are simply never shown, nothing else changes.
 using System;
+using System.Collections;
 using UnityEngine;
 
 namespace SliceBlast.Ads
@@ -71,9 +72,18 @@ namespace SliceBlast.Ads
             }
 
             _initialized = true;
+            StartCoroutine(RequestAttThenInitAds());
+        }
 
-            // Must happen before any ad request that could use the advertising identifier —
-            // see AppTrackingTransparency.cs.
+        private IEnumerator RequestAttThenInitAds()
+        {
+            // This runs from Awake, on the very first frame — before iOS has actually made the
+            // app's window key and visible. Apple's ATT prompt silently skips itself (no alert,
+            // no error) when requested that early, so give the app a moment to actually be on
+            // screen first. Must still happen before any ad request that could use the
+            // advertising identifier — see AppTrackingTransparency.cs.
+            yield return new WaitForSeconds(1f);
+
             AppTrackingTransparency.RequestIfNeeded();
 
             GoogleMobileAds.Api.MobileAds.Initialize(_ =>
