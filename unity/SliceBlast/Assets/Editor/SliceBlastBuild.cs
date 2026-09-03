@@ -185,6 +185,11 @@ namespace SliceBlast.EditorTools
             // manual per-machine "Scripting Define Symbols" step needed any more.
             AddScriptingDefine(named, "SLICEBLAST_ADS_ENABLED");
 
+            // com.unity.ads.ios-support (iOS 14 Advertising Support) is in the project —
+            // AppTrackingTransparency.cs can now actually show the system permission prompt
+            // instead of compiling to a no-op.
+            AddScriptingDefine(named, "SLICEBLAST_ATT_ENABLED");
+
             ApplySplashSettings();
 
             if (target != BuildTarget.iOS)
