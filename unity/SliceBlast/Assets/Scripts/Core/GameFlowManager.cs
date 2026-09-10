@@ -3,6 +3,7 @@
 // audio, HUD or particles.
 using System.Collections.Generic;
 using SliceBlast.Feedback;
+using SliceBlast.Meta;
 using UnityEngine;
 
 namespace SliceBlast.Core
@@ -10,8 +11,6 @@ namespace SliceBlast.Core
     [DisallowMultipleComponent]
     public sealed class GameFlowManager : MonoBehaviour
     {
-        private const string BestScoreKey = "sliceblast.best";
-
         public static GameFlowManager Instance { get; private set; }
 
         [Header("Systems")]
@@ -80,9 +79,26 @@ namespace SliceBlast.Core
         // finishing a lap, from the moment the current starts.
         [SerializeField] private int currentVisibleLayers = 14;
 
+        [Header("Fault Line")]
+        // A sliced layer stays in the tower but is damaged, and a blast that reaches one keeps
+        // going down through it. This is the one mechanic in the game that pays the player for
+        // their own mistakes: a scrappy early tower is a stack of charges waiting for the first
+        // blast to reach them, which is why a chain pays double per layer.
+        [SerializeField] private int maxChainLayers = 12;
+        [SerializeField] private int chainLayerBonus = 30;
+        [SerializeField] private float chainShakePerLayer = 0.12f;
+
+        [Header("Shields")]
+        [SerializeField] private int maxShieldCharges = 3;
+
         [Header("Scoring")]
         [SerializeField] private int perfectBonus = 2;
         [SerializeField] private int blastLayerBonus = 15;
+
+        [Header("Coins")]
+        [SerializeField] private int coinsPerBlastLayer = 2;
+        [SerializeField] private int coinsPerChainLayer = 5;
+        [SerializeField] private int scorePerCoin = 25;
 
         // Onboarding grace: the very first block can never kill the run.
         [SerializeField] private bool forgiveFirstBlock = true;
@@ -144,13 +160,22 @@ namespace SliceBlast.Core
         private float _currentPulse;
         private bool _currentActive;
 
+        private int _shieldCharges;
+        private int _runCoins;
+        private int _biggestBlast;
+        private int _longestChain;
+        private int _perfectCount;
+        private int _specialCount;
+
         public MovingBlock ActiveBlock => _active;
         public MovingBlock TopBlock => _stack.Count > 0 ? _stack[_stack.Count - 1] : null;
         public bool AcceptsInput => _running && !IsPaused && _inputLock <= 0f && _active != null && _active.IsMoving;
         public bool IsRunning => _running;
         public bool IsHome { get; private set; }
         public bool IsPaused { get; private set; }
-        public bool HasShield { get; private set; }
+        public bool HasShield => _shieldCharges > 0;
+        public int ShieldCharges => _shieldCharges;
+        public int RunCoins => _runCoins;
         public int PerfectStreak => _perfectStreak;
         // The very first blast needs the full streak; every escalation after that (5x, 7x, …)
         // only needs blastLayerStep more perfects on top of a streak that just reset to zero.
@@ -205,7 +230,7 @@ namespace SliceBlast.Core
             }
 
             Instance = this;
-            _bestScore = PlayerPrefs.GetInt(BestScoreKey, 0);
+            _bestScore = PlayerProfile.BestScore;
 
             Screen.sleepTimeout = SleepTimeout.NeverSleep;
 
@@ -298,11 +323,19 @@ namespace SliceBlast.Core
             _running = false;
             _pendingSpawn = false;
 
-            HasShield = false;
+            _runCoins = 0;
+            _biggestBlast = 0;
+            _longestChain = 0;
+            _perfectCount = 0;
+            _specialCount = 0;
+
+            // Armour is read here rather than cached at purchase: a level bought on the
+            // run-over screen is in force on the very next run, with no reload.
+            _shieldCharges = Mathf.Clamp(UpgradeCatalogue.StartingShields(), 0, maxShieldCharges);
             spawner.ResetRun();
 
             MovingBlock platform = (MovingBlock)blockPool.Spawn(baseOrigin, basePlatformSize, Quaternion.identity);
-            platform.SetTint(new Color(0.35f, 0.4f, 0.55f));
+            platform.SetTint(ThemeCatalogue.Equipped.Platform);
             platform.Freeze();
             _stack.Add(platform);
 
@@ -331,7 +364,7 @@ namespace SliceBlast.Core
             }
 
             GameEvents.RaisePauseChanged(false);
-            GameEvents.RaiseShieldChanged(false);
+            GameEvents.RaiseShieldChanged(_shieldCharges);
             GameEvents.RaiseMultiplierTimer(0f, electricDuration);
         }
 
@@ -686,16 +719,16 @@ namespace SliceBlast.Core
             }
         }
 
-        /// <summary>Consumed by the slicer when a Standard block is about to be cut.</summary>
+        /// <summary>Consumed by the slicer when a block is about to be cut.</summary>
         public bool ConsumeShield()
         {
-            if (!HasShield)
+            if (_shieldCharges <= 0)
             {
                 return false;
             }
 
-            HasShield = false;
-            GameEvents.RaiseShieldChanged(false);
+            _shieldCharges--;
+            GameEvents.RaiseShieldChanged(_shieldCharges);
             return true;
         }
 
@@ -737,6 +770,7 @@ namespace SliceBlast.Core
             {
                 case PlacementKind.Perfect:
                     _perfectStreak++;
+                    _perfectCount++;
                     _score += (1 + perfectBonus) * TotalMultiplier;
                     _slowdown = Mathf.Max(0f, _slowdown - comboBreakSlowdown * 0.5f);
                     PlayImpact(block, 0.22f, 5f, true, Mint);
@@ -757,6 +791,11 @@ namespace SliceBlast.Core
                     _blastLevel = 0;
                     _score += TotalMultiplier;
                     _slowdown = Mathf.Min(_slowdown + comboBreakSlowdown, maxSlowdown);
+
+                    // The fault line: this layer was cut, so it goes into the tower damaged
+                    // and a future blast will carry on through it.
+                    block.Fracture();
+
                     PlayImpact(block, 0.16f, 6f, false, Color.white);
                     Haptics.Medium();
                     Shake(sliceShake);
@@ -774,6 +813,11 @@ namespace SliceBlast.Core
 
             if (kind == PlacementKind.Perfect)
             {
+                if (BlockCatalogue.IsSpecial(type))
+                {
+                    _specialCount++;
+                }
+
                 ApplySpecialReward(type, position);
             }
 
@@ -808,9 +852,9 @@ namespace SliceBlast.Core
                     break;
 
                 case BlockType.Glass:
-                    HasShield = true;
+                    _shieldCharges = Mathf.Min(_shieldCharges + 1, maxShieldCharges);
                     _score += specialPerfectBonus * TotalMultiplier;
-                    GameEvents.RaiseShieldChanged(true);
+                    GameEvents.RaiseShieldChanged(_shieldCharges);
                     Reward(type, string.Empty, string.Empty, new Color(0.78f, 0.97f, 1f), position, 0);
                     break;
 
@@ -886,24 +930,37 @@ namespace SliceBlast.Core
 
             for (int i = 0; i < removable; i++)
             {
-                int last = _stack.Count - 1;
-                MovingBlock layer = _stack[last];
-                _stack.RemoveAt(last);
-
-                int index = _animating.IndexOf(layer);
-
-                if (index >= 0)
-                {
-                    _animating.RemoveAt(index);
-                }
-
-                ShatterLayer(layer, epicenter, 1f);
-                layer.Release();
+                RemoveTopLayer(epicenter, 1f);
             }
 
-            int bonus = blastLayerBonus * removable * TotalMultiplier;
+            // The fault line. Every layer that was sliced on the way in is a charge already
+            // sitting in the tower, and the blast keeps going down for as long as it keeps
+            // finding them. A run that stacked cleanly gets a clean blast; a run that fought
+            // for every layer gets one that tears the tower open — which is the whole trade,
+            // and why a chained layer pays double what a requested one does.
+            int chain = 0;
+
+            while (chain < maxChainLayers
+                   && _stack.Count > 1
+                   && _stack[_stack.Count - 1] != null
+                   && _stack[_stack.Count - 1].IsCracked)
+            {
+                chain++;
+
+                // Each link throws harder than the last, so the propagation is legible as an
+                // escalation rather than as one undifferentiated cloud of debris.
+                RemoveTopLayer(epicenter, 1f + chain * 0.15f);
+            }
+
+            int bonus = blastLayerBonus * removable * TotalMultiplier
+                        + chainLayerBonus * chain * TotalMultiplier;
+
             _score += bonus;
             _blastCount++;
+            _biggestBlast = Mathf.Max(_biggestBlast, removable + chain);
+            _longestChain = Mathf.Max(_longestChain, chain);
+
+            AwardCoins(coinsPerBlastLayer * removable + coinsPerChainLayer * chain, epicenter);
 
             _comboMultiplier = Mathf.Min(_comboMultiplier + 1, maxMultiplier);
             _blastLevel = exhausted ? 0 : _blastLevel + 1;
@@ -929,9 +986,9 @@ namespace SliceBlast.Core
                 }
             }
 
-            Shake(blastShake);
+            Shake(blastShake + chainShakePerLayer * chain);
 
-            if (removable >= hitstopBlastThreshold)
+            if (removable + chain >= hitstopBlastThreshold)
             {
                 _hitstopHold = hitstopSeconds;
                 Time.timeScale = hitstopTimeScale;
@@ -950,11 +1007,52 @@ namespace SliceBlast.Core
                 Bonus = bonus,
                 Epicenter = epicenter,
                 NextTop = nextTop,
-                Color = fromNeon ? _neonColor : Gold,
-                FromNeon = fromNeon
+                Color = fromNeon ? _neonColor : ThemeCatalogue.Equipped.Accent,
+                FromNeon = fromNeon,
+                Chain = chain
             });
 
             GameEvents.RaiseScoreChanged(_score, TotalMultiplier);
+        }
+
+        /// <summary>Pops the top layer, takes it out of the impact list and bursts it.</summary>
+        private void RemoveTopLayer(Vector3 epicenter, float force)
+        {
+            int last = _stack.Count - 1;
+            MovingBlock layer = _stack[last];
+            _stack.RemoveAt(last);
+
+            int index = _animating.IndexOf(layer);
+
+            if (index >= 0)
+            {
+                _animating.RemoveAt(index);
+            }
+
+            if (layer == null)
+            {
+                return;
+            }
+
+            ShatterLayer(layer, epicenter, force);
+            layer.Release();
+        }
+
+        /// <summary>
+        /// Coins are banked the moment they are earned rather than totalled at the end of the
+        /// run: a player who force-quits mid-run still keeps what the tower already paid out,
+        /// and the profile's own write throttling means this is not a disk hit per blast.
+        /// </summary>
+        private void AwardCoins(int amount, Vector3 position)
+        {
+            if (amount <= 0)
+            {
+                return;
+            }
+
+            _runCoins += amount;
+            PlayerProfile.AddCoins(amount);
+            GameEvents.RaiseCoinsAwarded(amount, position);
         }
 
         /// <summary>Widens the next platform by a share of its current size.</summary>
@@ -1056,7 +1154,7 @@ namespace SliceBlast.Core
             _blastLevel = 0;
             _electricTimer = 0f;
             _neonFuse = 0f;
-            HasShield = false;
+            _shieldCharges = 0;
             ClearCurrent();
 
             Transform t = block.CachedTransform;
@@ -1064,12 +1162,21 @@ namespace SliceBlast.Core
             EmitDebris(t.position, t.localScale, block.Tint, fallDirection * 1.5f, Vector3.up * 0.5f);
             block.Release();
 
-            if (_score > _bestScore)
-            {
-                _bestScore = _score;
-                PlayerPrefs.SetInt(BestScoreKey, _bestScore);
-                PlayerPrefs.Save();
-            }
+            // The run's own payout, on top of everything the blasts already banked.
+            AwardCoins(_score / Mathf.Max(1, scorePerCoin), TopBlockCenter());
+
+            PlayerProfile.RecordRun(_score, _blastCount, _biggestBlast, _longestChain);
+            _bestScore = PlayerProfile.BestScore;
+
+            MissionSystem.Report(MissionKind.RunScore, _score);
+            MissionSystem.Report(MissionKind.Perfects, _perfectCount);
+            MissionSystem.Report(MissionKind.Blasts, _blastCount);
+            MissionSystem.Report(MissionKind.Chain, _longestChain);
+            MissionSystem.Report(MissionKind.Specials, _specialCount);
+
+            // The one point in the loop where a synchronous write is affordable: the tower is
+            // already gone and the run-over screen is fading in over it.
+            PlayerProfile.Flush();
 
             // Pull back far enough to show the run: base platform to the last layer placed.
             if (cameraRig != null)
@@ -1088,7 +1195,7 @@ namespace SliceBlast.Core
 
             Haptics.Heavy();
 
-            GameEvents.RaiseShieldChanged(false);
+            GameEvents.RaiseShieldChanged(0);
             GameEvents.RaiseMultiplierTimer(0f, electricDuration);
             GameEvents.RaiseRunEnded(_score, _bestScore);
         }

@@ -96,6 +96,12 @@ namespace SliceBlast.Feedback
         }
 
         /// <summary>A momentary scatter + glow kick — call on a blast or a big combo.</summary>
+        /// <summary>Retints an already-built field — a theme swap, with no rebuild.</summary>
+        public void SetTint(Color tint)
+        {
+            _tint = tint;
+        }
+
         public void Pulse(float strength)
         {
             _burst = Mathf.Max(_burst, strength);

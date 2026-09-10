@@ -23,7 +23,13 @@ namespace SliceBlast.UI
         Chevrons,
         ElectricArcs,
         Crown,
-        Home
+        Home,
+        Coin,
+        Bag,
+        Target,
+        Lock,
+        Check,
+        Close
     }
 
     public static class IconFactory
@@ -221,6 +227,47 @@ namespace SliceBlast.UI
 
                     return Mathf.Min(main, Mathf.Min(forks, sparks));
                 }
+
+                case IconShape.Coin:
+                {
+                    // A filled centre inside a separate rim. A plain disc reads as a dot at
+                    // badge size; the gap between the two is what makes it a coin.
+                    float rim = Ring(p, 0.7f, 0.13f);
+                    float core = Circle(p, 0.4f);
+                    return Mathf.Min(rim, core);
+                }
+
+                case IconShape.Bag:
+                {
+                    float body = Box(p - new Vector2(0f, -0.22f), new Vector2(0.58f, 0.44f), 0.16f);
+                    // Top half of a ring: the handle.
+                    float handle = Mathf.Max(Ring(p - new Vector2(0f, 0.28f), 0.29f, 0.09f), 0.28f - p.y);
+                    return Mathf.Min(body, handle);
+                }
+
+                case IconShape.Target:
+                {
+                    return Mathf.Min(
+                        Ring(p, 0.72f, 0.12f),
+                        Mathf.Min(Ring(p, 0.42f, 0.12f), Circle(p, 0.14f)));
+                }
+
+                case IconShape.Lock:
+                {
+                    float body = Box(p - new Vector2(0f, -0.26f), new Vector2(0.5f, 0.38f), 0.12f);
+                    float shackle = Mathf.Max(Ring(p - new Vector2(0f, 0.18f), 0.3f, 0.1f), 0.18f - p.y);
+                    return Mathf.Min(body, shackle);
+                }
+
+                case IconShape.Check:
+                {
+                    return Mathf.Min(
+                        Segment(p, new Vector2(-0.62f, 0.04f), new Vector2(-0.16f, -0.44f), 0.15f),
+                        Segment(p, new Vector2(-0.16f, -0.44f), new Vector2(0.64f, 0.52f), 0.15f));
+                }
+
+                case IconShape.Close:
+                    return Cross(p, 0.5f, 0.13f);
 
                 case IconShape.Home:
                 {

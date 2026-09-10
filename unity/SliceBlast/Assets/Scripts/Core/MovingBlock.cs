@@ -30,6 +30,14 @@ namespace SliceBlast.Core
         public bool IsMoving { get; private set; }
         public BlockType Type { get; private set; }
 
+        /// <summary>This layer was sliced on the way in — a blast reaching it chains through.</summary>
+        public bool IsCracked { get; private set; }
+
+        // Dark enough to read as damage at a glance on a phone, with a dim ember in the seam
+        // so a fault line is still visible on a tower several layers deep.
+        private const float FaultBodyLevel = 0.52f;
+        private static readonly Color FaultSeam = new Color(0.62f, 0.14f, 0.05f);
+
         private float _pivot;
         private float _range;
         private float _direction = 1f;
@@ -100,6 +108,7 @@ namespace SliceBlast.Core
             _charge = 0f;
             _body = Color.white;
             _restEmission = Color.black;
+            IsCracked = false;
             Type = BlockType.Standard;
 
             ResetMaterial();
@@ -461,6 +470,34 @@ namespace SliceBlast.Core
                     WriteEffectColor(_arcRenderers[i], ArcWhite * flicker);
                 }
             }
+        }
+
+        /// <summary>
+        /// A layer that was cut rather than landed cleanly. It stays in the tower and still
+        /// holds weight, but it is now a fault: a blast that reaches it carries on through.
+        ///
+        /// The damage is written into _body and _restEmission rather than pushed straight at
+        /// the renderer, because those two are what every other effect restores *to* — the
+        /// electric current and the impact flash both end by returning the block to its
+        /// resting colours, and a crack has to survive both.
+        /// </summary>
+        public void Fracture()
+        {
+            if (IsCracked)
+            {
+                return;
+            }
+
+            IsCracked = true;
+
+            _body = new Color(
+                _body.r * FaultBodyLevel,
+                _body.g * FaultBodyLevel,
+                _body.b * FaultBodyLevel,
+                _body.a);
+
+            _restEmission = FaultSeam;
+            SetGlow(_body, _restEmission);
         }
 
         /// <summary>

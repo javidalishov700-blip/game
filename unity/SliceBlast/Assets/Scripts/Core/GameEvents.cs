@@ -30,6 +30,9 @@ namespace SliceBlast.Core
         public Vector3 NextTop;
         public Color Color;
         public bool FromNeon;
+
+        /// <summary>Cracked layers the blast carried on through under the ones it asked for.</summary>
+        public int Chain;
     }
 
     public struct RewardEvent
@@ -55,10 +58,14 @@ namespace SliceBlast.Core
         public static event Action<PlacementEvent> BlockPlaced;
         public static event Action<BlastEvent> BlastFired;
         public static event Action<RewardEvent> RewardGranted;
-        public static event Action<bool> ShieldChanged;
+        /// <summary>Shield charges in hand — Armour opens a run with some, Glass adds one.</summary>
+        public static event Action<int> ShieldChanged;
         public static event Action<float, float> MultiplierTimerChanged;
         public static event Action<int, int> RunEnded;
         public static event Action<bool> PauseChanged;
+
+        /// <summary>Coins earned, and the world point they were earned at.</summary>
+        public static event Action<int, Vector3> CoinsAwarded;
         /// <summary>Neon has marked the layers it is about to take, in its own colour.</summary>
         public static event Action<Vector3, Color> NeonCharged;
 
@@ -80,6 +87,7 @@ namespace SliceBlast.Core
             PauseChanged = null;
             NeonCharged = null;
             CurrentPulsed = null;
+            CoinsAwarded = null;
         }
 
         public static void RaiseHomeShown(int best) => HomeShown?.Invoke(best);
@@ -94,7 +102,9 @@ namespace SliceBlast.Core
 
         public static void RaiseReward(RewardEvent reward) => RewardGranted?.Invoke(reward);
 
-        public static void RaiseShieldChanged(bool active) => ShieldChanged?.Invoke(active);
+        public static void RaiseShieldChanged(int charges) => ShieldChanged?.Invoke(charges);
+
+        public static void RaiseCoinsAwarded(int amount, Vector3 position) => CoinsAwarded?.Invoke(amount, position);
 
         public static void RaiseMultiplierTimer(float remaining, float total) => MultiplierTimerChanged?.Invoke(remaining, total);
 

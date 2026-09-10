@@ -1,5 +1,6 @@
 // Tap resolution: Ego-Boost magnet, axis-aligned slice math, shield forgiveness and the
 // special-block vanish. Decides what happened; the flow manager decides what it means.
+using SliceBlast.Meta;
 using UnityEngine;
 using UnityEngine.EventSystems;
 #if ENABLE_INPUT_SYSTEM
@@ -81,13 +82,18 @@ namespace SliceBlast.Core
             float reference = Mathf.Min(topSize, movingSize);
 
             // Ego Boost: the window widens invisibly with the streak and with block speed,
-            // so a run that *feels* clean stays clean.
-            float threshold = Mathf.Max(perfectThreshold, reference * magnetFraction)
+            // so a run that *feels* clean stays clean. The Magnet upgrade widens the base of
+            // that window and lifts its ceiling by half as much again — without the second
+            // term the purchase would be invisible in exactly the situation it was bought
+            // for, since a fast run at a long streak is already pinned against the cap.
+            float magnetBonus = UpgradeCatalogue.MagnetBonusFraction();
+
+            float threshold = Mathf.Max(perfectThreshold, reference * (magnetFraction + magnetBonus))
                               + thresholdPerStreak * flow.PerfectStreak
                               + snapSpeedScale * flow.CurrentSpeed
                               + flow.TutorialAssist;
 
-            threshold = Mathf.Min(threshold, reference * maxThresholdFraction);
+            threshold = Mathf.Min(threshold, reference * (maxThresholdFraction + magnetBonus * 0.5f));
 
             if (Mathf.Abs(delta) <= threshold)
             {

@@ -21,6 +21,9 @@ namespace SliceBlast.UI
         private static readonly Color ShieldBlue = new Color(0.72f, 0.95f, 1f);
         private static readonly Color BoltBlue = new Color(0.45f, 0.85f, 1f);
 
+        /// <summary>Where the "+N" coin pop sits before it rises.</summary>
+        private static readonly Vector2 CoinPopRest = new Vector2(-44f, -258f);
+
         // Reachable from the title screen because a store listing is not the only place a
         // player should be able to find them. Served by real GitHub Pages — the javidalishov
         // steady-site repository already has Pages switched on for another app, so these ride
@@ -54,9 +57,13 @@ namespace SliceBlast.UI
         private Text _electricSeconds;
         private Text _soundLabel;
         private Text _hapticsLabel;
+        private Text _coinText;
+        private Text _coinPop;
+        private Text _shieldCount;
 
         private Image _flash;
         private Image _shieldIcon;
+        private Image _coinIcon;
         private Image _electricIcon;
         private Image _soundIcon;
         private Image _hapticsIcon;
@@ -88,8 +95,12 @@ namespace SliceBlast.UI
         private float _homeAlpha;
         private float _chromeAlpha;
         private float _introTime;
-        private bool _shieldActive;
+        private int _shieldCharges;
         private bool _electricActive;
+
+        private float _coinPunch;
+        private float _coinPopLife;
+        private int _coinPopAmount;
 
         private bool _soundOn = true;
         private bool _hapticsOn = true;
@@ -180,6 +191,49 @@ namespace SliceBlast.UI
             _electricSeconds = CreateText("ElectricSeconds", _safeArea, 50, FontStyle.Bold, BoltBlue, TextAnchor.MiddleLeft);
             Anchor(_electricSeconds.rectTransform, new Vector2(0f, 1f), new Vector2(0.5f, 1f), new Vector2(128f, -224f), new Vector2(0f, -140f));
             _electricSeconds.text = string.Empty;
+
+            // Armour and Glass can both be in hand at once, so the badge carries a number
+            // rather than just being on or off.
+            _shieldCount = CreateText("ShieldCount", _safeArea, 40, FontStyle.Bold, Ink, TextAnchor.MiddleCenter);
+            Anchor(_shieldCount.rectTransform, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(40f, -104f), new Vector2(124f, -46f));
+            _shieldCount.text = string.Empty;
+
+            BuildCoinBadge();
+        }
+
+        /// <summary>
+        /// The coin counter sits under the pause button, out of the score's way. It is inside
+        /// the chrome group, so it fades with the rest of the run furniture and never sits on
+        /// top of the title screen — the shop shows the balance there instead.
+        /// </summary>
+        private void BuildCoinBadge()
+        {
+            _coinIcon = CreateImage("CoinIcon", _safeArea, Gold);
+            _coinIcon.sprite = IconFactory.GetSprite(IconShape.Coin);
+            _coinIcon.preserveAspect = true;
+
+            RectTransform coinRect = _coinIcon.rectTransform;
+            coinRect.anchorMin = new Vector2(1f, 1f);
+            coinRect.anchorMax = new Vector2(1f, 1f);
+            coinRect.pivot = new Vector2(1f, 1f);
+            coinRect.sizeDelta = new Vector2(56f, 56f);
+            coinRect.anchoredPosition = new Vector2(-44f, -196f);
+
+            _coinText = CreateText("Coins", _safeArea, 52, FontStyle.Bold, Gold, TextAnchor.UpperRight);
+            Anchor(_coinText.rectTransform, new Vector2(0.5f, 1f), new Vector2(1f, 1f), new Vector2(0f, -256f), new Vector2(-110f, -192f));
+            _coinText.text = "0";
+
+            // Corner-anchored rather than stretched: the pop animates its own anchoredPosition,
+            // and on a rect whose anchors are apart that field means the offset midpoint, not
+            // a position — writing a raw value into it would fling the number across the HUD.
+            _coinPop = CreateText("CoinPop", _safeArea, 48, FontStyle.Bold, Gold, TextAnchor.UpperRight);
+            RectTransform popRect = _coinPop.rectTransform;
+            popRect.anchorMin = new Vector2(1f, 1f);
+            popRect.anchorMax = new Vector2(1f, 1f);
+            popRect.pivot = new Vector2(1f, 1f);
+            popRect.sizeDelta = new Vector2(260f, 64f);
+            popRect.anchoredPosition = CoinPopRest;
+            SetAlpha(_coinPop, 0f);
         }
 
         private void BuildPauseButton()
@@ -462,9 +516,43 @@ namespace SliceBlast.UI
             rect.anchoredPosition = new Vector2(0f, y);
         }
 
-        public void SetShield(bool active)
+        public void SetShield(int charges)
         {
-            _shieldActive = active;
+            _shieldCharges = Mathf.Max(0, charges);
+
+            if (_shieldCount != null)
+            {
+                // One shield is what the icon already says; a number only earns its place
+                // once there is more than one in hand.
+                _shieldCount.text = _shieldCharges > 1 ? _shieldCharges.ToString() : string.Empty;
+            }
+        }
+
+        public void SetCoins(int total)
+        {
+            if (_coinText == null)
+            {
+                return;
+            }
+
+            _coinText.text = total.ToString();
+            _coinPunch = 1f;
+        }
+
+        /// <summary>The "+N" that rises off the counter when a blast pays out.</summary>
+        public void PopCoins(int amount)
+        {
+            if (_coinPop == null || amount <= 0)
+            {
+                return;
+            }
+
+            // A second payout inside the same beat adds to the one already in flight rather
+            // than replacing it — a chained blast pays twice in two frames, and two numbers
+            // fighting over the same slot reads as a glitch.
+            _coinPopAmount = _coinPopLife > 0.35f ? _coinPopAmount + amount : amount;
+            _coinPop.text = "+" + _coinPopAmount;
+            _coinPopLife = 1f;
         }
 
         public void SetElectric(float remaining, float total)
@@ -816,8 +904,13 @@ namespace SliceBlast.UI
         {
             if (_shieldIcon != null)
             {
-                float alpha = Mathf.MoveTowards(_shieldIcon.color.a, _shieldActive ? 1f : 0f, dt * 5f);
+                float alpha = Mathf.MoveTowards(_shieldIcon.color.a, _shieldCharges > 0 ? 1f : 0f, dt * 5f);
                 SetAlpha(_shieldIcon, alpha);
+
+                if (_shieldCount != null)
+                {
+                    SetAlpha(_shieldCount, alpha);
+                }
 
                 if (alpha > 0.01f)
                 {
@@ -825,6 +918,8 @@ namespace SliceBlast.UI
                     _shieldIcon.rectTransform.localScale = new Vector3(breathe, breathe, 1f);
                 }
             }
+
+            TickCoins(dt);
 
             if (_electricIcon != null)
             {
@@ -837,6 +932,40 @@ namespace SliceBlast.UI
                     _electricIcon.rectTransform.localScale = new Vector3(jolt, jolt, 1f);
                 }
             }
+        }
+
+        private void TickCoins(float dt)
+        {
+            if (_coinText != null)
+            {
+                _coinPunch = Mathf.Max(0f, _coinPunch - dt * 4f);
+                float punch = 1f + Mathf.Sin(_coinPunch * Mathf.PI) * 0.22f;
+                _coinText.rectTransform.localScale = new Vector3(punch, punch, 1f);
+
+                if (_coinIcon != null)
+                {
+                    _coinIcon.rectTransform.localScale = new Vector3(punch, punch, 1f);
+                }
+            }
+
+            if (_coinPop == null)
+            {
+                return;
+            }
+
+            if (_coinPopLife <= 0f)
+            {
+                SetAlpha(_coinPop, 0f);
+                return;
+            }
+
+            _coinPopLife = Mathf.Max(0f, _coinPopLife - dt * 1.3f);
+
+            // Rises as it fades: the number leaves the counter rather than dissolving on it.
+            float progress = 1f - _coinPopLife;
+            SetAlpha(_coinPop, Mathf.SmoothStep(0f, 1f, _coinPopLife));
+
+            _coinPop.rectTransform.anchoredPosition = CoinPopRest + new Vector2(0f, progress * 34f);
         }
 
         private void ApplySafeArea()

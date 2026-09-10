@@ -5,6 +5,7 @@ using SliceBlast.Ads;
 using SliceBlast.Audio;
 using SliceBlast.Core;
 using SliceBlast.Feedback;
+using SliceBlast.Meta;
 using SliceBlast.UI;
 using UnityEngine;
 using UnityEngine.EventSystems;
@@ -16,9 +17,6 @@ namespace SliceBlast.Bootstrap
     [DisallowMultipleComponent]
     public sealed class SliceBlastBootstrap : MonoBehaviour
     {
-        private const string SoundKey = "sliceblast.sound";
-        private const string HapticsKey = "sliceblast.haptics";
-
         // Six is enough to read as a live discharge without looking like a swarm.
         private const int ArcNodeCount = 6;
 
@@ -108,6 +106,11 @@ namespace SliceBlast.Bootstrap
 
         private void Awake()
         {
+            // Before a single material or mesh is built: the theme decides what colour the
+            // sky, the stars and the platform are, and every one of those is baked into
+            // geometry further down this method.
+            ApplyEquippedTheme();
+
             Material lit = LoadMaterial("Materials/BlockLit", "Standard");
             Material unlit = LoadMaterial("Materials/BlastUnlit", "Sprites/Default");
             // Additive: with no post-processing in this pipeline, additive geometry is the
@@ -147,13 +150,19 @@ namespace SliceBlast.Bootstrap
             _hud = hudObject.AddComponent<GameHud>();
             _hud.Build();
 
-            bool soundOn = PlayerPrefs.GetInt(SoundKey, 1) == 1;
-            bool hapticsOn = PlayerPrefs.GetInt(HapticsKey, 1) == 1;
+            bool soundOn = PlayerProfile.Data.soundOn;
+            bool hapticsOn = PlayerProfile.Data.hapticsOn;
 
             _audio.Muted = !soundOn;
             Haptics.Enabled = hapticsOn;
             _hud.SetSoundLabel(soundOn);
             _hud.SetHapticsLabel(hapticsOn);
+            _hud.SetCoins(PlayerProfile.Coins);
+
+            // Rolled here rather than lazily on first open of the shop, so the badge on the
+            // title screen is already correct the first time the player looks at it.
+            MissionSystem.EnsureToday();
+            PlayerProfile.TouchDailyStreak();
 
             _hud.PauseToggled += OnPauseToggled;
             _hud.RestartRequested += OnRestartRequested;
@@ -211,6 +220,9 @@ namespace SliceBlast.Bootstrap
             GameEvents.PauseChanged += OnPauseChanged;
             GameEvents.NeonCharged += OnNeonCharged;
             GameEvents.CurrentPulsed += OnCurrentPulsed;
+            GameEvents.CoinsAwarded += OnCoinsAwarded;
+            PlayerProfile.CoinsChanged += OnCoinsChanged;
+            PlayerProfile.InventoryChanged += OnInventoryChanged;
         }
 
         private void Unsubscribe()
@@ -227,11 +239,42 @@ namespace SliceBlast.Bootstrap
             GameEvents.PauseChanged -= OnPauseChanged;
             GameEvents.NeonCharged -= OnNeonCharged;
             GameEvents.CurrentPulsed -= OnCurrentPulsed;
+            GameEvents.CoinsAwarded -= OnCoinsAwarded;
+            PlayerProfile.CoinsChanged -= OnCoinsChanged;
+            PlayerProfile.InventoryChanged -= OnInventoryChanged;
+        }
+
+        private void OnCoinsAwarded(int amount, Vector3 position)
+        {
+            _hud.PopCoins(amount);
+        }
+
+        private void OnCoinsChanged(int total)
+        {
+            _hud.SetCoins(total);
+        }
+
+        /// <summary>
+        /// iOS can terminate a backgrounded app without a further callback, so the profile
+        /// is written the moment focus is lost rather than trusting OnApplicationQuit.
+        /// </summary>
+        private void OnApplicationPause(bool paused)
+        {
+            if (paused)
+            {
+                PlayerProfile.Flush();
+            }
+        }
+
+        private void OnApplicationQuit()
+        {
+            PlayerProfile.Flush();
         }
 
         private void Update()
         {
             TickSky();
+            PlayerProfile.Tick(Time.unscaledDeltaTime);
 
             if (_starField != null)
             {
@@ -415,19 +458,41 @@ namespace SliceBlast.Bootstrap
         private void OnBlastFired(BlastEvent blast)
         {
             _audio.PlayBlast();
-            // Spell out the count rather than just the multiplier — a 3/5/7/9 escalation
-            // reads as a score bonus until it says "block" somewhere.
-            _hud.ShowBanner(blast.FromNeon ? "NEON BLAST" : blast.Layers + " BLOCK BLAST", "+" + blast.Bonus, blast.Color);
-            _hud.Flash(0.9f);
 
-            int tier = SkyTierForBlast(blast.Layers);
+            int total = blast.Layers + blast.Chain;
+
+            // A chain is the rarer and better thing that just happened, so it takes the
+            // headline; the plain count only leads when the blast stopped where it was asked
+            // to. Spelled out rather than left as a multiplier — a 3/5/7/9 escalation reads
+            // as a score bonus until it says "block" somewhere.
+            string headline;
+            string detail;
+
+            if (blast.Chain > 0)
+            {
+                headline = "FAULT CHAIN x" + blast.Chain;
+                detail = total + " BLOCKS  +" + blast.Bonus;
+            }
+            else
+            {
+                headline = blast.FromNeon ? "NEON BLAST" : blast.Layers + " BLOCK BLAST";
+                detail = "+" + blast.Bonus;
+            }
+
+            _hud.ShowBanner(headline, detail, blast.Color);
+            _hud.Flash(blast.Chain > 0 ? 1f : 0.9f);
+
+            // The sky reacts to what the blast actually cost the tower, chained layers and
+            // all — a 4-block blast that tore five faults open is a bigger moment than a
+            // clean 7 and should be allowed to say so.
+            int tier = SkyTierForBlast(total);
 
             if (tier > _skyTier)
             {
                 SetSkyTier(tier, false);
             }
 
-            EmitSparks(blast.Epicenter, blast.Color, 8.5f, 0.15f);
+            EmitSparks(blast.Epicenter, blast.Color, 8.5f + blast.Chain * 0.9f, 0.15f);
             EmitShockwave(blast.Epicenter, blast.Color);
 
             // Mark where the tower now ends, so the next block never appears out of nowhere.
@@ -436,7 +501,12 @@ namespace SliceBlast.Bootstrap
 
             if (_starField != null)
             {
-                _starField.Pulse(Mathf.Lerp(0.6f, 1.4f, Mathf.InverseLerp(3f, 9f, blast.Layers)));
+                _starField.Pulse(Mathf.Lerp(0.6f, 1.4f, Mathf.InverseLerp(3f, 9f, total)));
+            }
+
+            if (blast.Chain >= 3)
+            {
+                Haptics.Heavy();
             }
         }
 
@@ -462,9 +532,48 @@ namespace SliceBlast.Bootstrap
             }
         }
 
-        private void OnShieldChanged(bool active)
+        private void OnShieldChanged(int charges)
         {
-            _hud.SetShield(active);
+            _hud.SetShield(charges);
+        }
+
+        /// <summary>
+        /// Reads the equipped theme into the fields the backdrop and star field are built
+        /// from. Called once before anything is constructed, and again whenever the player
+        /// equips something in the shop — at which point the star field is retinted and the
+        /// sky is re-driven in place, so a theme swap lands without a reload.
+        /// </summary>
+        private void ApplyEquippedTheme()
+        {
+            ThemeDefinition theme = ThemeCatalogue.Equipped;
+
+            skyTop = theme.SkyTop;
+            skyBottom = theme.SkyBottom;
+            starTint = theme.StarTint;
+
+            if (_starField != null)
+            {
+                _starField.SetTint(starTint);
+            }
+
+            if (_camera != null)
+            {
+                _camera.backgroundColor = skyBottom;
+            }
+
+            if (_skyTexture != null)
+            {
+                _skyTopFrom = _skyTopTo = skyTop;
+                _skyBottomFrom = _skyBottomTo = skyBottom;
+                _skyBlend = 1f;
+                _skyTier = 0;
+                ApplySky(skyBottom, skyTop);
+            }
+        }
+
+        private void OnInventoryChanged()
+        {
+            ApplyEquippedTheme();
         }
 
         private void OnMultiplierTimer(float remaining, float total)
@@ -569,8 +678,8 @@ namespace SliceBlast.Bootstrap
         private void OnSoundToggled(bool on)
         {
             _audio.Muted = !on;
-            PlayerPrefs.SetInt(SoundKey, on ? 1 : 0);
-            PlayerPrefs.Save();
+            PlayerProfile.SetSound(on);
+            PlayerProfile.Flush();
 
             if (on)
             {
@@ -581,8 +690,8 @@ namespace SliceBlast.Bootstrap
         private void OnHapticsToggled(bool on)
         {
             Haptics.Enabled = on;
-            PlayerPrefs.SetInt(HapticsKey, on ? 1 : 0);
-            PlayerPrefs.Save();
+            PlayerProfile.SetHaptics(on);
+            PlayerProfile.Flush();
 
             if (on)
             {

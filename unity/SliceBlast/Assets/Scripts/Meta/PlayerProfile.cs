@@ -302,6 +302,18 @@ namespace SliceBlast.Meta
             InventoryChanged?.Invoke();
         }
 
+        public static void SetSound(bool on)
+        {
+            Data.soundOn = on;
+            _dirty = true;
+        }
+
+        public static void SetHaptics(bool on)
+        {
+            Data.hapticsOn = on;
+            _dirty = true;
+        }
+
         public static void SetAdsRemoved(bool removed)
         {
             if (Data.adsRemoved == removed)

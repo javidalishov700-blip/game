@@ -1,3 +1,4 @@
+using SliceBlast.Meta;
 using UnityEngine;
 
 namespace SliceBlast.Core
@@ -17,11 +18,10 @@ namespace SliceBlast.Core
         [SerializeField] private int maxSpecialGap = 22;
         [SerializeField] private float travelRange = 2f;
         [SerializeField] private float minTravelRange = 1.2f;
-        [SerializeField] private float hueStart = 0.45f;
-        [SerializeField] private float hueSpan = 0.4f;
+        // How fast the palette walks its band per layer. The band itself — where it starts,
+        // how wide it is, how saturated — belongs to the equipped theme, not to this
+        // component; see PaletteColor.
         [SerializeField] private float hueStep = 0.035f;
-        [SerializeField, Range(0f, 1f)] private float saturation = 0.55f;
-        [SerializeField, Range(0f, 1f)] private float brightness = 0.95f;
 
         private BlockPool _pool;
         private bool _forceStandard;
@@ -142,8 +142,15 @@ namespace SliceBlast.Core
 
         private void RollGap()
         {
-            int low = Mathf.Max(1, minSpecialGap);
-            _gap = Random.Range(low, Mathf.Max(low, maxSpecialGap) + 1);
+            // Fortune shortens the wait at both ends of the range rather than only the top,
+            // so an upgraded player sees the difference in the floor as well as the average.
+            // Four is the hard floor whatever the level: specials landing back to back would
+            // stop reading as events at all, which is the one thing the gap exists to prevent.
+            int reduction = UpgradeCatalogue.SpecialGapReduction();
+            int low = Mathf.Max(4, minSpecialGap - reduction);
+            int high = Mathf.Max(low, maxSpecialGap - reduction);
+
+            _gap = Random.Range(low, high + 1);
         }
 
         private BlockType PickType()
@@ -179,13 +186,31 @@ namespace SliceBlast.Core
         }
 
         /// <summary>
-        /// Ordinary blocks ping-pong through cyan → blue → violet. Bounded on purpose: no
+        /// Ordinary blocks ping-pong through a bounded hue band — cyan → blue → violet by
+        /// default, and whatever the equipped theme names otherwise. Bounded on purpose: no
         /// plain block should ever drift into a neon hue and be mistaken for a special.
         /// </summary>
         private Color PaletteColor(int index)
         {
-            float hue = hueStart + Mathf.PingPong(index * hueStep, hueSpan);
-            return Color.HSVToRGB(Mathf.Repeat(hue, 1f), saturation, brightness);
+            ThemeDefinition theme = ThemeCatalogue.Equipped;
+
+            float start = theme.HueStart;
+            float span = theme.HueSpan;
+            float sat = theme.Saturation;
+            float value = theme.Brightness;
+
+            float hue = start + Mathf.PingPong(index * hueStep, span);
+
+            // A themeless build, or a theme that deliberately drops saturation to zero, still
+            // has to produce a readable ladder of blocks rather than one flat colour — so a
+            // greyscale theme walks the value axis instead of the hue axis.
+            if (sat <= 0.001f)
+            {
+                float shade = value * (0.62f + Mathf.PingPong(index * hueStep * 2f, 0.38f));
+                return new Color(shade, shade, shade);
+            }
+
+            return Color.HSVToRGB(Mathf.Repeat(hue, 1f), sat, value);
         }
     }
 }
