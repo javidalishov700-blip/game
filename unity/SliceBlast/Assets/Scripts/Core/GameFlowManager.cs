@@ -166,6 +166,14 @@ namespace SliceBlast.Core
         private int _perfectCount;
         private int _specialCount;
 
+        // What has already been paid out and reported for the current tower. A rewarded
+        // continue means EndRun can fire more than once for one run; see EndRun.
+        private int _bankedScore;
+        private int _bankedBlasts;
+        private int _bankedPerfects;
+        private int _bankedSpecials;
+        private bool _runRecorded;
+
         public MovingBlock ActiveBlock => _active;
         public MovingBlock TopBlock => _stack.Count > 0 ? _stack[_stack.Count - 1] : null;
         public bool AcceptsInput => _running && !IsPaused && _inputLock <= 0f && _active != null && _active.IsMoving;
@@ -327,6 +335,12 @@ namespace SliceBlast.Core
             _longestChain = 0;
             _perfectCount = 0;
             _specialCount = 0;
+
+            _bankedScore = 0;
+            _bankedBlasts = 0;
+            _bankedPerfects = 0;
+            _bankedSpecials = 0;
+            _runRecorded = false;
 
             // Armour is read here rather than cached at purchase: a level bought on the
             // run-over screen is in force on the very next run, with no reload.
@@ -1167,17 +1181,35 @@ namespace SliceBlast.Core
             EmitDebris(t.position, t.localScale, block.Tint, fallDirection * 1.5f, Vector3.up * 0.5f);
             block.Release();
 
-            // The run's own payout, on top of everything the blasts already banked.
-            AwardCoins(_score / Mathf.Max(1, scorePerCoin), TopBlockCenter());
+            // A rewarded continue resumes the same tower, so this method runs again when that
+            // continued run finally ends. Everything cumulative is therefore banked as a
+            // delta: without this the end-of-run coin payout, the lifetime score and every
+            // counting mission would all be credited a second time for one tower — and a
+            // player could farm the payout by reviving.
+            //
+            // The two "personal best" shapes (a run's score, a chain length) are exempt: they
+            // are maxima, so reporting the running total again is idempotent.
+            int scoreDelta = Mathf.Max(0, _score - _bankedScore);
+            int blastDelta = Mathf.Max(0, _blastCount - _bankedBlasts);
+            int perfectDelta = Mathf.Max(0, _perfectCount - _bankedPerfects);
+            int specialDelta = Mathf.Max(0, _specialCount - _bankedSpecials);
 
-            PlayerProfile.RecordRun(_score, _blastCount, _biggestBlast, _longestChain);
+            AwardCoins(scoreDelta / Mathf.Max(1, scorePerCoin), TopBlockCenter());
+
+            PlayerProfile.RecordRun(_score, scoreDelta, blastDelta, _biggestBlast, _longestChain, !_runRecorded);
             _bestScore = PlayerProfile.BestScore;
 
             MissionSystem.Report(MissionKind.RunScore, _score);
-            MissionSystem.Report(MissionKind.Perfects, _perfectCount);
-            MissionSystem.Report(MissionKind.Blasts, _blastCount);
             MissionSystem.Report(MissionKind.Chain, _longestChain);
-            MissionSystem.Report(MissionKind.Specials, _specialCount);
+            MissionSystem.Report(MissionKind.Perfects, perfectDelta);
+            MissionSystem.Report(MissionKind.Blasts, blastDelta);
+            MissionSystem.Report(MissionKind.Specials, specialDelta);
+
+            _bankedScore = _score;
+            _bankedBlasts = _blastCount;
+            _bankedPerfects = _perfectCount;
+            _bankedSpecials = _specialCount;
+            _runRecorded = true;
 
             // The one point in the loop where a synchronous write is affordable: the tower is
             // already gone and the run-over screen is fading in over it.

@@ -353,22 +353,41 @@ namespace SliceBlast.Meta
             return true;
         }
 
-        /// <summary>Records a finished run and returns true if it set a new record.</summary>
-        public static bool RecordRun(int score, int blasts, int biggestBlast, int longestChain)
+        /// <summary>
+        /// Records a finished run and returns true if it set a new record.
+        ///
+        /// A run continued with a rewarded ad ends more than once, so the two kinds of number
+        /// here are deliberately separate: <paramref name="runScore"/> is the tower's running
+        /// total and is compared against the record, while <paramref name="scoreDelta"/> and
+        /// <paramref name="blastsDelta"/> are only what has not been banked yet and are what
+        /// the lifetime accumulators add. Passing the total to both would credit a revived run
+        /// twice for the same tower.
+        /// </summary>
+        public static bool RecordRun(
+            int runScore,
+            int scoreDelta,
+            int blastsDelta,
+            int biggestBlast,
+            int longestChain,
+            bool countRun)
         {
             ProfileData data = Data;
 
-            data.totalRuns++;
-            data.totalBlasts += blasts;
-            data.lifetimeScore += score;
+            if (countRun)
+            {
+                data.totalRuns++;
+            }
+
+            data.totalBlasts += Mathf.Max(0, blastsDelta);
+            data.lifetimeScore += Mathf.Max(0, scoreDelta);
             data.biggestBlast = Mathf.Max(data.biggestBlast, biggestBlast);
             data.longestChain = Mathf.Max(data.longestChain, longestChain);
 
-            bool record = score > data.bestScore;
+            bool record = runScore > data.bestScore;
 
             if (record)
             {
-                data.bestScore = score;
+                data.bestScore = runScore;
             }
 
             _dirty = true;
