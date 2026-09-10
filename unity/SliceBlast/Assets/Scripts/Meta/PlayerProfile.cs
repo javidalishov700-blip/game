@@ -45,6 +45,9 @@ namespace SliceBlast.Meta
         public int dailyStreak;
         public string lastPlayDay = string.Empty;
 
+        /// <summary>The fault-line explanation is shown once, ever, and then never again.</summary>
+        public bool sawFaultHint;
+
         // Missions are stored as three parallel lists rather than a list of structs:
         // JsonUtility will not serialise a List<T> of a nested serialisable type reliably
         // across Unity versions, and three flat lists cost nothing to keep aligned.
@@ -300,6 +303,17 @@ namespace SliceBlast.Meta
             Data.equippedTheme = id ?? string.Empty;
             _dirty = true;
             InventoryChanged?.Invoke();
+        }
+
+        public static void MarkFaultHintSeen()
+        {
+            if (Data.sawFaultHint)
+            {
+                return;
+            }
+
+            Data.sawFaultHint = true;
+            _dirty = true;
         }
 
         public static void SetSound(bool on)

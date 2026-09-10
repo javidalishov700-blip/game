@@ -25,6 +25,15 @@ namespace SliceBlast.Core
         [SerializeField] private float thresholdPerStreak = 0.002f;
         [SerializeField] private float snapSpeedScale = 0.0045f;
 
+        // Landing on a layer that was itself sliced is harder — damaged footing. This is what
+        // stops the fault line from rewarding sloppy play: a miss now costs width *and* makes
+        // the very next placement tighter, so damage is a debt paid immediately rather than a
+        // charge you bank for later.
+        //
+        // It cannot spiral, which is what makes it fair: a clean placement on a cracked layer
+        // puts an undamaged layer on top, so the penalty lasts exactly one tap per mistake.
+        [SerializeField, Range(0.4f, 1f)] private float crackedFootingPenalty = 0.75f;
+
         [Header("Slice")]
         [SerializeField] private float minChunkSize = 0.02f;
         [SerializeField] private float chunkImpulse = 1.8f;
@@ -94,6 +103,14 @@ namespace SliceBlast.Core
                               + flow.TutorialAssist;
 
             threshold = Mathf.Min(threshold, reference * (maxThresholdFraction + magnetBonus * 0.5f));
+
+            // Applied after the clamp on purpose: the penalty has to survive a player who is
+            // already pinned against the ceiling by streak and speed, which is exactly the
+            // situation where a free pass would be most noticeable.
+            if (top.IsCracked)
+            {
+                threshold *= crackedFootingPenalty;
+            }
 
             if (Mathf.Abs(delta) <= threshold)
             {

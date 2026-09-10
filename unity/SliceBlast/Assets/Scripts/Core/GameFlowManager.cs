@@ -81,11 +81,16 @@ namespace SliceBlast.Core
 
         [Header("Fault Line")]
         // A sliced layer stays in the tower but is damaged, and a blast that reaches one keeps
-        // going down through it. This is the one mechanic in the game that pays the player for
-        // their own mistakes: a scrappy early tower is a stack of charges waiting for the first
-        // blast to reach them, which is why a chain pays double per layer.
+        // going down through it.
+        //
+        // A chained layer pays *less* than one the blast was asked for, and that is the whole
+        // balance of the mechanic. Damage is a debt: it costs width immediately, it makes the
+        // very next placement harder (see BlockSlicer's cracked-footing penalty), and the
+        // chain is what finally clears it. Paying a premium for chained layers would have made
+        // the optimal line "miss on purpose, then cash in" — the spectacle is the reward here,
+        // not the score.
         [SerializeField] private int maxChainLayers = 12;
-        [SerializeField] private int chainLayerBonus = 30;
+        [SerializeField] private int chainLayerBonus = 10;
         [SerializeField] private float chainShakePerLayer = 0.12f;
 
         [Header("Shields")]
@@ -96,8 +101,11 @@ namespace SliceBlast.Core
         [SerializeField] private int blastLayerBonus = 15;
 
         [Header("Coins")]
+        // Chained layers pay the same as requested ones, not more. Coins are the meta
+        // currency, and making damage the fastest way to earn them would push the same
+        // "miss on purpose" line the score already refuses to reward.
         [SerializeField] private int coinsPerBlastLayer = 2;
-        [SerializeField] private int coinsPerChainLayer = 5;
+        [SerializeField] private int coinsPerChainLayer = 2;
         [SerializeField] private int scorePerCoin = 25;
 
         // Onboarding grace: the very first block can never kill the run.

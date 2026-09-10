@@ -540,6 +540,17 @@ namespace SliceBlast.Bootstrap
 
                 case PlacementKind.Sliced:
                     _audio.PlaySlice();
+
+                    // The fault line is invisible as a rule: the player sees a layer go dark
+                    // and has no way to know a blast will tear through it later. Said once,
+                    // the first time it ever happens to them, and never again — an unexplained
+                    // mechanic is a mechanic nobody plays around.
+                    if (!PlayerProfile.Data.sawFaultHint)
+                    {
+                        PlayerProfile.MarkFaultHintSeen();
+                        _hud.ShowBanner("CRACKED", "BLASTS CHAIN THROUGH DAMAGE", MissRed);
+                    }
+
                     break;
 
                 case PlacementKind.Shielded:
