@@ -6,6 +6,8 @@ using SliceBlast.Audio;
 using SliceBlast.Core;
 using SliceBlast.Feedback;
 using SliceBlast.Meta;
+using SliceBlast.Social;
+using SliceBlast.Store;
 using SliceBlast.UI;
 using UnityEngine;
 using UnityEngine.EventSystems;
@@ -52,6 +54,7 @@ namespace SliceBlast.Bootstrap
         private GameFlowManager _flow;
         private AudioDirector _audio;
         private GameHud _hud;
+        private ShopScreen _shop;
         private PoolManager _pools;
 
         private bool _gameOver;
@@ -170,8 +173,16 @@ namespace SliceBlast.Bootstrap
             _hud.SoundToggled += OnSoundToggled;
             _hud.HapticsToggled += OnHapticsToggled;
             _hud.ContinueRequested += OnContinueRequested;
+            _hud.ShopRequested += OnShopRequested;
+            _hud.LeaderboardRequested += OnLeaderboardRequested;
+
+            BuildShop(hudObject.transform);
 
             AdsManager.EnsureInstance();
+
+            // Asked for once, early, and never again: Game Center shows its own sign-in
+            // banner, and declining is a normal outcome the game carries on without.
+            Leaderboards.Authenticate();
 
             GameObject spawnerObject = new GameObject("Spawner");
             spawnerObject.transform.SetParent(transform, false);
@@ -191,9 +202,137 @@ namespace SliceBlast.Bootstrap
             flowObject.SetActive(true);
         }
 
+        /// <summary>
+        /// The shop is the last child of the HUD's canvas, so it draws over everything the
+        /// HUD built without needing a canvas or a sorting order of its own. Constructed with
+        /// a RectTransform up front — a plain GameObject gets a Transform, and the cast the
+        /// screen does on its own transform would fail on the first line of Build.
+        /// </summary>
+        private void BuildShop(Transform canvasRoot)
+        {
+            GameObject shopObject = new GameObject("Shop", typeof(RectTransform));
+            shopObject.transform.SetParent(canvasRoot, false);
+
+            _shop = shopObject.AddComponent<ShopScreen>();
+            _shop.Build(UiKit.ResolveFont());
+
+            _shop.Closed += OnShopClosed;
+            _shop.PurchaseResolved += OnPurchaseResolved;
+            _shop.RemoveAdsRequested += OnRemoveAdsRequested;
+            _shop.RestoreRequested += OnRestoreRequested;
+            _shop.CoinPackRequested += OnCoinPackRequested;
+
+            // Touching Instance is what brings the store up, so this is also the point the
+            // catalogue starts loading — well before the player can reach a buy button.
+            IapManager store = IapManager.Instance;
+            store.PurchaseFinished += OnStorePurchaseFinished;
+            store.PriceResolved += OnStorePriceResolved;
+        }
+
+        private void OnStorePurchaseFinished(bool succeeded)
+        {
+            OnPurchaseResolved(succeeded);
+
+            if (_shop != null)
+            {
+                _shop.Refresh();
+            }
+        }
+
+        private void OnStorePriceResolved(string productId, string price)
+        {
+            if (_shop != null)
+            {
+                _shop.SetCoinPackPrice(productId, price);
+            }
+        }
+
+        private void OnLeaderboardRequested()
+        {
+            Leaderboards.ShowUi();
+        }
+
+        private void OnShopRequested()
+        {
+            if (_shop == null)
+            {
+                return;
+            }
+
+            // Opening from inside a live run would leave a block swinging behind the sheet,
+            // so anywhere it can be reached mid-run it pauses first.
+            if (_flow != null && _flow.IsRunning && !_flow.IsPaused)
+            {
+                _flow.SetPaused(true);
+            }
+
+            _shop.Show();
+        }
+
+        private void OnShopClosed()
+        {
+            if (_shop == null)
+            {
+                return;
+            }
+
+            _shop.Hide();
+            _hud.SetShopBadge(MissionSystem.ClaimableCount());
+        }
+
+        private void OnPurchaseResolved(bool succeeded)
+        {
+            if (succeeded)
+            {
+                // The rising arpeggio neon uses when it charges — already the game's "you
+                // just got something good" sound, so a purchase borrows it rather than
+                // introducing a second one that means the same thing.
+                _audio.PlayNeonCharge();
+                Haptics.Medium();
+            }
+            else
+            {
+                _audio.PlayShatter();
+            }
+        }
+
+        private void OnRemoveAdsRequested()
+        {
+            IapManager.Instance.Purchase(IapManager.RemoveAdsProductId);
+        }
+
+        private void OnRestoreRequested()
+        {
+            IapManager.Instance.Restore();
+        }
+
+        private void OnCoinPackRequested(string productId)
+        {
+            IapManager.Instance.Purchase(productId);
+        }
+
         private void OnDestroy()
         {
             Unsubscribe();
+
+            if (_shop != null)
+            {
+                _shop.Closed -= OnShopClosed;
+                _shop.PurchaseResolved -= OnPurchaseResolved;
+                _shop.RemoveAdsRequested -= OnRemoveAdsRequested;
+                _shop.RestoreRequested -= OnRestoreRequested;
+                _shop.CoinPackRequested -= OnCoinPackRequested;
+            }
+
+            // The store outlives this object (DontDestroyOnLoad), so its subscriptions have
+            // to come off explicitly or a reload leaves it calling into a destroyed HUD.
+            IapManager store = IapManager.Existing;
+
+            if (store != null)
+            {
+                store.PurchaseFinished -= OnStorePurchaseFinished;
+                store.PriceResolved -= OnStorePriceResolved;
+            }
 
             if (_hud != null)
             {
@@ -203,6 +342,8 @@ namespace SliceBlast.Bootstrap
                 _hud.SoundToggled -= OnSoundToggled;
                 _hud.HapticsToggled -= OnHapticsToggled;
                 _hud.ContinueRequested -= OnContinueRequested;
+                _hud.ShopRequested -= OnShopRequested;
+                _hud.LeaderboardRequested -= OnLeaderboardRequested;
             }
         }
 
@@ -286,6 +427,15 @@ namespace SliceBlast.Bootstrap
                 _pools.Tick(Time.deltaTime);
             }
 
+            // Both paths below start or restart a run on a tap anywhere. The shop's backdrop
+            // is a raycast target, so PointerOverUi already covers it — but that makes "the
+            // game does not start behind an open sheet" a property of one raycastTarget flag
+            // several files away. Checked outright instead.
+            if (_shop != null && _shop.IsOpen)
+            {
+                return;
+            }
+
             if (_home)
             {
                 if (Time.unscaledTime - _homeTime < homeInputDelay)
@@ -332,6 +482,12 @@ namespace SliceBlast.Bootstrap
             _hud.ShowPaused(false);
             _hud.ShowHint(false);
             _hud.ShowHome(best);
+
+            // A day can roll over while the app sits open on the title screen, so the set is
+            // re-checked here rather than only at launch.
+            MissionSystem.EnsureToday();
+            _hud.SetShopBadge(MissionSystem.ClaimableCount());
+
             _audio.PlayIntro();
             SetSkyTier(0, true);
         }
@@ -601,9 +757,18 @@ namespace SliceBlast.Bootstrap
 
             _audio.PlayGameOver();
             _hud.ShowHint(false);
-            _hud.ShowGameOver(score, best);
+            _hud.ShowGameOver(score, best, _flow != null ? _flow.RunCoins : 0);
+            Leaderboards.ReportBestScore(best);
+            _hud.SetShopBadge(MissionSystem.ClaimableCount());
 
-            AdsManager.Instance.NotifyRunEnded();
+            // A player who paid to remove ads is never shown one, interstitial or otherwise;
+            // the rewarded continue stays available because that one is opt-in and is the
+            // thing they would actually miss.
+            if (!PlayerProfile.AdsRemoved)
+            {
+                AdsManager.Instance.NotifyRunEnded();
+            }
+
             _hud.SetContinueAvailable(AdsManager.Instance.IsRewardedReady);
         }
 

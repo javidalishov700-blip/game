@@ -1,6 +1,5 @@
 using System;
 using UnityEngine;
-using UnityEngine.EventSystems;
 using UnityEngine.UI;
 
 namespace SliceBlast.UI
@@ -39,6 +38,8 @@ namespace SliceBlast.UI
         public event Action<bool> HapticsToggled;
         /// <summary>The player chose to watch a rewarded ad for one more block to continue on.</summary>
         public event Action ContinueRequested;
+        public event Action ShopRequested;
+        public event Action LeaderboardRequested;
 
         private RectTransform _safeArea;
         private Rect _appliedSafeArea;
@@ -60,6 +61,9 @@ namespace SliceBlast.UI
         private Text _coinText;
         private Text _coinPop;
         private Text _shieldCount;
+        private Text _homeShopBadge;
+        private Image _homeShopBadgeDot;
+        private Text _runCoins;
 
         private Image _flash;
         private Image _shieldIcon;
@@ -372,6 +376,47 @@ namespace SliceBlast.UI
                 HapticsToggled?.Invoke(_hapticsOn);
             });
 
+            MenuControl shop = CreateButton("HomeShop", screen, "WORKSHOP", 50, Panel, Color.white, IconShape.Bag);
+            RectTransform shopRect = shop.Root;
+            shopRect.anchorMin = new Vector2(0.5f, 0f);
+            shopRect.anchorMax = new Vector2(0.5f, 0f);
+            shopRect.pivot = new Vector2(0.5f, 0f);
+            shopRect.sizeDelta = new Vector2(420f, 118f);
+            shopRect.anchoredPosition = new Vector2(-60f, 330f);
+            shop.Button.onClick.AddListener(() => ShopRequested?.Invoke());
+
+            MenuControl board = CreateButton("HomeLeaderboard", screen, string.Empty, 0, Panel, Gold, IconShape.Crown);
+            RectTransform boardRect = board.Root;
+            boardRect.anchorMin = new Vector2(0.5f, 0f);
+            boardRect.anchorMax = new Vector2(0.5f, 0f);
+            boardRect.pivot = new Vector2(0.5f, 0f);
+            boardRect.sizeDelta = new Vector2(118f, 118f);
+            boardRect.anchoredPosition = new Vector2(260f, 330f);
+            board.Button.onClick.AddListener(() => LeaderboardRequested?.Invoke());
+
+            // Sits on the workshop button and counts finished, unclaimed missions — the one
+            // thing on the title screen that should pull the eye when there is something to
+            // collect, and be invisible when there is not.
+            _homeShopBadge = CreateText("HomeShopBadge", screen, 40, FontStyle.Bold, Ink, TextAnchor.MiddleCenter);
+            RectTransform badgeRect = _homeShopBadge.rectTransform;
+            badgeRect.anchorMin = new Vector2(0.5f, 0f);
+            badgeRect.anchorMax = new Vector2(0.5f, 0f);
+            badgeRect.pivot = new Vector2(0.5f, 0f);
+            badgeRect.sizeDelta = new Vector2(60f, 60f);
+            badgeRect.anchoredPosition = new Vector2(120f, 400f);
+
+            _homeShopBadgeDot = CreateImage("HomeShopBadgeDot", screen, Gold);
+            _homeShopBadgeDot.sprite = IconFactory.GetSprite(IconShape.Panel);
+            _homeShopBadgeDot.type = Image.Type.Sliced;
+            RectTransform dotRect = _homeShopBadgeDot.rectTransform;
+            dotRect.anchorMin = badgeRect.anchorMin;
+            dotRect.anchorMax = badgeRect.anchorMax;
+            dotRect.pivot = badgeRect.pivot;
+            dotRect.sizeDelta = badgeRect.sizeDelta;
+            dotRect.anchoredPosition = badgeRect.anchoredPosition;
+            // Drawn before the number so the number sits on top of it.
+            dotRect.SetSiblingIndex(badgeRect.GetSiblingIndex());
+
             CreateLink("Privacy", screen, "PRIVACY POLICY", -175f, PrivacyUrl);
             CreateLink("Terms", screen, "TERMS OF USE", 175f, TermsUrl);
 
@@ -487,9 +532,24 @@ namespace SliceBlast.UI
             _continueButton.Button.onClick.AddListener(() => ContinueRequested?.Invoke());
             _continueButton.Root.gameObject.SetActive(false);
 
-            _restart = CreateText("RestartHint", screen, 44, FontStyle.Bold, new Color(1f, 1f, 1f, 0.7f), TextAnchor.MiddleCenter);
-            Anchor(_restart.rectTransform, new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(0f, 170f), new Vector2(0f, 250f));
+            MenuControl shop = CreateButton("GameOverShop", screen, "WORKSHOP", 44, new Color(1f, 1f, 1f, 0.12f), Color.white, IconShape.Bag);
+            RectTransform shopRect = shop.Root;
+            shopRect.anchorMin = new Vector2(0.5f, 0f);
+            shopRect.anchorMax = new Vector2(0.5f, 0f);
+            shopRect.pivot = new Vector2(0.5f, 0.5f);
+            shopRect.sizeDelta = new Vector2(460f, 100f);
+            shopRect.anchoredPosition = new Vector2(0f, 200f);
+            shop.Button.onClick.AddListener(() => ShopRequested?.Invoke());
+
+            _restart = CreateText("RestartHint", screen, 40, FontStyle.Bold, new Color(1f, 1f, 1f, 0.7f), TextAnchor.MiddleCenter);
+            Anchor(_restart.rectTransform, new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(0f, 84f), new Vector2(0f, 146f));
             _restart.text = "OR TAP ANYWHERE";
+
+            // Just clear of the header panel's bottom edge rather than inside it: the panel
+            // already carries the score and the record, and a third line crammed against its
+            // border reads as an overflow.
+            _runCoins = CreateText("RunCoins", screen, 46, FontStyle.Bold, Gold, TextAnchor.MiddleCenter);
+            Anchor(_runCoins.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0f, -846f), new Vector2(0f, -786f));
         }
 
         /// <summary>
@@ -673,11 +733,32 @@ namespace SliceBlast.UI
             _chromeAlpha = visible ? 1f : 0f;
         }
 
-        public void ShowGameOver(int score, int best)
+        /// <summary>The count on the workshop button: finished missions waiting to be claimed.</summary>
+        public void SetShopBadge(int count)
+        {
+            bool show = count > 0;
+
+            if (_homeShopBadge != null)
+            {
+                _homeShopBadge.text = show ? count.ToString() : string.Empty;
+            }
+
+            if (_homeShopBadgeDot != null && _homeShopBadgeDot.gameObject.activeSelf != show)
+            {
+                _homeShopBadgeDot.gameObject.SetActive(show);
+            }
+        }
+
+        public void ShowGameOver(int score, int best, int coins)
         {
             if (_finalScore != null)
             {
                 _finalScore.text = score.ToString();
+            }
+
+            if (_runCoins != null)
+            {
+                _runCoins.text = coins > 0 ? "+" + coins + " COINS" : string.Empty;
             }
 
             if (_bestScore != null)
@@ -991,207 +1072,55 @@ namespace SliceBlast.UI
 
         private static void Stretch(RectTransform rect)
         {
-            rect.anchorMin = Vector2.zero;
-            rect.anchorMax = Vector2.one;
-            rect.offsetMin = Vector2.zero;
-            rect.offsetMax = Vector2.zero;
+            UiKit.Stretch(rect);
         }
 
         private static void SetAlpha(Graphic graphic, float alpha)
         {
-            Color c = graphic.color;
-            c.a = alpha;
-            graphic.color = c;
+            UiKit.SetAlpha(graphic, alpha);
         }
 
         private static RectTransform CreateChild(string name, Transform parent)
         {
-            GameObject go = new GameObject(name, typeof(RectTransform));
-            RectTransform rect = (RectTransform)go.transform;
-            rect.SetParent(parent, false);
-            return rect;
+            return UiKit.CreateChild(name, parent);
         }
 
         private static Image CreateImage(string name, Transform parent, Color color)
         {
-            RectTransform rect = CreateChild(name, parent);
-            Image image = rect.gameObject.AddComponent<Image>();
-            image.color = color;
-            image.raycastTarget = false;
-            return image;
+            return UiKit.CreateImage(name, parent, color);
         }
 
         private Text CreateText(string name, Transform parent, int size, FontStyle style, Color color, TextAnchor anchor, bool outlined = false)
         {
-            RectTransform rect = CreateChild(name, parent);
-
-            Text text = rect.gameObject.AddComponent<Text>();
-            text.font = _font;
-            text.fontSize = size;
-            text.fontStyle = style;
-            text.color = color;
-            text.alignment = anchor;
-            text.horizontalOverflow = HorizontalWrapMode.Overflow;
-            text.verticalOverflow = VerticalWrapMode.Overflow;
-            text.raycastTarget = false;
-
-            // A word sitting on a coloured panel needs a rim, not a drop shadow, to survive
-            // whatever the panel behind it happens to be.
-            if (outlined)
-            {
-                Outline outline = rect.gameObject.AddComponent<Outline>();
-                outline.effectColor = new Color(0f, 0f, 0f, 0.55f);
-                outline.effectDistance = new Vector2(2.5f, -2.5f);
-            }
-            else
-            {
-                Shadow shadow = rect.gameObject.AddComponent<Shadow>();
-                shadow.effectColor = new Color(0f, 0f, 0f, 0.55f);
-                shadow.effectDistance = new Vector2(3f, -3f);
-            }
-
-            return text;
+            return UiKit.CreateText(_font, name, parent, size, style, color, anchor, outlined);
         }
 
-        /// <summary>
-        /// A menu control: the tap target, the glyph and the word as three separate objects.
-        /// The real bug that once made every one of these labels invisible was much plainer
-        /// than the hierarchy — <see cref="CreateButton"/> built the label's Text component
-        /// and never assigned its <c>text</c> string, so it rendered as an empty, correctly
-        /// coloured, correctly sized box. SOUND and VIBRATION looked fine only because
-        /// <see cref="SetSoundLabel"/>/<see cref="SetHapticsLabel"/> happen to set that string
-        /// themselves on load; RESUME, REPLAY, HOME and PLAY AGAIN have no such second call
-        /// and stayed blank. Keeping the label as a sibling rather than a child of the button
-        /// is still worth doing — it is not, itself, at the mercy of the button's own
-        /// <see cref="Selectable"/> transition — but it was never what was hiding the text.
-        /// </summary>
-        private sealed class MenuControl
-        {
-            public RectTransform Root;
-            public Button Button;
-            public Image Icon;
-            public Text Label;
-        }
-
+        // The label bug worth remembering, since the shape of this control still carries its
+        // scar tissue: every button in the game once rendered blank because CreateButton built
+        // the label's Text component and never assigned its `text` string. SOUND and VIBRATION
+        // looked fine only because SetSoundLabel/SetHapticsLabel set that string themselves on
+        // load; RESUME, REPLAY, HOME and PLAY AGAIN had no such second call and stayed empty.
+        // Keeping the label a sibling of the button rather than a child is still worth doing —
+        // it is not then at the mercy of the button's own Selectable transition — but that was
+        // never what hid the text.
         private MenuControl CreateButton(string name, Transform parent, string label, int fontSize, Color background, Color foreground, IconShape icon)
         {
-            MenuControl control = new MenuControl();
-
-            RectTransform root = CreateChild(name, parent);
-            control.Root = root;
-
-            // The tap target: a rounded panel with nothing underneath it to tint.
-            RectTransform hit = CreateChild("Hit", root);
-            Stretch(hit);
-
-            Image image = hit.gameObject.AddComponent<Image>();
-            image.sprite = IconFactory.GetSprite(IconShape.Panel);
-            image.type = Image.Type.Sliced;
-            image.color = background;
-            image.raycastTarget = true;
-
-            Button button = hit.gameObject.AddComponent<Button>();
-            button.targetGraphic = image;
-            button.transition = Selectable.Transition.ColorTint;
-
-            ColorBlock colors = ColorBlock.defaultColorBlock;
-            colors.normalColor = Color.white;
-            colors.highlightedColor = Color.white;
-            colors.selectedColor = Color.white;
-            colors.pressedColor = new Color(0.74f, 0.74f, 0.74f, 1f);
-            colors.disabledColor = Color.white;
-            colors.colorMultiplier = 1f;
-            colors.fadeDuration = 0.06f;
-            button.colors = colors;
-
-            control.Button = button;
-
-            bool hasLabel = !string.IsNullOrEmpty(label);
-
-            if (icon != IconShape.None)
-            {
-                Image glyph = CreateImage("Icon", root, foreground);
-                glyph.sprite = IconFactory.GetSprite(icon);
-                glyph.preserveAspect = true;
-
-                RectTransform glyphRect = glyph.rectTransform;
-                glyphRect.anchorMin = new Vector2(hasLabel ? 0f : 0.5f, 0.5f);
-                glyphRect.anchorMax = glyphRect.anchorMin;
-                glyphRect.pivot = new Vector2(0.5f, 0.5f);
-                glyphRect.sizeDelta = hasLabel ? new Vector2(74f, 74f) : new Vector2(62f, 62f);
-                glyphRect.anchoredPosition = hasLabel ? new Vector2(92f, 0f) : Vector2.zero;
-
-                control.Icon = glyph;
-            }
-
-            if (hasLabel)
-            {
-                Text text = CreateText(name + "Label", root, fontSize, FontStyle.Bold, foreground, TextAnchor.MiddleCenter, true);
-                Anchor(text.rectTransform, Vector2.zero, Vector2.one, new Vector2(160f, 0f), new Vector2(-40f, 0f));
-                text.text = label;
-                control.Label = text;
-            }
-
-            // Leaving a control selected keeps it highlighted for the rest of the run.
-            button.onClick.AddListener(Deselect);
-
-            return control;
+            return UiKit.CreateButton(_font, name, parent, label, fontSize, background, foreground, icon);
         }
 
         private static void Deselect()
         {
-            EventSystem events = EventSystem.current;
-
-            if (events != null)
-            {
-                events.SetSelectedGameObject(null);
-            }
+            UiKit.Deselect();
         }
 
         private static void Anchor(RectTransform rect, Vector2 anchorMin, Vector2 anchorMax, Vector2 offsetMin, Vector2 offsetMax)
         {
-            rect.anchorMin = anchorMin;
-            rect.anchorMax = anchorMax;
-            rect.offsetMin = offsetMin;
-            rect.offsetMax = offsetMax;
+            UiKit.Anchor(rect, anchorMin, anchorMax, offsetMin, offsetMax);
         }
 
         private static Font ResolveFont()
         {
-            Font font = null;
-
-            try
-            {
-                font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-            }
-            catch (Exception)
-            {
-                font = null;
-            }
-
-            if (font == null)
-            {
-                try
-                {
-                    font = Resources.GetBuiltinResource<Font>("Arial.ttf");
-                }
-                catch (Exception)
-                {
-                    font = null;
-                }
-            }
-
-            if (font == null)
-            {
-                string[] installed = Font.GetOSInstalledFontNames();
-
-                if (installed != null && installed.Length > 0)
-                {
-                    font = Font.CreateDynamicFontFromOSFont(installed[0], 48);
-                }
-            }
-
-            return font;
+            return UiKit.ResolveFont();
         }
     }
 }

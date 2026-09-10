@@ -96,6 +96,14 @@ namespace SliceBlast.Ads
         /// <summary>Call once per completed run, after the run-over screen is shown.</summary>
         public void NotifyRunEnded()
         {
+            // Guarded here as well as at the call site. A player who paid to remove ads must
+            // never see one, and "every caller remembered to check" is not a guarantee — the
+            // one place that actually shows the ad is.
+            if (SliceBlast.Meta.PlayerProfile.AdsRemoved)
+            {
+                return;
+            }
+
             _runsSinceInterstitial++;
 
             if (_runsSinceInterstitial < RunsBetweenInterstitials)
