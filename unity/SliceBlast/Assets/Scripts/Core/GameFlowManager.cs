@@ -122,7 +122,6 @@ namespace SliceBlast.Core
         [SerializeField] private float homeZoom = 1.16f;
         [SerializeField] private int targetFrameRate = 60;
 
-        private static readonly Color Gold = new Color(1f, 0.79f, 0.29f);
         private static readonly Color Mint = new Color(0.6f, 1f, 0.92f);
 
         private readonly List<MovingBlock> _stack = new List<MovingBlock>(128);
@@ -974,11 +973,17 @@ namespace SliceBlast.Core
             {
                 // The exposed layer becomes the new base: clearing downwards hands the
                 // player back the width those lower blocks still have.
+                //
+                // This is also what closes the fault line's loop, and it is worth spelling
+                // out because it is load-bearing and not obvious: a deep chain digs down to
+                // an older, *wider* layer, so the run that earned the chain by playing badly
+                // is handed a wide block to restart from. Sloppy play narrows the tower and
+                // plants charges; the blast that finds them pays the width back.
                 Vector3 exposed = top.CachedTransform.localScale;
                 _nextSize = new Vector2(exposed.x, exposed.z);
 
                 nextTop = top.CachedTransform.position;
-                PlayImpact(top, 0.3f, 3f, true, Gold);
+                PlayImpact(top, 0.3f, 3f, true, ThemeCatalogue.Equipped.Accent);
 
                 if (cameraRig != null)
                 {

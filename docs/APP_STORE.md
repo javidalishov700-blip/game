@@ -236,3 +236,76 @@ Before submitting a build with ads on:
   reviewer actually checks, so update it to match this file, not the other way around.
 - **App Review Notes** (section 7 above) already mentions the ads — nothing extra needed here
   once that section's Notes text is pasted in.
+
+## 10. The meta layer (coins, workshop, purchases, Game Center)
+
+Landed in code, **not yet shippable**. Everything below has to be done before a build
+carrying it goes anywhere near review.
+
+### 10.1 Version
+
+`SliceBlastBuild.cs` still stamps **1.1.0**, on purpose: 1.1 is in review as this is written
+and may need a fresh build under the same version string. The moment 1.1 is approved (or
+abandoned), bump `PlayerSettings.bundleVersion` and `codemagic.yaml`'s `APP_VERSION` to
+**1.2.0** — App Store Connect rejects a new version that reuses an approved version string
+(error 90062).
+
+### 10.2 Unity IAP is not installed yet
+
+`Scripts/Store/IapManager.cs` is written but compiles to a stub, gated behind
+`SLICEBLAST_IAP_ENABLED`. The define is **deliberately not baked** into
+`SliceBlastBuild.ApplyPlayerSettings` — a define without its package is a compile failure,
+which is exactly what nearly happened with the App Tracking Transparency package. Order:
+
+1. Unity → **Window → Package Manager → Unity Registry → In-App Purchasing → Install**.
+2. Commit the resulting `Packages/manifest.json` change. *(Installing through the Package
+   Manager edits that file locally; if it is not committed, CI builds a project without the
+   package and the define breaks the build.)*
+3. Only then add `AddScriptingDefine(named, "SLICEBLAST_IAP_ENABLED");` to
+   `SliceBlastBuild.ApplyPlayerSettings`, next to the two defines already there.
+
+### 10.3 Products to create in App Store Connect
+
+**Features → In-App Purchases**. The identifiers must match `IapManager.RemoveAdsProductId`
+and `ShopScreen.CoinPackIds` character for character:
+
+| product ID | type | grants |
+|---|---|---|
+| `com.javidalishov.sliceblast.removeads` | Non-Consumable | permanently disables interstitials |
+| `com.javidalishov.sliceblast.coins.small` | Consumable | 1,200 coins |
+| `com.javidalishov.sliceblast.coins.medium` | Consumable | 4,000 coins |
+| `com.javidalishov.sliceblast.coins.large` | Consumable | 12,000 coins |
+
+Each needs a display name, description, price tier, and a review screenshot (a capture of the
+workshop's bottom row is enough). Products are reviewed **with** the build the first time, so
+submit them attached to the 1.2 version rather than on their own.
+
+### 10.4 Game Center
+
+**Features → Game Center → Leaderboards → +**, with Leaderboard ID
+`com.javidalishov.sliceblast.best`, format *Integer*, sort *High to Low*. That exact string is
+in `Scripts/Social/Leaderboards.cs`. No package and no entitlement file to edit — the Social
+API is part of the engine and Unity writes the capability into the Xcode project itself.
+
+### 10.5 Metadata that has to change again
+
+This is the part that got the app rejected under **Guideline 2.3.6** last time, so it is worth
+being blunt: the listing currently says the game has **no purchases**, and with 10.3 done that
+is false.
+
+- The **Description** in section 3 has a `• No purchases, no accounts…` line. It must go, and
+  the optional purchases must be described.
+- App Store Connect's **In-App Purchases** section on the version page must list the products.
+- **App Privacy** does not change: purchases run through Apple, the game stores the outcome
+  locally in its own profile, and nothing new is collected or transmitted.
+- The **support page** (`steady-site`, `public/sliceblast/legal/support.html`) answers "Are
+  there ads or purchases?" with "No purchases" — update it in that repository at the same time.
+
+### 10.6 What is already correct
+
+- Ads are suppressed for anyone who buys Remove Ads, enforced inside `AdsManager` rather than
+  only at the call site.
+- Restore Purchases is reachable from the workshop's footer, which iOS requires for
+  non-consumables.
+- Coins are banked as they are earned and the profile is flushed on background, so a purchase
+  cannot be lost to a force-quit.

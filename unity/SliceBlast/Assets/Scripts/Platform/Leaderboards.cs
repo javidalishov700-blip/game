@@ -1,5 +1,5 @@
-// Game Center, through UnityEngine.SocialPlatforms. Deliberately not a package and not a
-// plugin: the Social API is part of the engine, and on iOS it is backed by GameKit already,
+// Game Center, through Unity's built-in Social API. Deliberately not a package and not a
+// plugin: UnityEngine.Social is part of the engine and is backed by GameKit on iOS already,
 // so a global leaderboard costs this project no new dependency, no server and nothing extra
 // for the build pipeline to resolve — which, given how much of this app's history has been
 // spent fighting CocoaPods, is the entire reason it is done this way.
@@ -7,9 +7,8 @@
 // Authentication is fire-and-forget. Everything below is safe to call whether or not it
 // succeeded: an unauthenticated report is dropped, and the board UI simply does not open.
 using UnityEngine;
-using UnityEngine.SocialPlatforms;
 
-namespace SliceBlast.Social
+namespace SliceBlast.Platform
 {
     public static class Leaderboards
     {
@@ -19,7 +18,14 @@ namespace SliceBlast.Social
 
         private static bool _attempted;
 
-        public static bool IsAuthenticated => Social.localUser != null && Social.localUser.authenticated;
+        // Every reference to the engine's Social class is fully qualified on purpose. This
+        // file used to live in a namespace called SliceBlast.Social, where a bare `Social`
+        // binds to *that namespace* rather than to UnityEngine.Social — C# resolves the
+        // enclosing namespace first, and the result is a compile error about `localUser` not
+        // existing in a namespace. Renaming to Platform fixes it; qualifying keeps it fixed
+        // if anyone ever moves this file back.
+        public static bool IsAuthenticated =>
+            UnityEngine.Social.localUser != null && UnityEngine.Social.localUser.authenticated;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         private static void ResetStatics()
@@ -41,12 +47,12 @@ namespace SliceBlast.Social
 
             _attempted = true;
 
-            if (Social.localUser == null)
+            if (UnityEngine.Social.localUser == null)
             {
                 return;
             }
 
-            Social.localUser.Authenticate(success => { });
+            UnityEngine.Social.localUser.Authenticate(success => { });
         }
 
         /// <summary>Posts a score. Silently ignored when the player is not signed in.</summary>
@@ -57,7 +63,7 @@ namespace SliceBlast.Social
                 return;
             }
 
-            Social.ReportScore(score, BestScoreId, success => { });
+            UnityEngine.Social.ReportScore(score, BestScoreId, success => { });
         }
 
         /// <summary>
@@ -73,7 +79,7 @@ namespace SliceBlast.Social
                 return false;
             }
 
-            Social.ShowLeaderboardUI();
+            UnityEngine.Social.ShowLeaderboardUI();
             return true;
         }
     }
