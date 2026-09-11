@@ -90,8 +90,11 @@ namespace SliceBlast.UI
         private ThemeRow[] _themeRows;
         private MissionRow[] _missionRows;
         private MenuControl _removeAds;
+        private MenuControl _restore;
+        private RectTransform[] _coinPacks;
         private Text _missionBadge;
         private Text[] _coinPackLabels;
+        private bool _storeAvailable;
 
         public bool IsOpen { get; private set; }
 
@@ -386,7 +389,8 @@ namespace SliceBlast.UI
             adsRect.offsetMax = new Vector2(-40f, 226f);
             _removeAds.Button.onClick.AddListener(() => RemoveAdsRequested?.Invoke());
 
-            MenuControl restore = UiKit.CreateButton(_font, "Restore", root, "RESTORE PURCHASES", 32, new Color(1f, 1f, 1f, 0.08f), UiKit.Dim, IconShape.None);
+            _restore = UiKit.CreateButton(_font, "Restore", root, "RESTORE PURCHASES", 32, new Color(1f, 1f, 1f, 0.08f), UiKit.Dim, IconShape.None);
+            MenuControl restore = _restore;
             RectTransform restoreRect = restore.Root;
             restoreRect.anchorMin = new Vector2(0f, 0f);
             restoreRect.anchorMax = new Vector2(1f, 0f);
@@ -411,6 +415,7 @@ namespace SliceBlast.UI
         private void BuildCoinPacks(RectTransform root)
         {
             _coinPackLabels = new Text[CoinPackIds.Length];
+            _coinPacks = new RectTransform[CoinPackIds.Length];
 
             for (int i = 0; i < CoinPackIds.Length; i++)
             {
@@ -443,6 +448,39 @@ namespace SliceBlast.UI
 
                 string id = CoinPackIds[i];
                 pack.Button.onClick.AddListener(() => CoinPackRequested?.Invoke(id));
+                _coinPacks[i] = rect;
+            }
+        }
+
+        /// <summary>
+        /// Shows or hides everything that spends real money. A build without the Unity IAP
+        /// package — or a device where the store never came up — cannot complete any of these,
+        /// and a row that takes a tap and does nothing is exactly what App Review rejects. The
+        /// run-over screen already holds its rewarded-ad button back on the same principle.
+        /// </summary>
+        public void SetStoreAvailable(bool available)
+        {
+            _storeAvailable = available;
+
+            if (_removeAds != null)
+            {
+                _removeAds.Root.gameObject.SetActive(available);
+            }
+
+            if (_restore != null)
+            {
+                _restore.Root.gameObject.SetActive(available);
+            }
+
+            if (_coinPacks != null)
+            {
+                for (int i = 0; i < _coinPacks.Length; i++)
+                {
+                    if (_coinPacks[i] != null)
+                    {
+                        _coinPacks[i].gameObject.SetActive(available);
+                    }
+                }
             }
         }
 
@@ -588,7 +626,7 @@ namespace SliceBlast.UI
             _missionBadge.text = claimable > 0 ? claimable.ToString() : string.Empty;
             _missionBadge.color = claimable > 0 ? UiKit.Gold : Color.clear;
 
-            if (_removeAds != null)
+            if (_removeAds != null && _storeAvailable)
             {
                 bool removed = PlayerProfile.AdsRemoved;
                 _removeAds.Button.interactable = !removed;

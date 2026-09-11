@@ -227,6 +227,11 @@ namespace SliceBlast.Bootstrap
             IapManager store = IapManager.Instance;
             store.PurchaseFinished += OnStorePurchaseFinished;
             store.PriceResolved += OnStorePriceResolved;
+
+            // Hidden until the store actually answers. In a build without the Unity IAP
+            // package this stays false forever, which is the correct outcome: the rows would
+            // take a tap and do nothing.
+            _shop.SetStoreAvailable(store.IsReady);
         }
 
         private void OnStorePurchaseFinished(bool succeeded)
@@ -241,10 +246,15 @@ namespace SliceBlast.Bootstrap
 
         private void OnStorePriceResolved(string productId, string price)
         {
-            if (_shop != null)
+            if (_shop == null)
             {
-                _shop.SetCoinPackPrice(productId, price);
+                return;
             }
+
+            // A price coming back is the store's own proof that it is up, so this is also
+            // where the purchase rows become visible.
+            _shop.SetStoreAvailable(true);
+            _shop.SetCoinPackPrice(productId, price);
         }
 
         private void OnLeaderboardRequested()
