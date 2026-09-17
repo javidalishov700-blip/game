@@ -1,16 +1,16 @@
-// Wraps the Google Mobile Ads Unity Plugin behind an interface the rest of the game never has
-// to know the shape of: an interstitial that shows itself on a schedule, and a rewarded ad the
-// player opts into.
+// The game's whole relationship with advertising: when an interstitial is allowed, what a
+// rewarded ad is worth, and whether the player has paid them away. Which network actually
+// serves the ad is an implementation detail behind IAdProvider.
 //
-// Gated behind the SLICEBLAST_ADS_ENABLED scripting define on purpose: the GoogleMobileAds
-// namespace only exists once the Google Mobile Ads Unity Plugin has been imported by hand (see
-// the note at the bottom of this file), and that is a real Unity Editor step nobody has done
-// yet. Without the guard, this file would fail to compile the moment it landed — breaking the
-// whole project, including rebuilds of the version already submitted to Apple, for a feature
-// that was not ready. With the define left off, everything below compiles to inert stubs: ads
-// are simply never shown, nothing else changes.
+// Providers are tried in order and the first one with an ad in hand shows it. That is a
+// client-side waterfall, not mediation — it does not compare what each network would pay, it
+// just takes the first that can fill. For this app that is the right trade: real mediation
+// means another SDK, another account and another review, and the whole point of the second
+// network here is to not be blocked on any one of those again.
 using System;
 using System.Collections;
+using System.Collections.Generic;
+using SliceBlast.Meta;
 using UnityEngine;
 
 namespace SliceBlast.Ads
@@ -22,13 +22,20 @@ namespace SliceBlast.Ads
         // session never carries one, and every one after that costs a fixed number of runs.
         private const int RunsBetweenInterstitials = 3;
 
+        // Apple's ATT prompt silently skips itself — no alert, no error — when requested
+        // before iOS has made the app's window key and visible, and this object is created
+        // during Awake on the very first frame.
+        private const float AttDelaySeconds = 1f;
+
         public static AdsManager Instance { get; private set; }
 
-#if SLICEBLAST_ADS_ENABLED
-        public bool IsRewardedReady => _rewardedAd != null && _rewardedAd.CanShowAd();
-#else
-        public bool IsRewardedReady => false;
-#endif
+        private readonly List<IAdProvider> _providers = new List<IAdProvider>(2);
+
+        private int _runsSinceInterstitial;
+        private bool _initialized;
+
+        /// <summary>True when any provider has a rewarded ad ready to show.</summary>
+        public bool IsRewardedReady => FindRewardedProvider() != null;
 
         /// <summary>Creates the singleton the first time it is needed; safe to call repeatedly.</summary>
         public static AdsManager EnsureInstance()
@@ -45,24 +52,13 @@ namespace SliceBlast.Ads
             return Instance;
         }
 
-#if SLICEBLAST_ADS_ENABLED
-        // Real ad unit IDs from the Slice & Blast AdMob app (iOS-only — this project never
-        // ships Android, so that branch below is still Google's public test IDs).
-#if UNITY_IOS
-        private const string InterstitialAdUnitId = "ca-app-pub-4448830215845263/4186164698";
-        private const string RewardedAdUnitId = "ca-app-pub-4448830215845263/3977341780";
-#elif UNITY_ANDROID
-        private const string InterstitialAdUnitId = "ca-app-pub-3940256099942544/1033173712";
-        private const string RewardedAdUnitId = "ca-app-pub-3940256099942544/5224354917";
-#else
-        private const string InterstitialAdUnitId = "unused";
-        private const string RewardedAdUnitId = "unused";
-#endif
-
-        private GoogleMobileAds.Api.InterstitialAd _interstitialAd;
-        private GoogleMobileAds.Api.RewardedAd _rewardedAd;
-        private int _runsSinceInterstitial;
-        private bool _initialized;
+        private void OnDestroy()
+        {
+            if (Instance == this)
+            {
+                Instance = null;
+            }
+        }
 
         private void Initialize()
         {
@@ -72,25 +68,26 @@ namespace SliceBlast.Ads
             }
 
             _initialized = true;
-            StartCoroutine(RequestAttThenInitAds());
+
+            // Order is the waterfall. A provider whose SDK is not in the build compiles to one
+            // that is never ready, so an entry here costs nothing until its package exists.
+            _providers.Add(new AdMobProvider());
+
+            StartCoroutine(RequestAttThenInitProviders());
         }
 
-        private IEnumerator RequestAttThenInitAds()
+        private IEnumerator RequestAttThenInitProviders()
         {
-            // This runs from Awake, on the very first frame — before iOS has actually made the
-            // app's window key and visible. Apple's ATT prompt silently skips itself (no alert,
-            // no error) when requested that early, so give the app a moment to actually be on
-            // screen first. Must still happen before any ad request that could use the
-            // advertising identifier — see AppTrackingTransparency.cs.
-            yield return new WaitForSeconds(1f);
+            yield return new WaitForSeconds(AttDelaySeconds);
 
+            // Once, for the whole app, before any network asks for the advertising identifier.
+            // Doing this per provider would show the player the same system prompt twice.
             AppTrackingTransparency.RequestIfNeeded();
 
-            GoogleMobileAds.Api.MobileAds.Initialize(_ =>
+            for (int i = 0; i < _providers.Count; i++)
             {
-                LoadInterstitial();
-                LoadRewarded();
-            });
+                _providers[i].Initialize();
+            }
         }
 
         /// <summary>Call once per completed run, after the run-over screen is shown.</summary>
@@ -99,7 +96,7 @@ namespace SliceBlast.Ads
             // Guarded here as well as at the call site. A player who paid to remove ads must
             // never see one, and "every caller remembered to check" is not a guarantee — the
             // one place that actually shows the ad is.
-            if (SliceBlast.Meta.PlayerProfile.AdsRemoved)
+            if (PlayerProfile.AdsRemoved)
             {
                 return;
             }
@@ -111,121 +108,73 @@ namespace SliceBlast.Ads
                 return;
             }
 
-            if (_interstitialAd != null && _interstitialAd.CanShowAd())
+            for (int i = 0; i < _providers.Count; i++)
             {
-                _runsSinceInterstitial = 0;
-                _interstitialAd.Show();
+                if (_providers[i].IsInterstitialReady)
+                {
+                    // Only reset the counter when one actually shows. A run that found no fill
+                    // should not cost the player their place in the cadence.
+                    _runsSinceInterstitial = 0;
+                    _providers[i].ShowInterstitial();
+                    return;
+                }
             }
         }
 
         /// <summary>
-        /// Shows the rewarded ad if one is ready. onEarned fires only once the player actually
-        /// finished watching; onUnavailable fires immediately if nothing was loaded, and also
-        /// if the player closes the ad early without earning the reward.
+        /// Shows a rewarded ad from the first provider that has one. onEarned fires only once
+        /// the player actually finished watching; onUnavailable fires immediately if nothing is
+        /// loaded anywhere, and also if the player closes the ad early.
+        ///
+        /// Not gated on AdsRemoved: a rewarded ad is opt-in and is the one the player asked
+        /// for. Removing ads buys the end of interruptions, not the end of second chances.
         /// </summary>
         public void ShowRewarded(Action onEarned, Action onUnavailable)
         {
-            if (_rewardedAd == null || !_rewardedAd.CanShowAd())
+            IAdProvider provider = FindRewardedProvider();
+
+            if (provider == null)
             {
                 onUnavailable?.Invoke();
                 return;
             }
 
-            bool earned = false;
+            provider.ShowRewarded(onEarned, onUnavailable);
+        }
 
-            _rewardedAd.Show(_ =>
+        private IAdProvider FindRewardedProvider()
+        {
+            for (int i = 0; i < _providers.Count; i++)
             {
-                earned = true;
-                onEarned?.Invoke();
-            });
-
-            _rewardedAd.OnAdFullScreenContentClosed += HandleRewardedClosed;
-
-            void HandleRewardedClosed()
-            {
-                _rewardedAd.OnAdFullScreenContentClosed -= HandleRewardedClosed;
-                LoadRewarded();
-
-                if (!earned)
+                if (_providers[i].IsRewardedReady)
                 {
-                    onUnavailable?.Invoke();
+                    return _providers[i];
                 }
             }
+
+            return null;
         }
-
-        private void LoadInterstitial()
-        {
-            if (_interstitialAd != null)
-            {
-                _interstitialAd.Destroy();
-                _interstitialAd = null;
-            }
-
-            GoogleMobileAds.Api.AdRequest request = new GoogleMobileAds.Api.AdRequest();
-
-            GoogleMobileAds.Api.InterstitialAd.Load(InterstitialAdUnitId, request, (ad, error) =>
-            {
-                if (error != null || ad == null)
-                {
-                    return;
-                }
-
-                _interstitialAd = ad;
-                _interstitialAd.OnAdFullScreenContentClosed += LoadInterstitial;
-                _interstitialAd.OnAdFullScreenContentFailed += _ => LoadInterstitial();
-            });
-        }
-
-        private void LoadRewarded()
-        {
-            if (_rewardedAd != null)
-            {
-                _rewardedAd.Destroy();
-                _rewardedAd = null;
-            }
-
-            GoogleMobileAds.Api.AdRequest request = new GoogleMobileAds.Api.AdRequest();
-
-            GoogleMobileAds.Api.RewardedAd.Load(RewardedAdUnitId, request, (ad, error) =>
-            {
-                if (error != null || ad == null)
-                {
-                    return;
-                }
-
-                _rewardedAd = ad;
-            });
-        }
-#else
-        private void Initialize()
-        {
-        }
-
-        public void NotifyRunEnded()
-        {
-        }
-
-        public void ShowRewarded(Action onEarned, Action onUnavailable)
-        {
-            onUnavailable?.Invoke();
-        }
-#endif
     }
 }
 
 // ---------------------------------------------------------------------------------------------
-// Turning ads on:
+// Adding a second network
 //
-// 1. [DONE] AdMob ad unit IDs. The interstitial/rewarded ad unit IDs are wired in above.
-// 2. [DONE] Google Mobile Ads Unity Plugin imported (Assets/GoogleMobileAds).
-// 3. [DONE] GoogleMobileAdsSettings.asset configured via Assets → Google Mobile Ads →
-//    Settings… (App ID + tracking description) and pushed. The plugin's own build step
-//    (GoogleMobileAds.Editor.PListProcessor) reads it to write GADApplicationIdentifier,
-//    NSUserTrackingUsageDescription and SKAdNetworkItems into Info.plist — nothing of ours
-//    duplicates that any more.
-// 4. [DONE] SLICEBLAST_ADS_ENABLED is baked into SliceBlastBuild.ApplyPlayerSettings, so
-//    every build path carries it automatically. Ads are live from here on.
+// The reason this file is shaped the way it is: AdMob approval has been stuck behind an
+// unexplained account review, and an app whose only revenue path is one account nobody can
+// appeal to is a single point of failure. A second network is insurance, not an upgrade.
 //
-// App Privacy answers and the Privacy Policy / Terms of Use updates this needs are already
-// done — see docs/APP_STORE.md section 9.
+// To add one — Unity LevelPlay is the natural candidate, since this is a Unity project and the
+// account already exists:
+//
+//   1. Install its package in the Unity Editor and COMMIT Packages/manifest.json. A define
+//      without its package is a compile failure; this project has already been bitten by that
+//      once with the ATT package.
+//   2. Write Ads/LevelPlayProvider.cs implementing IAdProvider, guarded by its own define
+//      exactly as AdMobProvider is.
+//   3. Add the define in SliceBlastBuild.ApplyPlayerSettings, and one line to the provider
+//      list in Initialize() above. Order there is the waterfall order.
+//
+// Nothing else in the game changes: the HUD, the run-over screen and the coin economy all talk
+// to AdsManager and have never known which network is underneath.
 // ---------------------------------------------------------------------------------------------
