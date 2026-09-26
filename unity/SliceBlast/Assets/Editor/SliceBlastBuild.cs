@@ -167,9 +167,12 @@ namespace SliceBlast.EditorTools
             PlayerSettings.companyName = EnvOr("COMPANY_NAME", "Slice Blast Games");
             PlayerSettings.productName = ProductName;
             PlayerSettings.SetApplicationIdentifier(named, bundleId);
-            // 1.0 already cleared App Store review — Apple rejects any new build still
-            // stamped 1.0.0 (code 90062/90186), so every build from here on is 1.1.0.
-            PlayerSettings.bundleVersion = EnvOr("APP_VERSION", "1.1.0");
+            // 1.2: the fault line, the workshop, coins, missions and themes. Every build made
+            // from this point on carries that content, so it is stamped 1.2 whatever became of
+            // 1.1 — if 1.1 was approved, a new 1.1.0 upload is rejected outright (90062); if it
+            // is still in review, a 1.2.0 build goes to TestFlight on its own train and does
+            // not touch that review.
+            PlayerSettings.bundleVersion = EnvOr("APP_VERSION", "1.2.0");
 
             PlayerSettings.defaultInterfaceOrientation = UIOrientation.Portrait;
             PlayerSettings.allowedAutorotateToPortrait = true;

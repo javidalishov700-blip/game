@@ -25,7 +25,7 @@ workflows:
         XCODE_PROJECT: unity/SliceBlast/ios/Unity-iPhone.xcodeproj
         XCODE_SCHEME: Unity-iPhone
         BUNDLE_ID: com.javidalishov.sliceblast
-        APP_VERSION: 1.1.0
+        APP_VERSION: 1.2.0
         IOS_MIN_VERSION: "13.0"
       xcode: latest
 
@@ -128,7 +128,7 @@ workflows:
         UNITY_VERSION: 6000.3.22f1
         UNITY_MODULES: android android-sdk-ndk-tools android-open-jdk
         BUNDLE_ID: com.javidalishov.sliceblast
-        APP_VERSION: 1.1.0
+        APP_VERSION: 1.2.0
 
     scripts:
       - name: Install the Unity editor
@@ -204,7 +204,12 @@ workflows:
       ios_signing:
         distribution_type: app_store
         bundle_identifier: com.javidalishov.sliceblast
-      xcode: latest
+      # Pinned rather than `latest`. The last archive that succeeded ran on Xcode 26.4.1;
+      # the next one silently picked up 26.6 and failed in 42 seconds — too fast to be a
+      # compile error, which points at signing/toolchain validation. Pinning takes the
+      # toolchain out of the list of things that changed between a good build and a bad
+      # one. Move it forward deliberately, on a build where nothing else changed.
+      xcode: "26.4"
 
     scripts:
       - name: Fetch the Xcode project built by GitHub Actions
@@ -241,13 +246,31 @@ workflows:
           # the Pods target — building the bare .xcodeproj after that would silently drop
           # every pod.
           if [ -f "$XCODE_DIR/Unity-iPhone.xcworkspace/contents.xcworkspacedata" ]; then
-            xcode-project build-ipa \
-              --workspace "$XCODE_DIR/Unity-iPhone.xcworkspace" \
-              --scheme "$XCODE_SCHEME"
+            SOURCE="--workspace $XCODE_DIR/Unity-iPhone.xcworkspace"
           else
-            xcode-project build-ipa \
-              --project "$XCODE_PROJECT" \
-              --scheme "$XCODE_SCHEME"
+            SOURCE="--project $XCODE_PROJECT"
+          fi
+
+          # xcode-project prints a one-line summary on failure and hides the real cause in
+          # a log file only reachable as a downloaded artifact. Every failed archive in this
+          # project's history has been diagnosed from that file, so it is surfaced here —
+          # the actual `error:` lines land in the step's own console output, where they can
+          # be read (and pasted) straight off the build page.
+          if ! xcode-project build-ipa $SOURCE --scheme "$XCODE_SCHEME"; then
+            # `|| true` inside the substitution: grep exits 1 on no match, and under
+            # `set -e -o pipefail` that alone would kill this handler before it printed
+            # anything — the one situation it exists for.
+            ERRORS="$( (grep -h -E "error:|\*\* ARCHIVE FAILED \*\*|The following build commands failed" \
+              /tmp/xcodebuild_logs/*.log 2>/dev/null || true) | sort -u | head -80 )"
+            echo ""
+            echo "=================== xcodebuild errors ==================="
+            if [ -n "$ERRORS" ]; then
+              echo "$ERRORS"
+            else
+              echo "(no xcodebuild log was written — the failure happened before archiving began)"
+            fi
+            echo "========================================================="
+            exit 1
           fi
 
     artifacts:
