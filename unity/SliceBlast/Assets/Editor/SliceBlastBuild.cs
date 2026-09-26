@@ -50,7 +50,11 @@ namespace SliceBlast.EditorTools
         [MenuItem("Slice & Blast/Build iOS Xcode Project")]
         public static void BuildIos()
         {
-            Run(BuildTarget.iOS, BuildTargetGroup.iOS, "ios");
+            // "ios" beside the project from the menu; wherever the CI runner asks for it when
+            // GameCI launches this method with -customBuildPath. Honouring that argument is
+            // what lets CI call *this* entry point rather than Unity's default build — see
+            // .github/workflows/ios-xcode.yml for why that matters.
+            Run(BuildTarget.iOS, BuildTargetGroup.iOS, CommandLineArgument("-customBuildPath", "ios"));
         }
 
         [MenuItem("Slice & Blast/Build Android APK")]
@@ -245,6 +249,22 @@ namespace SliceBlast.EditorTools
         {
             string value = Environment.GetEnvironmentVariable(key);
             return string.IsNullOrEmpty(value) ? fallback : value;
+        }
+
+        /// <summary>The value following <paramref name="flag"/> on Unity's command line, or the fallback.</summary>
+        private static string CommandLineArgument(string flag, string fallback)
+        {
+            string[] args = Environment.GetCommandLineArgs();
+
+            for (int i = 0; i < args.Length - 1; i++)
+            {
+                if (args[i] == flag && !string.IsNullOrEmpty(args[i + 1]))
+                {
+                    return args[i + 1];
+                }
+            }
+
+            return fallback;
         }
     }
 }

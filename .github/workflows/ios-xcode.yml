@@ -25,6 +25,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 60
 
+    # The last step publishes a release. Repositories created since 2023 hand workflows a
+    # read-only token by default, which would let the whole Unity build run for half an hour
+    # and then fail with a 403 on the one step that makes it useful.
+    permissions:
+      contents: write
+
     steps:
       - uses: actions/checkout@v4
         with:
@@ -77,6 +83,16 @@ jobs:
           unityVersion: ${{ inputs.unityVersion }}
           targetPlatform: iOS
           allowDirtyBuild: true
+          # Our own entry point, not GameCI's default build. ProjectSettings.asset is not in
+          # the repository, so a fresh runner starts with no scripting defines at all, and
+          # SLICEBLAST_ADS_ENABLED / SLICEBLAST_ATT_ENABLED are only set by ApplyPlayerSettings.
+          # Under the default build that would happen inside the build's own preprocess step,
+          # and whether that lands before or after the player scripts compile is pipeline
+          # ordering this project has never verified. This method sets them before
+          # BuildPipeline.BuildPlayer is even called — the path every successful TestFlight
+          # build has taken. Getting it wrong ships ads and the App Tracking Transparency
+          # prompt silently stubbed out, which is exactly what got 1.1 rejected.
+          buildMethod: SliceBlast.EditorTools.SliceBlastBuild.BuildIos
 
       - name: Package the Xcode project
         run: |
