@@ -8,7 +8,10 @@
 # Secrets required (Settings → Secrets and variables → Actions):
 #   UNITY_EMAIL     the Unity account e-mail
 #   UNITY_PASSWORD  its password
-#   UNITY_LICENSE   optional: contents of a .ulf licence file, if the account has one
+#   UNITY_LICENSE   contents of a .ulf licence file — required for a Personal licence.
+#                   Unity Hub → Preferences → Licenses → Add → Get a free personal license
+#                   writes it to C:\ProgramData\Unity\Unity_lic.ulf (a hidden folder); a
+#                   licence that merely shows up in the Hub may never have produced the file.
 name: iOS Xcode project
 
 on:
