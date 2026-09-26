@@ -182,6 +182,12 @@ namespace SliceBlast.Bootstrap
 
             // Asked for once, early, and never again: Game Center shows its own sign-in
             // banner, and declining is a normal outcome the game carries on without.
+            //
+            // Subscribed before the call, not in Subscribe() further down: sign-in can resolve
+            // synchronously (no local user at all, or the editor's stub platform), and an
+            // answer raised before anyone is listening is simply lost — leaving the crown
+            // hidden for a player who is in fact signed in.
+            Leaderboards.AuthenticationResolved += OnLeaderboardAuthResolved;
             Leaderboards.Authenticate();
 
             GameObject spawnerObject = new GameObject("Spawner");
@@ -200,6 +206,53 @@ namespace SliceBlast.Bootstrap
             _flow.Configure(spawner, blockPool, debrisPool, rig);
 
             flowObject.SetActive(true);
+
+            StartCoroutine(WarmUpGlass(glass));
+        }
+
+        /// <summary>
+        /// Draws the glass material once, invisibly, during the title screen.
+        ///
+        /// Every other material in the game is on screen from the first frames — the tower,
+        /// the stars, the sky — so its GPU pipeline is built before anyone is playing. Glass
+        /// is the exception: nothing uses the transparent Standard variant until the first
+        /// glass block, which can be forty layers into a run. On Metal the pipeline state is
+        /// compiled on first draw, so that block used to arrive with a hitch at exactly the
+        /// moment the player is timing a tap. A one-hundredth-scale cube buried inside the
+        /// base platform issues the same draw — same shader variant, same blend and depth
+        /// state, same cube mesh, shadow pass included — and costs two frames nobody sees.
+        /// </summary>
+        private System.Collections.IEnumerator WarmUpGlass(Material glass)
+        {
+            if (glass == null)
+            {
+                yield break;
+            }
+
+            GameObject probe = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            probe.name = "GlassWarmup";
+
+            Collider probeCollider = probe.GetComponent<Collider>();
+
+            if (probeCollider != null)
+            {
+                DestroyImmediate(probeCollider);
+            }
+
+            MeshRenderer probeRenderer = probe.GetComponent<MeshRenderer>();
+            probeRenderer.sharedMaterial = glass;
+            probeRenderer.shadowCastingMode = ShadowCastingMode.On;
+
+            probe.transform.SetParent(transform, false);
+            probe.transform.localPosition = Vector3.zero;
+            probe.transform.localScale = Vector3.one * 0.01f;
+
+            // Two frames: one to submit the draw, one for it to have actually been consumed
+            // by the GPU before the object goes away.
+            yield return null;
+            yield return null;
+
+            Destroy(probe);
         }
 
         /// <summary>
@@ -255,6 +308,11 @@ namespace SliceBlast.Bootstrap
             // where the purchase rows become visible.
             _shop.SetStoreAvailable(true);
             _shop.SetCoinPackPrice(productId, price);
+        }
+
+        private void OnLeaderboardAuthResolved(bool signedIn)
+        {
+            _hud.SetLeaderboardAvailable(signedIn);
         }
 
         private void OnLeaderboardRequested()
@@ -391,6 +449,7 @@ namespace SliceBlast.Bootstrap
             GameEvents.NeonCharged -= OnNeonCharged;
             GameEvents.CurrentPulsed -= OnCurrentPulsed;
             GameEvents.CoinsAwarded -= OnCoinsAwarded;
+            Leaderboards.AuthenticationResolved -= OnLeaderboardAuthResolved;
             PlayerProfile.CoinsChanged -= OnCoinsChanged;
             PlayerProfile.InventoryChanged -= OnInventoryChanged;
         }
@@ -497,6 +556,10 @@ namespace SliceBlast.Bootstrap
             // re-checked here rather than only at launch.
             MissionSystem.EnsureToday();
             _hud.SetShopBadge(MissionSystem.ClaimableCount());
+
+            // Re-read on every return to the title rather than trusting the one event: a
+            // player can sign in to Game Center from iOS Settings while the app is open.
+            _hud.SetLeaderboardAvailable(Leaderboards.IsAuthenticated);
 
             _audio.PlayIntro();
             SetSkyTier(0, true);

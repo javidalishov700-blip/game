@@ -64,6 +64,7 @@ namespace SliceBlast.UI
         private Text _homeShopBadge;
         private Image _homeShopBadgeDot;
         private Text _runCoins;
+        private RectTransform _leaderboardButton;
 
         private Image _flash;
         private Image _shieldIcon;
@@ -394,6 +395,13 @@ namespace SliceBlast.UI
             boardRect.anchoredPosition = new Vector2(260f, 330f);
             board.Button.onClick.AddListener(() => LeaderboardRequested?.Invoke());
 
+            // Hidden until Game Center confirms the player is signed in. Before that — or on a
+            // device where the player declined, or before the leaderboard exists in App Store
+            // Connect — a tap opens nothing, and a control that does nothing is what App Review
+            // rejects. SetLeaderboardAvailable brings it in once there is something behind it.
+            _leaderboardButton = boardRect;
+            boardRect.gameObject.SetActive(false);
+
             // Sits on the workshop button and counts finished, unclaimed missions — the one
             // thing on the title screen that should pull the eye when there is something to
             // collect, and be invisible when there is not.
@@ -416,6 +424,10 @@ namespace SliceBlast.UI
             dotRect.anchoredPosition = badgeRect.anchoredPosition;
             // Drawn before the number so the number sits on top of it.
             dotRect.SetSiblingIndex(badgeRect.GetSiblingIndex());
+
+            // Starts hidden: until SetShopBadge has a real count there is nothing to badge,
+            // and an empty gold dot on the first frames reads as a rendering fault.
+            _homeShopBadgeDot.gameObject.SetActive(false);
 
             CreateLink("Privacy", screen, "PRIVACY POLICY", -175f, PrivacyUrl);
             CreateLink("Terms", screen, "TERMS OF USE", 175f, TermsUrl);
@@ -731,6 +743,15 @@ namespace SliceBlast.UI
         public void ShowRunChrome(bool visible)
         {
             _chromeAlpha = visible ? 1f : 0f;
+        }
+
+        /// <summary>Shows the leaderboard crown once Game Center has actually signed the player in.</summary>
+        public void SetLeaderboardAvailable(bool available)
+        {
+            if (_leaderboardButton != null && _leaderboardButton.gameObject.activeSelf != available)
+            {
+                _leaderboardButton.gameObject.SetActive(available);
+            }
         }
 
         /// <summary>The count on the workshop button: finished missions waiting to be claimed.</summary>

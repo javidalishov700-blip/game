@@ -18,6 +18,9 @@ namespace SliceBlast.Platform
 
         private static bool _attempted;
 
+        /// <summary>Raised once sign-in has an answer, successful or not.</summary>
+        public static event System.Action<bool> AuthenticationResolved;
+
         // Every reference to the engine's Social class is fully qualified on purpose. This
         // file used to live in a namespace called SliceBlast.Social, where a bare `Social`
         // binds to *that namespace* rather than to UnityEngine.Social — C# resolves the
@@ -31,6 +34,7 @@ namespace SliceBlast.Platform
         private static void ResetStatics()
         {
             _attempted = false;
+            AuthenticationResolved = null;
         }
 
         /// <summary>
@@ -49,10 +53,11 @@ namespace SliceBlast.Platform
 
             if (UnityEngine.Social.localUser == null)
             {
+                AuthenticationResolved?.Invoke(false);
                 return;
             }
 
-            UnityEngine.Social.localUser.Authenticate(success => { });
+            UnityEngine.Social.localUser.Authenticate(success => AuthenticationResolved?.Invoke(success));
         }
 
         /// <summary>Posts a score. Silently ignored when the player is not signed in.</summary>

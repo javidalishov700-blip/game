@@ -244,11 +244,11 @@ carrying it goes anywhere near review.
 
 ### 10.1 Version
 
-`SliceBlastBuild.cs` still stamps **1.1.0**, on purpose: 1.1 is in review as this is written
-and may need a fresh build under the same version string. The moment 1.1 is approved (or
-abandoned), bump `PlayerSettings.bundleVersion` and `codemagic.yaml`'s `APP_VERSION` to
-**1.2.0** — App Store Connect rejects a new version that reuses an approved version string
-(error 90062).
+`SliceBlastBuild.cs` and `codemagic.yaml` now stamp **1.2.0**. Every build made from the
+repository's current state carries the meta layer, so it *is* 1.2 content whatever became of
+1.1: if 1.1 was approved, a 1.1.0 upload would be rejected outright (error 90062); if 1.1 is
+still in review, a 1.2.0 build goes to TestFlight on its own version train and does not touch
+that review.
 
 ### 10.2 Unity IAP is not installed yet
 
@@ -284,8 +284,19 @@ submit them attached to the 1.2 version rather than on their own.
 
 **Features → Game Center → Leaderboards → +**, with Leaderboard ID
 `com.javidalishov.sliceblast.best`, format *Integer*, sort *High to Low*. That exact string is
-in `Scripts/Social/Leaderboards.cs`. No package and no entitlement file to edit — the Social
-API is part of the engine and Unity writes the capability into the Xcode project itself.
+in `Scripts/Platform/Leaderboards.cs`.
+
+As shipped, Game Center is **dormant and safe**: the crown button on the title screen stays
+hidden until Game Center actually confirms the player is signed in, so no build can show a
+control that opens nothing. It will stay dormant until both halves below are done:
+
+1. The leaderboard above exists in App Store Connect.
+2. The Game Center capability is on the Xcode target. This is deliberately **not** added by
+   `IosPostProcess` yet — adding an entitlement changes what the provisioning profile must
+   contain, and that is a signing variable not worth introducing while an archive failure is
+   still being diagnosed. When archives are green again, add to `IosPostProcess`:
+   `new ProjectCapabilityManager(pbxPath, "Unity-iPhone.entitlements", null, targetGuid).AddGameCenter();`
+   then regenerate the provisioning profile so it includes the capability.
 
 ### 10.5 Metadata that has to change again
 
