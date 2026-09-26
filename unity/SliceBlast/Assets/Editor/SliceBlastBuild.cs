@@ -3,6 +3,7 @@
 //         -executeMethod SliceBlast.EditorTools.SliceBlastBuild.BuildIos
 using System;
 using System.IO;
+using System.Reflection;
 using SliceBlast.Bootstrap;
 using UnityEditor;
 using UnityEditor.Build;
@@ -19,6 +20,11 @@ namespace SliceBlast.EditorTools
         private const string ScenePath = SceneFolder + "/Main.unity";
         private const string DefaultBundleId = "com.javidalishov.sliceblast";
         private const string ProductName = "Slice Blast";
+
+        // What an Xcode project needs before Codemagic can link AdMob into it: the SDK itself,
+        // pulled in by CocoaPods, and Google's Objective-C bridge the C# plugin calls into.
+        private const string AdsPod = "Google-Mobile-Ads-SDK";
+        private const string AdsBridge = "unity-plugin-library";
 
         [MenuItem("Slice & Blast/Create Playable Scene")]
         public static void CreatePlayableScene()
@@ -105,6 +111,11 @@ namespace SliceBlast.EditorTools
                 Directory.CreateDirectory(directory);
             }
 
+            if (target == BuildTarget.iOS)
+            {
+                LoadPodDependencies();
+            }
+
             BuildReport report = BuildPipeline.BuildPlayer(new BuildPlayerOptions
             {
                 scenes = new[] { scenePath },
@@ -117,10 +128,85 @@ namespace SliceBlast.EditorTools
             BuildSummary summary = report.summary;
             Debug.Log($"[SliceBlast] Build {summary.result} — {summary.totalSize} bytes in {summary.totalTime}.");
 
+            bool succeeded = summary.result == BuildResult.Succeeded;
+
+            if (succeeded && target == BuildTarget.iOS)
+            {
+                string problem = FindAdsLinkProblem(outputPath);
+
+                if (problem != null)
+                {
+                    succeeded = false;
+                    string message = $"This Xcode project cannot be shipped: {problem}. Codemagic would "
+                        + "fail to link it, or worse, produce an app whose ads never load.";
+                    Debug.LogError("[SliceBlast] " + message);
+
+                    if (!Application.isBatchMode)
+                    {
+                        EditorUtility.DisplayDialog("Slice & Blast", message, "OK");
+                    }
+                }
+            }
+
             if (Application.isBatchMode)
             {
-                EditorApplication.Exit(summary.result == BuildResult.Succeeded ? 0 : 1);
+                EditorApplication.Exit(succeeded ? 0 : 1);
             }
+        }
+
+        /// <summary>
+        /// Makes the External Dependency Manager read every *Dependencies.xml now, before the
+        /// build. It normally does that on its first editor update, which a batch-mode build
+        /// launched with -executeMethod reaches only after the build is over — and with
+        /// CocoaPods integration set to None its own pre-build refresh is skipped too. The
+        /// result was a Podfile with no pods in it: a project that builds, then cannot link
+        /// AdMob. The method is private, hence reflection; if a future EDM4U renames it, the
+        /// Podfile check after the build says so instead of letting that pass silently.
+        /// </summary>
+        private static void LoadPodDependencies()
+        {
+            Type resolver = null;
+
+            foreach (Assembly assembly in AppDomain.CurrentDomain.GetAssemblies())
+            {
+                resolver = assembly.GetType("Google.IOSResolver", false);
+
+                if (resolver != null)
+                {
+                    break;
+                }
+            }
+
+            MethodInfo refresh = resolver?.GetMethod(
+                "RefreshXmlDependencies", BindingFlags.NonPublic | BindingFlags.Static);
+
+            if (refresh == null)
+            {
+                Debug.LogWarning("[SliceBlast] Could not ask the External Dependency Manager to load its pods.");
+                return;
+            }
+
+            refresh.Invoke(null, null);
+        }
+
+        /// <summary>Why the generated project could not link AdMob, or null if it can.</summary>
+        private static string FindAdsLinkProblem(string xcodeProject)
+        {
+            string podfile = Path.Combine(xcodeProject, "Podfile");
+
+            if (!File.Exists(podfile) || !File.ReadAllText(podfile).Contains(AdsPod))
+            {
+                return $"its Podfile does not list {AdsPod}";
+            }
+
+            string pbxproj = Path.Combine(xcodeProject, "Unity-iPhone.xcodeproj", "project.pbxproj");
+
+            if (!File.Exists(pbxproj) || !File.ReadAllText(pbxproj).Contains(AdsBridge))
+            {
+                return $"it does not contain {AdsBridge}, the Google Mobile Ads bridge from Assets/Plugins/iOS";
+            }
+
+            return null;
         }
 
         private static string EnsureScene(bool force)

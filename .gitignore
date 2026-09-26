@@ -1,7 +1,12 @@
 node_modules
 dist
-android
-ios
+# Anchored to the repository root: these were the old Capacitor shell's native folders.
+# Unanchored, Git on Windows (case-insensitive) also matched Unity's Assets/Plugins/iOS
+# and Assets/Plugins/Android, which silently kept the Google Mobile Ads native bridge out
+# of the repository — any machine but the one it was imported on built an app that
+# could not link its ads.
+/android
+/ios
 .idea
 .vscode
 .DS_Store
