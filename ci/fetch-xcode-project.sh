@@ -2,28 +2,38 @@
 # Downloads the Xcode project produced by the GitHub Actions workflow "iOS Xcode project"
 # and unpacks it, so a Mac runner can compile and sign it without Unity being installed.
 #
-#   GITHUB_TOKEN   fine-grained PAT with Contents: read on the repository
 #   GITHUB_REPO    owner/repo, e.g. javidalishov700-blip/game
 #   RELEASE_TAG    optional; defaults to ios-xcode-latest
+#   GITHUB_TOKEN   only needed if the repository is private: fine-grained PAT with
+#                  Contents: read on it
 set -eu
 
 DESTINATION="${1:-ios-xcode}"
 TAG="${RELEASE_TAG:-ios-xcode-latest}"
 API="https://api.github.com/repos/${GITHUB_REPO}"
+PUBLIC_URL="https://github.com/${GITHUB_REPO}/releases/download/${TAG}/ios-xcode.zip"
 
-if [ -z "${GITHUB_TOKEN:-}" ]; then
-  echo "GITHUB_TOKEN is not set. Add it to the Codemagic environment group."
-  exit 1
-fi
+download_through_api() {
+  if [ -z "${GITHUB_TOKEN:-}" ]; then
+    echo "The release is not publicly downloadable and GITHUB_TOKEN is not set."
+    echo "Add a fine-grained PAT (Contents: read) to the Codemagic environment group."
+    exit 1
+  fi
 
-echo "Looking up release $TAG in $GITHUB_REPO"
+  echo "Looking up release $TAG in $GITHUB_REPO"
 
-RELEASE="$(curl -fsS \
-  -H "Authorization: Bearer $GITHUB_TOKEN" \
-  -H "Accept: application/vnd.github+json" \
-  "$API/releases/tags/$TAG")"
+  # A token GitHub no longer accepts fails with a bare 401, which reads like a bug in this
+  # script rather than what it is — an expired or revoked PAT.
+  if ! RELEASE="$(curl -fsS \
+      -H "Authorization: Bearer $GITHUB_TOKEN" \
+      -H "Accept: application/vnd.github+json" \
+      "$API/releases/tags/$TAG")"; then
+    echo "GitHub refused the release lookup. If the error above is 401, GITHUB_TOKEN has"
+    echo "expired or been revoked: create a new fine-grained PAT and replace it in Codemagic."
+    exit 1
+  fi
 
-ASSET_ID="$(printf '%s' "$RELEASE" | python3 -c '
+  ASSET_ID="$(printf '%s' "$RELEASE" | python3 -c '
 import json, sys
 
 release = json.load(sys.stdin)
@@ -34,18 +44,29 @@ for asset in release.get("assets", []):
         break
 ')"
 
-if [ -z "$ASSET_ID" ]; then
-  echo "No .zip asset on release $TAG. Run the \"iOS Xcode project\" workflow first."
-  exit 1
+  if [ -z "$ASSET_ID" ]; then
+    echo "No .zip asset on release $TAG. Run the \"iOS Xcode project\" workflow first."
+    exit 1
+  fi
+
+  echo "Downloading asset $ASSET_ID"
+
+  curl -fsSL \
+    -H "Authorization: Bearer $GITHUB_TOKEN" \
+    -H "Accept: application/octet-stream" \
+    -o ios-xcode.zip \
+    "$API/releases/assets/$ASSET_ID"
+}
+
+# Public repository: the release asset downloads directly, no credentials involved — and so
+# nothing to expire. The API route is the fallback for a private repository or an archive
+# uploaded by hand under some other name.
+echo "Downloading $PUBLIC_URL"
+
+if ! curl -fsSL -o ios-xcode.zip "$PUBLIC_URL"; then
+  echo "Direct download failed; trying the GitHub API."
+  download_through_api
 fi
-
-echo "Downloading asset $ASSET_ID"
-
-curl -fsSL \
-  -H "Authorization: Bearer $GITHUB_TOKEN" \
-  -H "Accept: application/octet-stream" \
-  -o ios-xcode.zip \
-  "$API/releases/assets/$ASSET_ID"
 
 rm -rf "$DESTINATION" .xcode-unpack
 mkdir -p .xcode-unpack

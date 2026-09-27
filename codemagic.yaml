@@ -187,8 +187,9 @@ workflows:
 
     environment:
       groups:
-        # Add to the "unity" group in the Codemagic UI:
-        #   GITHUB_TOKEN — fine-grained PAT, Contents: read on the repository
+        # The repository is public, so the Xcode project downloads without credentials.
+        # Only if it is ever made private: add GITHUB_TOKEN (fine-grained PAT, Contents:
+        # read) to the "unity" group in the Codemagic UI.
         - unity
       vars:
         GITHUB_REPO: javidalishov700-blip/game
