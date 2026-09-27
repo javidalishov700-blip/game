@@ -1153,6 +1153,11 @@ namespace SliceBlast.UI
             return UiKit.CreateChild(name, parent);
         }
 
+        private static RectTransform CreateSafeAreaChild(string name, Transform parent)
+        {
+            return UiKit.CreateSafeAreaChild(name, parent);
+        }
+
         private static Image CreateImage(string name, Transform parent, Color color)
         {
             return UiKit.CreateImage(name, parent, color);
