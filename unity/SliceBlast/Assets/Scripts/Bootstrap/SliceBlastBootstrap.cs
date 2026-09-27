@@ -178,8 +178,8 @@ namespace SliceBlast.Bootstrap
             _hud.LeaderboardRequested += OnLeaderboardRequested;
             _hud.PrivacyRequested += OnPrivacyRequested;
 
-            BuildShop(hudObject.transform);
-            BuildLeaderboard(hudObject.transform);
+            BuildShop(_hud.OverlayRoot);
+            BuildLeaderboard(_hud.OverlayRoot);
 
             AdsManager.EnsureInstance();
 
@@ -277,6 +277,8 @@ namespace SliceBlast.Bootstrap
             _shop.RemoveAdsRequested += OnRemoveAdsRequested;
             _shop.RestoreRequested += OnRestoreRequested;
             _shop.CoinPackRequested += OnCoinPackRequested;
+            _shop.SoundToggled += OnSoundToggled;
+            _shop.HapticsToggled += OnHapticsToggled;
 
             // Touching Instance is what brings the store up, so this is also the point the
             // catalogue starts loading — well before the player can reach a buy button.
@@ -432,6 +434,8 @@ namespace SliceBlast.Bootstrap
                 _shop.RemoveAdsRequested -= OnRemoveAdsRequested;
                 _shop.RestoreRequested -= OnRestoreRequested;
                 _shop.CoinPackRequested -= OnCoinPackRequested;
+                _shop.SoundToggled -= OnSoundToggled;
+                _shop.HapticsToggled -= OnHapticsToggled;
             }
 
             // The store outlives this object (DontDestroyOnLoad), so its subscriptions have
@@ -475,6 +479,11 @@ namespace SliceBlast.Bootstrap
             GameEvents.CoinsAwarded += OnCoinsAwarded;
             PlayerProfile.CoinsChanged += OnCoinsChanged;
             PlayerProfile.InventoryChanged += OnInventoryChanged;
+
+            // One tick and one light haptic for every button in the game — pause menu, home
+            // screen, shop, leaderboard, coin packs — wherever UiKit.CreateButton built it.
+            // Nothing here has to remember to wire its own feedback in.
+            UiKit.ButtonTapped += OnUiButtonTapped;
         }
 
         private void Unsubscribe()
@@ -495,6 +504,7 @@ namespace SliceBlast.Bootstrap
             Leaderboards.AuthenticationResolved -= OnLeaderboardAuthResolved;
             PlayerProfile.CoinsChanged -= OnCoinsChanged;
             PlayerProfile.InventoryChanged -= OnInventoryChanged;
+            UiKit.ButtonTapped -= OnUiButtonTapped;
         }
 
         private void OnCoinsAwarded(int amount, Vector3 position)
@@ -925,6 +935,12 @@ namespace SliceBlast.Bootstrap
                 onUnavailable: () => _hud.SetContinueAvailable(false));
         }
 
+        private void OnUiButtonTapped()
+        {
+            _audio.PlayTick();
+            Haptics.Light();
+        }
+
         private void OnPauseChanged(bool paused)
         {
             if (paused && AdsManager.Instance != null)
@@ -982,11 +998,15 @@ namespace SliceBlast.Bootstrap
             _flow.ShowHome();
         }
 
+        // Also reached from the shop's Settings tab now, not only GameHud's own pause-menu
+        // and title-screen buttons — all three read the same PlayerProfile field, so whichever
+        // one is on screen shows the truth once this returns.
         private void OnSoundToggled(bool on)
         {
             _audio.Muted = !on;
             PlayerProfile.SetSound(on);
             PlayerProfile.Flush();
+            _hud.SetSoundLabel(on);
 
             if (on)
             {
@@ -999,6 +1019,7 @@ namespace SliceBlast.Bootstrap
             Haptics.Enabled = on;
             PlayerProfile.SetHaptics(on);
             PlayerProfile.Flush();
+            _hud.SetHapticsLabel(on);
 
             if (on)
             {

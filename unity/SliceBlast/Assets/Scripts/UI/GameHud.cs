@@ -43,7 +43,11 @@ namespace SliceBlast.UI
         public event Action PrivacyRequested;
 
         private RectTransform _safeArea;
+        private RectTransform _overlaySafeArea;
         private Rect _appliedSafeArea;
+
+        /// <summary>Where a full-screen overlay belongs, clear of the notch/Dynamic Island.</summary>
+        public RectTransform OverlayRoot => _overlaySafeArea;
         private Font _font;
 
         private Text _score;
@@ -135,6 +139,15 @@ namespace SliceBlast.UI
 
             _safeArea = CreateChild("SafeArea", transform);
             Stretch(_safeArea);
+
+            // A second safe-area rect, inset the same way but with no CanvasGroup of its own.
+            // The gameplay HUD's group (_chrome, below) hides for the title and pause screens,
+            // and anything nested under a CanvasGroup inherits its alpha — so the full-screen
+            // overlays (title, pause, game-over, shop, leaderboard) hang off this one instead,
+            // clear of the notch/Dynamic Island on every device without going invisible
+            // whenever the run chrome does.
+            _overlaySafeArea = CreateChild("OverlaySafeArea", transform);
+            Stretch(_overlaySafeArea);
             ApplySafeArea();
 
             // Everything that belongs to a run lives under one group, so the title screen
@@ -259,7 +272,7 @@ namespace SliceBlast.UI
 
         private void BuildPauseSheet()
         {
-            RectTransform sheet = CreateChild("PauseSheet", transform);
+            RectTransform sheet = CreateChild("PauseSheet", _overlaySafeArea);
             Stretch(sheet);
 
             _pause = sheet.gameObject.AddComponent<CanvasGroup>();
@@ -331,7 +344,7 @@ namespace SliceBlast.UI
         /// </summary>
         private void BuildHomeScreen()
         {
-            RectTransform screen = CreateChild("Home", transform);
+            RectTransform screen = CreateChild("Home", _overlaySafeArea);
             Stretch(screen);
 
             _home = screen.gameObject.AddComponent<CanvasGroup>();
@@ -393,22 +406,27 @@ namespace SliceBlast.UI
                 HapticsToggled?.Invoke(_hapticsOn);
             });
 
-            MenuControl shop = CreateButton("HomeShop", screen, "WORKSHOP", 50, Panel, Color.white, IconShape.Bag);
+            // Widened from a 3-word-tight 420 and dropped a size: at 50pt "WORKSHOP" ran past
+            // its own label region and looked cramped against the icon.
+            MenuControl shop = CreateButton("HomeShop", screen, "WORKSHOP", 42, Panel, Color.white, IconShape.Bag);
             RectTransform shopRect = shop.Root;
             shopRect.anchorMin = new Vector2(0.5f, 0f);
             shopRect.anchorMax = new Vector2(0.5f, 0f);
             shopRect.pivot = new Vector2(0.5f, 0f);
-            shopRect.sizeDelta = new Vector2(420f, 118f);
-            shopRect.anchoredPosition = new Vector2(-60f, 330f);
+            shopRect.sizeDelta = new Vector2(480f, 118f);
+            shopRect.anchoredPosition = new Vector2(0f, 330f);
             shop.Button.onClick.AddListener(() => ShopRequested?.Invoke());
 
+            // Top-right corner rather than sharing the bottom row with Workshop: a leaderboard
+            // entry point is worth seeing the moment the title screen appears, not only after
+            // scrolling attention down to where the home indicator crowds it on most phones.
             MenuControl board = CreateButton("HomeLeaderboard", screen, string.Empty, 0, Panel, Gold, IconShape.Crown);
             RectTransform boardRect = board.Root;
-            boardRect.anchorMin = new Vector2(0.5f, 0f);
-            boardRect.anchorMax = new Vector2(0.5f, 0f);
-            boardRect.pivot = new Vector2(0.5f, 0f);
-            boardRect.sizeDelta = new Vector2(118f, 118f);
-            boardRect.anchoredPosition = new Vector2(260f, 330f);
+            boardRect.anchorMin = new Vector2(1f, 1f);
+            boardRect.anchorMax = new Vector2(1f, 1f);
+            boardRect.pivot = new Vector2(1f, 1f);
+            boardRect.sizeDelta = new Vector2(112f, 112f);
+            boardRect.anchoredPosition = new Vector2(-40f, -40f);
             board.Button.onClick.AddListener(() => LeaderboardRequested?.Invoke());
 
             // Hidden until Game Center confirms the player is signed in. Before that — or on a
@@ -500,7 +518,7 @@ namespace SliceBlast.UI
 
         private void BuildGameOverScreen()
         {
-            RectTransform screen = CreateChild("GameOver", transform);
+            RectTransform screen = CreateChild("GameOver", _overlaySafeArea);
             Stretch(screen);
 
             _gameOver = screen.gameObject.AddComponent<CanvasGroup>();
@@ -888,7 +906,7 @@ namespace SliceBlast.UI
         {
             float dt = Time.unscaledDeltaTime;
 
-            if (_safeArea != null && _appliedSafeArea != Screen.safeArea)
+            if ((_safeArea != null || _overlaySafeArea != null) && _appliedSafeArea != Screen.safeArea)
             {
                 ApplySafeArea();
             }
@@ -1116,6 +1134,12 @@ namespace SliceBlast.UI
 
             _safeArea.anchorMin = min;
             _safeArea.anchorMax = max;
+
+            if (_overlaySafeArea != null)
+            {
+                _overlaySafeArea.anchorMin = min;
+                _overlaySafeArea.anchorMax = max;
+            }
         }
 
         private static void Stretch(RectTransform rect)

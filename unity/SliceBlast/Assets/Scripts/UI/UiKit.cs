@@ -26,6 +26,14 @@ namespace SliceBlast.UI
 
     public static class UiKit
     {
+        /// <summary>
+        /// Fired after every UiKit-built button is tapped, before its own onClick listeners
+        /// run. One place to hang a tap sound and a light haptic on the whole interface,
+        /// rather than every menu wiring its own — a button that shipped silent was a control
+        /// nobody remembered to add feedback to, not a decision.
+        /// </summary>
+        public static event Action ButtonTapped;
+
         public static readonly Color Gold = new Color(1f, 0.79f, 0.29f);
         public static readonly Color Mint = new Color(0.36f, 0.91f, 0.77f);
         public static readonly Color Ink = new Color(0.04f, 0.05f, 0.09f);
@@ -138,6 +146,7 @@ namespace SliceBlast.UI
             button.colors = colors;
 
             control.Button = button;
+            button.onClick.AddListener(() => ButtonTapped?.Invoke());
 
             bool hasLabel = !string.IsNullOrEmpty(label);
 

@@ -286,10 +286,15 @@ namespace SliceBlast.UI
 
                 case IconShape.Crown:
                 {
-                    float band = Box(p - new Vector2(0f, -0.42f), new Vector2(0.62f, 0.16f), 0.06f);
-                    float body = Triangle(p, new Vector2(-0.72f, 0.6f), new Vector2(-0.62f, -0.34f), new Vector2(0.62f, -0.34f));
-                    body = Mathf.Min(body, Triangle(p, new Vector2(0.72f, 0.6f), new Vector2(-0.62f, -0.34f), new Vector2(0.62f, -0.34f)));
-                    body = Mathf.Min(body, Triangle(p, new Vector2(0f, 0.72f), new Vector2(-0.62f, -0.34f), new Vector2(0.62f, -0.34f)));
+                    // Shifted down 0.07 from the original coordinates: the band-plus-spikes
+                    // shape spans y in [-0.58, 0.72], so its true centre sits above the
+                    // origin. Centring it is what made the crown read as off-balance in its
+                    // round badge — the RectTransform holding it was centred correctly all
+                    // along; the artwork inside it was not.
+                    float band = Box(p - new Vector2(0f, -0.49f), new Vector2(0.62f, 0.16f), 0.06f);
+                    float body = Triangle(p, new Vector2(-0.72f, 0.53f), new Vector2(-0.62f, -0.41f), new Vector2(0.62f, -0.41f));
+                    body = Mathf.Min(body, Triangle(p, new Vector2(0.72f, 0.53f), new Vector2(-0.62f, -0.41f), new Vector2(0.62f, -0.41f)));
+                    body = Mathf.Min(body, Triangle(p, new Vector2(0f, 0.65f), new Vector2(-0.62f, -0.41f), new Vector2(0.62f, -0.41f)));
                     return Mathf.Min(band, body);
                 }
 

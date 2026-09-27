@@ -26,7 +26,7 @@ namespace SliceBlast.Meta
                 Id = UpgradeId.Magnet,
                 Name = "MAGNET",
                 Description = "Wider perfect window",
-                MaxLevel = 5
+                MaxLevel = 7
             },
             new UpgradeDefinition
             {
@@ -45,8 +45,12 @@ namespace SliceBlast.Meta
         };
 
         // Level 1 is cheap enough to be the first thing a player buys with one good run's
-        // coins; the top of each track costs several sessions.
-        private static readonly int[] MagnetCosts = { 150, 400, 900, 1800, 3200 };
+        // coins; the top of each track costs several sessions. Magnet is the exception on
+        // both counts: at the old 5 levels and a flat 0.006 per level, a maxed Magnet nearly
+        // doubled the perfect window on its own — indistinguishable from cheating rather than
+        // an upgrade. Two more levels spread the same ceiling thinner, and the price of
+        // reaching it now runs several times the cost of maxing Shield or Fortune outright.
+        private static readonly int[] MagnetCosts = { 300, 900, 2200, 4500, 8500, 15000, 26000 };
         private static readonly int[] ShieldCosts = { 600, 1500, 3000 };
         private static readonly int[] LuckCosts = { 250, 700, 1500, 2800 };
 
@@ -121,7 +125,7 @@ namespace SliceBlast.Meta
         /// </summary>
         public static float MagnetBonusFraction()
         {
-            return 0.006f * PlayerProfile.GetUpgradeLevel(UpgradeId.Magnet);
+            return 0.0025f * PlayerProfile.GetUpgradeLevel(UpgradeId.Magnet);
         }
 
         /// <summary>Shields a run opens with.</summary>

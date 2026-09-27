@@ -56,6 +56,11 @@ namespace SliceBlast.Core
         [SerializeField] private int blastStreak = 3;
         [SerializeField] private int blastBaseLayers = 3;
         [SerializeField] private int blastLayerStep = 2;
+        // Uncapped, a long run's blast kept escalating forever — 3, 5, 7, 9, 11, 13... — with
+        // nothing on screen explaining why. Capping the level it can reach keeps the
+        // escalation legible (it still climbs, it just stops climbing) without touching the
+        // combo multiplier, which is the part that is meant to keep paying out indefinitely.
+        [SerializeField] private int maxBlastLevel = 6;
         [SerializeField] private int neonLayers = 3;
         [SerializeField] private int maxMultiplier = 9;
         [SerializeField] private float blastShake = 0.95f;
@@ -104,9 +109,12 @@ namespace SliceBlast.Core
         // Chained layers pay the same as requested ones, not more. Coins are the meta
         // currency, and making damage the fastest way to earn them would push the same
         // "miss on purpose" line the score already refuses to reward.
-        [SerializeField] private int coinsPerBlastLayer = 2;
-        [SerializeField] private int coinsPerChainLayer = 2;
-        [SerializeField] private int scorePerCoin = 25;
+        // Halved the blast payout and raised the score conversion: coins were piling up fast
+        // enough that the shop's economy — priced assuming a slower drip — stopped meaning
+        // anything after a handful of runs.
+        [SerializeField] private int coinsPerBlastLayer = 1;
+        [SerializeField] private int coinsPerChainLayer = 1;
+        [SerializeField] private int scorePerCoin = 40;
 
         // Onboarding grace: the very first block can never kill the run.
         [SerializeField] private bool forgiveFirstBlock = true;
@@ -984,7 +992,7 @@ namespace SliceBlast.Core
             AwardCoins(coinsPerBlastLayer * removable + coinsPerChainLayer * chain, epicenter);
 
             _comboMultiplier = Mathf.Min(_comboMultiplier + 1, maxMultiplier);
-            _blastLevel = exhausted ? 0 : _blastLevel + 1;
+            _blastLevel = exhausted ? 0 : Mathf.Min(_blastLevel + 1, maxBlastLevel);
             _perfectStreak = 0;
             _slowdown = 0f;
 

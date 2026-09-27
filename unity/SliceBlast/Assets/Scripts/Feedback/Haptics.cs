@@ -1,4 +1,7 @@
 using UnityEngine;
+#if UNITY_IOS && !UNITY_EDITOR
+using System.Runtime.InteropServices;
+#endif
 
 namespace SliceBlast.Feedback
 {
@@ -15,6 +18,17 @@ namespace SliceBlast.Feedback
         private static AndroidJavaClass s_effectClass;
         private static int s_apiLevel;
         private static bool s_initialized;
+#endif
+
+#if UNITY_IOS && !UNITY_EDITOR
+        // Handheld.Vibrate() plays iOS's old "system sound" buzz through AudioServices, which
+        // on the Taptic Engine iPhones this game actually ships on is inconsistent — silent on
+        // some models, unless the device happens to be in a state that routes it through the
+        // old vibration motor path. UIImpactFeedbackGenerator is the API Apple has meant for
+        // this since iOS 10, so a tiny native plugin (Assets/Plugins/iOS/SliceBlastHaptics.mm)
+        // calls it directly instead.
+        [DllImport("__Internal")]
+        private static extern void _SliceBlastHapticImpact(int style);
 #endif
 
         public static void Light() => Fire(12, 40);
@@ -53,7 +67,7 @@ namespace SliceBlast.Feedback
                 s_vibrator.Call("vibrate", milliseconds);
             }
 #elif UNITY_IOS && !UNITY_EDITOR
-            Handheld.Vibrate();
+            _SliceBlastHapticImpact(amplitude >= 120 ? 2 : amplitude >= 60 ? 1 : 0);
 #endif
         }
 
