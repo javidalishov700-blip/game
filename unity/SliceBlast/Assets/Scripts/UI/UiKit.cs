@@ -233,6 +233,50 @@ namespace SliceBlast.UI
             rect.offsetMax = Vector2.zero;
         }
 
+        /// <summary>
+        /// The device's safe area as anchor fractions, or false before Unity has reported a
+        /// real screen size. Every full-screen overlay in the game shares this: its own dim
+        /// background reaches every physical edge (Stretch), and this insets only the content
+        /// sitting on top of it, clear of the notch/Dynamic Island and the home indicator.
+        /// Putting the dim behind the inset too — an earlier version of this did — leaves a
+        /// strip at the true top and bottom edges with nothing painted on it at all, showing
+        /// whatever the 3D scene behind the canvas happens to be instead.
+        /// </summary>
+        public static bool TryGetSafeAreaFractions(out Vector2 min, out Vector2 max)
+        {
+            min = Vector2.zero;
+            max = Vector2.one;
+
+            if (Screen.width <= 0 || Screen.height <= 0)
+            {
+                return false;
+            }
+
+            Rect area = Screen.safeArea;
+            min = new Vector2(area.x / Screen.width, area.y / Screen.height);
+            max = new Vector2((area.x + area.width) / Screen.width, (area.y + area.height) / Screen.height);
+
+            return !float.IsNaN(min.x) && !float.IsNaN(min.y) && !float.IsNaN(max.x) && !float.IsNaN(max.y);
+        }
+
+        /// <summary>A full-size child inset to the current safe area — see TryGetSafeAreaFractions.</summary>
+        public static RectTransform CreateSafeAreaChild(string name, Transform parent)
+        {
+            RectTransform rect = CreateChild(name, parent);
+
+            if (!TryGetSafeAreaFractions(out Vector2 min, out Vector2 max))
+            {
+                min = Vector2.zero;
+                max = Vector2.one;
+            }
+
+            rect.anchorMin = min;
+            rect.anchorMax = max;
+            rect.offsetMin = Vector2.zero;
+            rect.offsetMax = Vector2.zero;
+            return rect;
+        }
+
         public static void SetAlpha(Graphic graphic, float alpha)
         {
             if (graphic == null)

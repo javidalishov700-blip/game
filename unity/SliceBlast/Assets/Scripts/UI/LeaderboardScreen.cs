@@ -78,15 +78,22 @@ namespace SliceBlast.UI
             _group.blocksRaycasts = false;
             _group.interactable = false;
 
-            Image dim = UiKit.CreateImage("Dim", root, new Color(UiKit.Ink.r, UiKit.Ink.g, UiKit.Ink.b, 0.96f));
+            // Fully opaque: at 0.96 the title screen's wordmark was still faintly visible
+            // behind every row, competing with the board's own text.
+            Image dim = UiKit.CreateImage("Dim", root, new Color(UiKit.Ink.r, UiKit.Ink.g, UiKit.Ink.b, 1f));
             UiKit.Stretch(dim.rectTransform);
             dim.raycastTarget = true; // nothing behind the board is tappable while it is open
 
-            BuildHeader(root);
-            BuildList(root);
-            BuildYouRow(root);
+            // Everything below sits on this instead of directly on root: the dim above has to
+            // reach every physical edge, but a control here must not, or it ends up under the
+            // notch/Dynamic Island or the home indicator.
+            RectTransform safeContent = UiKit.CreateSafeAreaChild("SafeContent", root);
 
-            _status = UiKit.CreateText(_font, "Status", root, 44, FontStyle.Bold, UiKit.Dim, TextAnchor.MiddleCenter);
+            BuildHeader(safeContent);
+            BuildList(safeContent);
+            BuildYouRow(safeContent);
+
+            _status = UiKit.CreateText(_font, "Status", safeContent, 44, FontStyle.Bold, UiKit.Dim, TextAnchor.MiddleCenter);
             UiKit.Anchor(_status.rectTransform, new Vector2(0f, 0.5f), new Vector2(1f, 0.5f), new Vector2(60f, -120f), new Vector2(-60f, 120f));
             _status.horizontalOverflow = HorizontalWrapMode.Wrap;
 

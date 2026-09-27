@@ -126,14 +126,21 @@ namespace SliceBlast.UI
             _group.blocksRaycasts = false;
             _group.interactable = false;
 
-            Image dim = UiKit.CreateImage("Dim", root, new Color(UiKit.Ink.r, UiKit.Ink.g, UiKit.Ink.b, 0.96f));
+            // Fully opaque: at 0.96 the title screen's wordmark was still faintly visible
+            // behind every row, competing with the shop's own text.
+            Image dim = UiKit.CreateImage("Dim", root, new Color(UiKit.Ink.r, UiKit.Ink.g, UiKit.Ink.b, 1f));
             UiKit.Stretch(dim.rectTransform);
             dim.raycastTarget = true; // nothing behind the shop is tappable while it is open
 
-            BuildHeader(root);
-            BuildTabs(root);
+            // Everything below sits on this instead of directly on root: the dim above has to
+            // reach every physical edge, but a control here must not, or it ends up under the
+            // notch/Dynamic Island or the home indicator.
+            RectTransform safeContent = UiKit.CreateSafeAreaChild("SafeContent", root);
 
-            _content = UiKit.CreateChild("Content", root);
+            BuildHeader(safeContent);
+            BuildTabs(safeContent);
+
+            _content = UiKit.CreateChild("Content", safeContent);
             UiKit.Anchor(_content, new Vector2(0f, 0f), new Vector2(1f, 1f), new Vector2(40f, 366f), new Vector2(-40f, -430f));
 
             _pages = new RectTransform[4];
@@ -143,7 +150,7 @@ namespace SliceBlast.UI
             _pages[(int)Tab.Settings] = BuildSettingsPage();
             _pages[(int)Tab.Missions] = BuildMissionsPage();
 
-            BuildFooter(root);
+            BuildFooter(safeContent);
             SelectTab(Tab.Upgrades);
         }
 

@@ -178,8 +178,8 @@ namespace SliceBlast.Bootstrap
             _hud.LeaderboardRequested += OnLeaderboardRequested;
             _hud.PrivacyRequested += OnPrivacyRequested;
 
-            BuildShop(_hud.OverlayRoot);
-            BuildLeaderboard(_hud.OverlayRoot);
+            BuildShop(hudObject.transform);
+            BuildLeaderboard(hudObject.transform);
 
             AdsManager.EnsureInstance();
 

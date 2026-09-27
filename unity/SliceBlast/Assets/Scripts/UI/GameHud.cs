@@ -43,11 +43,7 @@ namespace SliceBlast.UI
         public event Action PrivacyRequested;
 
         private RectTransform _safeArea;
-        private RectTransform _overlaySafeArea;
         private Rect _appliedSafeArea;
-
-        /// <summary>Where a full-screen overlay belongs, clear of the notch/Dynamic Island.</summary>
-        public RectTransform OverlayRoot => _overlaySafeArea;
         private Font _font;
 
         private Text _score;
@@ -139,15 +135,6 @@ namespace SliceBlast.UI
 
             _safeArea = CreateChild("SafeArea", transform);
             Stretch(_safeArea);
-
-            // A second safe-area rect, inset the same way but with no CanvasGroup of its own.
-            // The gameplay HUD's group (_chrome, below) hides for the title and pause screens,
-            // and anything nested under a CanvasGroup inherits its alpha — so the full-screen
-            // overlays (title, pause, game-over, shop, leaderboard) hang off this one instead,
-            // clear of the notch/Dynamic Island on every device without going invisible
-            // whenever the run chrome does.
-            _overlaySafeArea = CreateChild("OverlaySafeArea", transform);
-            Stretch(_overlaySafeArea);
             ApplySafeArea();
 
             // Everything that belongs to a run lives under one group, so the title screen
@@ -272,7 +259,7 @@ namespace SliceBlast.UI
 
         private void BuildPauseSheet()
         {
-            RectTransform sheet = CreateChild("PauseSheet", _overlaySafeArea);
+            RectTransform sheet = CreateChild("PauseSheet", transform);
             Stretch(sheet);
 
             _pause = sheet.gameObject.AddComponent<CanvasGroup>();
@@ -284,23 +271,28 @@ namespace SliceBlast.UI
             Stretch(dim.rectTransform);
             dim.raycastTarget = true; // swallow taps while paused
 
-            Text title = CreateText("Title", sheet, 96, FontStyle.Bold, Color.white, TextAnchor.MiddleCenter);
+            // Everything below sits on this instead of directly on the sheet: the dim above
+            // has to reach every physical edge, but a control here must not, or it ends up
+            // under the notch/Dynamic Island or the home indicator.
+            RectTransform content = CreateSafeAreaChild("Content", sheet);
+
+            Text title = CreateText("Title", content, 96, FontStyle.Bold, Color.white, TextAnchor.MiddleCenter);
             Anchor(title.rectTransform, new Vector2(0f, 0.5f), new Vector2(1f, 0.5f), new Vector2(0f, 420f), new Vector2(0f, 560f));
             title.text = "PAUSED";
 
-            MenuControl resume = CreateButton("Resume", sheet, "RESUME", 58, Mint, Ink, IconShape.Play);
+            MenuControl resume = CreateButton("Resume", content, "RESUME", 58, Mint, Ink, IconShape.Play);
             PlaceMenuButton(resume, 240f);
             resume.Button.onClick.AddListener(() => PauseToggled?.Invoke());
 
-            MenuControl restart = CreateButton("Restart", sheet, "REPLAY", 58, Panel, Color.white, IconShape.Replay);
+            MenuControl restart = CreateButton("Restart", content, "REPLAY", 58, Panel, Color.white, IconShape.Replay);
             PlaceMenuButton(restart, 80f);
             restart.Button.onClick.AddListener(() => RestartRequested?.Invoke());
 
-            MenuControl home = CreateButton("Home", sheet, "HOME", 58, Panel, Color.white, IconShape.Home);
+            MenuControl home = CreateButton("Home", content, "HOME", 58, Panel, Color.white, IconShape.Home);
             PlaceMenuButton(home, -80f);
             home.Button.onClick.AddListener(() => HomeRequested?.Invoke());
 
-            MenuControl sound = CreateButton("Sound", sheet, "SOUND", 52, Panel, Color.white, IconShape.SoundOn);
+            MenuControl sound = CreateButton("Sound", content, "SOUND", 52, Panel, Color.white, IconShape.SoundOn);
             PlaceMenuButton(sound, -240f);
             _soundLabel = sound.Label;
             _soundIcon = sound.Icon;
@@ -310,7 +302,7 @@ namespace SliceBlast.UI
                 SoundToggled?.Invoke(_soundOn);
             });
 
-            MenuControl haptics = CreateButton("Haptics", sheet, "VIBRATION", 52, Panel, Color.white, IconShape.VibrateOn);
+            MenuControl haptics = CreateButton("Haptics", content, "VIBRATION", 52, Panel, Color.white, IconShape.VibrateOn);
             PlaceMenuButton(haptics, -400f);
             _hapticsLabel = haptics.Label;
             _hapticsIcon = haptics.Icon;
@@ -320,14 +312,14 @@ namespace SliceBlast.UI
                 HapticsToggled?.Invoke(_hapticsOn);
             });
 
-            Text credit = CreateText("Credit", sheet, 34, FontStyle.Normal, new Color(1f, 1f, 1f, 0.35f), TextAnchor.LowerCenter);
+            Text credit = CreateText("Credit", content, 34, FontStyle.Normal, new Color(1f, 1f, 1f, 0.35f), TextAnchor.LowerCenter);
             Anchor(credit.rectTransform, new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(0f, 60f), new Vector2(0f, 130f));
             credit.text = "SLICE BLAST";
             _pauseCredit = credit;
 
             // Takes the credit's place only where GDPR gives the player a standing right to
             // change their ad-privacy decision; everywhere else there is nothing behind it.
-            Text privacy = CreateText("Privacy", sheet, 36, FontStyle.Bold, new Color(1f, 1f, 1f, 0.7f), TextAnchor.MiddleCenter);
+            Text privacy = CreateText("Privacy", content, 36, FontStyle.Bold, new Color(1f, 1f, 1f, 0.7f), TextAnchor.MiddleCenter);
             Anchor(privacy.rectTransform, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(-280f, 50f), new Vector2(280f, 140f));
             privacy.text = "PRIVACY CHOICES";
             privacy.raycastTarget = true;
@@ -344,7 +336,7 @@ namespace SliceBlast.UI
         /// </summary>
         private void BuildHomeScreen()
         {
-            RectTransform screen = CreateChild("Home", _overlaySafeArea);
+            RectTransform screen = CreateChild("Home", transform);
             Stretch(screen);
 
             _home = screen.gameObject.AddComponent<CanvasGroup>();
@@ -355,29 +347,34 @@ namespace SliceBlast.UI
             Image dim = CreateImage("Dim", screen, new Color(Ink.r, Ink.g, Ink.b, 0.55f));
             Stretch(dim.rectTransform);
 
-            Text slice = CreateText("TitleSlice", screen, 175, FontStyle.Bold, Color.white, TextAnchor.MiddleCenter);
+            // Everything below sits on this instead of directly on the screen: the dim above
+            // has to reach every physical edge, but a control here must not, or it ends up
+            // under the notch/Dynamic Island or the home indicator.
+            RectTransform content = CreateSafeAreaChild("Content", screen);
+
+            Text slice = CreateText("TitleSlice", content, 175, FontStyle.Bold, Color.white, TextAnchor.MiddleCenter);
             Anchor(slice.rectTransform, new Vector2(0f, 0.5f), new Vector2(1f, 0.5f), new Vector2(0f, 170f), new Vector2(0f, 380f));
             slice.text = "SLICE";
             _titleSlice = slice.rectTransform;
 
-            Image cut = CreateImage("TitleCut", screen, Mint);
+            Image cut = CreateImage("TitleCut", content, Mint);
             Anchor(cut.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), Vector2.zero, Vector2.zero);
             cut.rectTransform.pivot = new Vector2(0.5f, 0.5f);
             cut.rectTransform.sizeDelta = new Vector2(0f, 12f);
             cut.rectTransform.anchoredPosition = new Vector2(0f, 150f);
             _titleCut = cut.rectTransform;
 
-            Text blast = CreateText("TitleBlast", screen, 175, FontStyle.Bold, Gold, TextAnchor.MiddleCenter);
+            Text blast = CreateText("TitleBlast", content, 175, FontStyle.Bold, Gold, TextAnchor.MiddleCenter);
             Anchor(blast.rectTransform, new Vector2(0f, 0.5f), new Vector2(1f, 0.5f), new Vector2(0f, -80f), new Vector2(0f, 130f));
             blast.text = "BLAST";
             _titleBlast = blast.rectTransform;
 
-            _homeStart = CreateText("TapToStart", screen, 66, FontStyle.Bold, Color.white, TextAnchor.MiddleCenter);
+            _homeStart = CreateText("TapToStart", content, 66, FontStyle.Bold, Color.white, TextAnchor.MiddleCenter);
             Anchor(_homeStart.rectTransform, new Vector2(0f, 0.5f), new Vector2(1f, 0.5f), new Vector2(0f, -330f), new Vector2(0f, -230f));
             _homeStart.text = "TAP TO START";
 
-            Image crown = CreateImage("HomeCrown", screen, Gold);
-            crown.sprite = IconFactory.GetSprite(IconShape.Crown);
+            Image crown = CreateImage("HomeCrown", content, Gold);
+            crown.sprite = IconFactory.GetSprite(IconShape.Target);
             crown.rectTransform.anchorMin = new Vector2(0.5f, 0.5f);
             crown.rectTransform.anchorMax = new Vector2(0.5f, 0.5f);
             crown.rectTransform.pivot = new Vector2(0.5f, 0.5f);
@@ -385,10 +382,10 @@ namespace SliceBlast.UI
             crown.rectTransform.anchoredPosition = new Vector2(-130f, -450f);
             _homeCrown = crown;
 
-            _homeBest = CreateText("HomeBest", screen, 54, FontStyle.Bold, Gold, TextAnchor.MiddleCenter);
+            _homeBest = CreateText("HomeBest", content, 54, FontStyle.Bold, Gold, TextAnchor.MiddleCenter);
             Anchor(_homeBest.rectTransform, new Vector2(0f, 0.5f), new Vector2(1f, 0.5f), new Vector2(60f, -490f), new Vector2(0f, -410f));
 
-            MenuControl sound = CreateButton("HomeSound", screen, string.Empty, 0, new Color(1f, 1f, 1f, 0.16f), Color.white, IconShape.SoundOn);
+            MenuControl sound = CreateButton("HomeSound", content, string.Empty, 0, new Color(1f, 1f, 1f, 0.16f), Color.white, IconShape.SoundOn);
             PlaceHomeToggle(sound, -110f);
             _homeSoundIcon = sound.Icon;
             sound.Button.onClick.AddListener(() =>
@@ -397,7 +394,7 @@ namespace SliceBlast.UI
                 SoundToggled?.Invoke(_soundOn);
             });
 
-            MenuControl haptics = CreateButton("HomeHaptics", screen, string.Empty, 0, new Color(1f, 1f, 1f, 0.16f), Color.white, IconShape.VibrateOn);
+            MenuControl haptics = CreateButton("HomeHaptics", content, string.Empty, 0, new Color(1f, 1f, 1f, 0.16f), Color.white, IconShape.VibrateOn);
             PlaceHomeToggle(haptics, 110f);
             _homeHapticsIcon = haptics.Icon;
             haptics.Button.onClick.AddListener(() =>
@@ -408,7 +405,7 @@ namespace SliceBlast.UI
 
             // Widened from a 3-word-tight 420 and dropped a size: at 50pt "WORKSHOP" ran past
             // its own label region and looked cramped against the icon.
-            MenuControl shop = CreateButton("HomeShop", screen, "WORKSHOP", 42, Panel, Color.white, IconShape.Bag);
+            MenuControl shop = CreateButton("HomeShop", content, "WORKSHOP", 42, Panel, Color.white, IconShape.Bag);
             RectTransform shopRect = shop.Root;
             shopRect.anchorMin = new Vector2(0.5f, 0f);
             shopRect.anchorMax = new Vector2(0.5f, 0f);
@@ -420,7 +417,7 @@ namespace SliceBlast.UI
             // Top-right corner rather than sharing the bottom row with Workshop: a leaderboard
             // entry point is worth seeing the moment the title screen appears, not only after
             // scrolling attention down to where the home indicator crowds it on most phones.
-            MenuControl board = CreateButton("HomeLeaderboard", screen, string.Empty, 0, Panel, Gold, IconShape.Crown);
+            MenuControl board = CreateButton("HomeLeaderboard", content, string.Empty, 0, Panel, Gold, IconShape.Crown);
             RectTransform boardRect = board.Root;
             boardRect.anchorMin = new Vector2(1f, 1f);
             boardRect.anchorMax = new Vector2(1f, 1f);
@@ -439,7 +436,7 @@ namespace SliceBlast.UI
             // Sits on the workshop button and counts finished, unclaimed missions — the one
             // thing on the title screen that should pull the eye when there is something to
             // collect, and be invisible when there is not.
-            _homeShopBadge = CreateText("HomeShopBadge", screen, 40, FontStyle.Bold, Ink, TextAnchor.MiddleCenter);
+            _homeShopBadge = CreateText("HomeShopBadge", content, 40, FontStyle.Bold, Ink, TextAnchor.MiddleCenter);
             RectTransform badgeRect = _homeShopBadge.rectTransform;
             badgeRect.anchorMin = new Vector2(0.5f, 0f);
             badgeRect.anchorMax = new Vector2(0.5f, 0f);
@@ -447,7 +444,7 @@ namespace SliceBlast.UI
             badgeRect.sizeDelta = new Vector2(60f, 60f);
             badgeRect.anchoredPosition = new Vector2(120f, 400f);
 
-            _homeShopBadgeDot = CreateImage("HomeShopBadgeDot", screen, Gold);
+            _homeShopBadgeDot = CreateImage("HomeShopBadgeDot", content, Gold);
             _homeShopBadgeDot.sprite = IconFactory.GetSprite(IconShape.Panel);
             _homeShopBadgeDot.type = Image.Type.Sliced;
             RectTransform dotRect = _homeShopBadgeDot.rectTransform;
@@ -463,8 +460,8 @@ namespace SliceBlast.UI
             // and an empty gold dot on the first frames reads as a rendering fault.
             _homeShopBadgeDot.gameObject.SetActive(false);
 
-            CreateLink("Privacy", screen, "PRIVACY POLICY", -175f, PrivacyUrl);
-            CreateLink("Terms", screen, "TERMS OF USE", 175f, TermsUrl);
+            CreateLink("Privacy", content, "PRIVACY POLICY", -175f, PrivacyUrl);
+            CreateLink("Terms", content, "TERMS OF USE", 175f, TermsUrl);
 
             _titleSliceRest = _titleSlice.anchoredPosition;
             _titleBlastRest = _titleBlast.anchoredPosition;
@@ -518,7 +515,7 @@ namespace SliceBlast.UI
 
         private void BuildGameOverScreen()
         {
-            RectTransform screen = CreateChild("GameOver", _overlaySafeArea);
+            RectTransform screen = CreateChild("GameOver", transform);
             Stretch(screen);
 
             _gameOver = screen.gameObject.AddComponent<CanvasGroup>();
@@ -531,22 +528,27 @@ namespace SliceBlast.UI
             Image dim = CreateImage("Dim", screen, new Color(Ink.r, Ink.g, Ink.b, 0.42f));
             Stretch(dim.rectTransform);
 
+            // Everything below sits on this instead of directly on the screen: the dim above
+            // has to reach every physical edge, but a control here must not, or it ends up
+            // under the notch/Dynamic Island or the home indicator.
+            RectTransform content = CreateSafeAreaChild("Content", screen);
+
             // The readable content sits on solid panels in the top and bottom thirds; the
             // middle band stays clear.
-            Image header = CreateImage("HeaderPanel", screen, new Color(Ink.r, Ink.g, Ink.b, 0.88f));
+            Image header = CreateImage("HeaderPanel", content, new Color(Ink.r, Ink.g, Ink.b, 0.88f));
             header.sprite = IconFactory.GetSprite(IconShape.Panel);
             header.type = Image.Type.Sliced;
             Anchor(header.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(60f, -760f), new Vector2(-60f, -200f));
 
-            Text title = CreateText("Title", screen, 80, FontStyle.Bold, new Color(1f, 1f, 1f, 0.75f), TextAnchor.UpperCenter);
+            Text title = CreateText("Title", content, 80, FontStyle.Bold, new Color(1f, 1f, 1f, 0.75f), TextAnchor.UpperCenter);
             Anchor(title.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0f, -360f), new Vector2(0f, -260f));
             title.text = "RUN OVER";
 
-            _finalScore = CreateText("FinalScore", screen, 210, FontStyle.Bold, Color.white, TextAnchor.UpperCenter);
+            _finalScore = CreateText("FinalScore", content, 210, FontStyle.Bold, Color.white, TextAnchor.UpperCenter);
             Anchor(_finalScore.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0f, -620f), new Vector2(0f, -370f));
 
-            Image crown = CreateImage("Crown", screen, Gold);
-            crown.sprite = IconFactory.GetSprite(IconShape.Crown);
+            Image crown = CreateImage("Crown", content, Gold);
+            crown.sprite = IconFactory.GetSprite(IconShape.Target);
             RectTransform crownRect = crown.rectTransform;
             crownRect.anchorMin = new Vector2(0.5f, 1f);
             crownRect.anchorMax = new Vector2(0.5f, 1f);
@@ -554,10 +556,10 @@ namespace SliceBlast.UI
             crownRect.sizeDelta = new Vector2(62f, 62f);
             crownRect.anchoredPosition = new Vector2(-150f, -665f);
 
-            _bestScore = CreateText("BestScore", screen, 54, FontStyle.Bold, Gold, TextAnchor.MiddleCenter);
+            _bestScore = CreateText("BestScore", content, 54, FontStyle.Bold, Gold, TextAnchor.MiddleCenter);
             Anchor(_bestScore.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(40f, -700f), new Vector2(0f, -630f));
 
-            MenuControl again = CreateButton("PlayAgain", screen, "PLAY AGAIN", 60, Mint, Ink, IconShape.Replay);
+            MenuControl again = CreateButton("PlayAgain", content, "PLAY AGAIN", 60, Mint, Ink, IconShape.Replay);
             RectTransform againRect = again.Root;
             againRect.anchorMin = new Vector2(0.5f, 0f);
             againRect.anchorMax = new Vector2(0.5f, 0f);
@@ -568,7 +570,7 @@ namespace SliceBlast.UI
 
             // Hidden until an ad is actually loaded and ready — never a button that promises
             // a reward it cannot deliver.
-            _continueButton = CreateButton("Continue", screen, "CONTINUE", 50, new Color(1f, 1f, 1f, 0.1f), Gold, IconShape.Bolt);
+            _continueButton = CreateButton("Continue", content, "CONTINUE", 50, new Color(1f, 1f, 1f, 0.1f), Gold, IconShape.Bolt);
             RectTransform continueRect = _continueButton.Root;
             continueRect.anchorMin = new Vector2(0.5f, 0f);
             continueRect.anchorMax = new Vector2(0.5f, 0f);
@@ -578,7 +580,7 @@ namespace SliceBlast.UI
             _continueButton.Button.onClick.AddListener(() => ContinueRequested?.Invoke());
             _continueButton.Root.gameObject.SetActive(false);
 
-            MenuControl shop = CreateButton("GameOverShop", screen, "WORKSHOP", 44, new Color(1f, 1f, 1f, 0.12f), Color.white, IconShape.Bag);
+            MenuControl shop = CreateButton("GameOverShop", content, "WORKSHOP", 44, new Color(1f, 1f, 1f, 0.12f), Color.white, IconShape.Bag);
             RectTransform shopRect = shop.Root;
             shopRect.anchorMin = new Vector2(0.5f, 0f);
             shopRect.anchorMax = new Vector2(0.5f, 0f);
@@ -587,14 +589,14 @@ namespace SliceBlast.UI
             shopRect.anchoredPosition = new Vector2(0f, 200f);
             shop.Button.onClick.AddListener(() => ShopRequested?.Invoke());
 
-            _restart = CreateText("RestartHint", screen, 40, FontStyle.Bold, new Color(1f, 1f, 1f, 0.7f), TextAnchor.MiddleCenter);
+            _restart = CreateText("RestartHint", content, 40, FontStyle.Bold, new Color(1f, 1f, 1f, 0.7f), TextAnchor.MiddleCenter);
             Anchor(_restart.rectTransform, new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(0f, 84f), new Vector2(0f, 146f));
             _restart.text = "OR TAP ANYWHERE";
 
             // Just clear of the header panel's bottom edge rather than inside it: the panel
             // already carries the score and the record, and a third line crammed against its
             // border reads as an overflow.
-            _runCoins = CreateText("RunCoins", screen, 46, FontStyle.Bold, Gold, TextAnchor.MiddleCenter);
+            _runCoins = CreateText("RunCoins", content, 46, FontStyle.Bold, Gold, TextAnchor.MiddleCenter);
             Anchor(_runCoins.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0f, -846f), new Vector2(0f, -786f));
         }
 
@@ -906,7 +908,7 @@ namespace SliceBlast.UI
         {
             float dt = Time.unscaledDeltaTime;
 
-            if ((_safeArea != null || _overlaySafeArea != null) && _appliedSafeArea != Screen.safeArea)
+            if (_safeArea != null && _appliedSafeArea != Screen.safeArea)
             {
                 ApplySafeArea();
             }
@@ -1134,12 +1136,6 @@ namespace SliceBlast.UI
 
             _safeArea.anchorMin = min;
             _safeArea.anchorMax = max;
-
-            if (_overlaySafeArea != null)
-            {
-                _overlaySafeArea.anchorMin = min;
-                _overlaySafeArea.anchorMax = max;
-            }
         }
 
         private static void Stretch(RectTransform rect)
