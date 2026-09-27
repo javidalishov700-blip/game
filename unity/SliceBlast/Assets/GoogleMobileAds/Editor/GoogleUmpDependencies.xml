@@ -7,10 +7,7 @@
     </androidPackage>
   </androidPackages>
   <iosPods>
-    <iosPod name="GoogleUserMessagingPlatform" version="3.1.0">
-      <sources>
-        <source>https://github.com/CocoaPods/Specs</source>
-      </sources>
-    </iosPod>
+    <!-- See GoogleMobileAdsDependencies.xml for why this carries no explicit <sources>. -->
+    <iosPod name="GoogleUserMessagingPlatform" version="3.1.0" />
   </iosPods>
 </dependencies>

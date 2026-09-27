@@ -23,10 +23,14 @@
   </androidPackages>
 
   <iosPods>
-    <iosPod name="Google-Mobile-Ads-SDK" version="~> 13.7">
-      <sources>
-        <source>https://github.com/CocoaPods/Specs</source>
-      </sources>
-    </iosPod>
+    <!--
+      No explicit <sources> here on purpose. The External Dependency Manager already
+      searches the CDN (https://cdn.cocoapods.org/) by default; naming the old git-based
+      https://github.com/CocoaPods/Specs here made it search both, and CocoaPods refused
+      to pick between the two nearly-identical spec files that produced — "Found multiple
+      specifications for Google-Mobile-Ads-SDK" — on every build. The CDN mirrors the same
+      specs and is what CocoaPods itself has defaulted new projects to since 1.7.
+    -->
+    <iosPod name="Google-Mobile-Ads-SDK" version="~> 13.7" />
   </iosPods>
 </dependencies>
