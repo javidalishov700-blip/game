@@ -191,13 +191,15 @@ namespace SliceBlast.UI
             _tabs = new MenuControl[4];
 
             string[] labels = { "UPGRADES", "THEMES", "SETTINGS", "DAILY" };
-            IconShape[] icons = { IconShape.Chevrons, IconShape.Burst, IconShape.Lock, IconShape.Target };
 
             for (int i = 0; i < _tabs.Length; i++)
             {
-                // Four columns instead of three narrowed every tab; 38pt "SETTINGS" no longer
-                // fit its own button without crowding.
-                MenuControl tab = UiKit.CreateButton(_font, "Tab" + i, root, labels[i], 30, UiKit.Panel, Color.white, icons[i]);
+                // No icon: a glyph crowds a 30pt word in a quarter-width button, so tabs have
+                // never shown one. Built with IconShape.None from the start rather than built
+                // with one and disabled afterwards — CreateButton's layout group sizes and
+                // centres the label the moment it's created, so there is nothing left over to
+                // correct once the button exists.
+                MenuControl tab = UiKit.CreateButton(_font, "Tab" + i, root, labels[i], 30, UiKit.Panel, Color.white, IconShape.None);
 
                 RectTransform rect = tab.Root;
                 rect.anchorMin = new Vector2(i / (float)_tabs.Length, 1f);
@@ -205,18 +207,6 @@ namespace SliceBlast.UI
                 rect.pivot = new Vector2(0.5f, 1f);
                 rect.offsetMin = new Vector2(46f, -390f);
                 rect.offsetMax = new Vector2(-6f, -290f);
-
-                // The icon crowds a 38pt word in a third-width button; the label alone is
-                // clearer at this size, so the glyph is dropped and the text recentred.
-                if (tab.Icon != null)
-                {
-                    tab.Icon.gameObject.SetActive(false);
-                }
-
-                if (tab.Label != null)
-                {
-                    UiKit.Anchor(tab.Label.rectTransform, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
-                }
 
                 Tab which = (Tab)i;
                 tab.Button.onClick.AddListener(() => SelectTab(which));

@@ -62,7 +62,6 @@ namespace SliceBlast.Core
         // combo multiplier, which is the part that is meant to keep paying out indefinitely.
         [SerializeField] private int maxBlastLevel = 6;
         [SerializeField] private int neonLayers = 3;
-        [SerializeField] private int maxMultiplier = 9;
         [SerializeField] private float blastShake = 0.95f;
         [SerializeField] private float blastImpulse = 7f;
         [SerializeField] private float blastSpin = 6f;
@@ -991,7 +990,15 @@ namespace SliceBlast.Core
 
             AwardCoins(coinsPerBlastLayer * removable + coinsPerChainLayer * chain, epicenter);
 
-            _comboMultiplier = Mathf.Min(_comboMultiplier + 1, maxMultiplier);
+            // The "xN" the player sees is now, by definition, the exact block count this
+            // blast just cleared. It used to climb by 1 every blast (2, 3, 4, 5...) while the
+            // blast itself cleared blastBaseLayers + blastLayerStep*level (3, 5, 7, 9...) —
+            // two different formulas that only coincidentally lined up on the very first
+            // blast, so "x3" could mean anything from a 3-block blast to a much bigger one by
+            // the third or fourth. A chain from earlier misses is still added on top of this
+            // and called out on its own in the banner ("FAULT CHAIN xN") — that part is a
+            // separate, clearly labelled bonus, not folded into this number.
+            _comboMultiplier = removable;
             _blastLevel = exhausted ? 0 : Mathf.Min(_blastLevel + 1, maxBlastLevel);
             _perfectStreak = 0;
             _slowdown = 0f;
