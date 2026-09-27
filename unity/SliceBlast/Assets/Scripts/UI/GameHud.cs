@@ -40,6 +40,7 @@ namespace SliceBlast.UI
         public event Action ContinueRequested;
         public event Action ShopRequested;
         public event Action LeaderboardRequested;
+        public event Action PrivacyRequested;
 
         private RectTransform _safeArea;
         private Rect _appliedSafeArea;
@@ -65,6 +66,8 @@ namespace SliceBlast.UI
         private Image _homeShopBadgeDot;
         private Text _runCoins;
         private RectTransform _leaderboardButton;
+        private GameObject _privacyLink;
+        private Text _pauseCredit;
 
         private Image _flash;
         private Image _shieldIcon;
@@ -307,6 +310,19 @@ namespace SliceBlast.UI
             Text credit = CreateText("Credit", sheet, 34, FontStyle.Normal, new Color(1f, 1f, 1f, 0.35f), TextAnchor.LowerCenter);
             Anchor(credit.rectTransform, new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(0f, 60f), new Vector2(0f, 130f));
             credit.text = "SLICE BLAST";
+            _pauseCredit = credit;
+
+            // Takes the credit's place only where GDPR gives the player a standing right to
+            // change their ad-privacy decision; everywhere else there is nothing behind it.
+            Text privacy = CreateText("Privacy", sheet, 36, FontStyle.Bold, new Color(1f, 1f, 1f, 0.7f), TextAnchor.MiddleCenter);
+            Anchor(privacy.rectTransform, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(-280f, 50f), new Vector2(280f, 140f));
+            privacy.text = "PRIVACY CHOICES";
+            privacy.raycastTarget = true;
+            Button privacyButton = privacy.gameObject.AddComponent<Button>();
+            privacyButton.targetGraphic = privacy;
+            privacyButton.onClick.AddListener(() => PrivacyRequested?.Invoke());
+            _privacyLink = privacy.gameObject;
+            _privacyLink.SetActive(false);
         }
 
         /// <summary>
@@ -755,6 +771,17 @@ namespace SliceBlast.UI
         }
 
         /// <summary>The count on the workshop button: finished missions waiting to be claimed.</summary>
+        public void SetPrivacyOptionsAvailable(bool available)
+        {
+            if (_privacyLink == null)
+            {
+                return;
+            }
+
+            _privacyLink.SetActive(available);
+            _pauseCredit.gameObject.SetActive(!available);
+        }
+
         public void SetShopBadge(int count)
         {
             bool show = count > 0;

@@ -25,6 +25,16 @@ namespace SliceBlast.Ads
         /// </summary>
         void Initialize();
 
+        /// <summary>
+        /// True when the network's consent rules oblige the app to let the player revisit
+        /// their privacy choices (GDPR regions, for AdMob). The game shows an entry point only
+        /// then.
+        /// </summary>
+        bool PrivacyOptionsRequired { get; }
+
+        /// <summary>Opens the network's own privacy choices form.</summary>
+        void ShowPrivacyOptions();
+
         void ShowInterstitial();
 
         /// <summary>

@@ -37,6 +37,38 @@ namespace SliceBlast.Ads
         /// <summary>True when any provider has a rewarded ad ready to show.</summary>
         public bool IsRewardedReady => FindRewardedProvider() != null;
 
+        /// <summary>
+        /// True when a network requires a way back into the player's privacy choices. GDPR
+        /// makes withdrawing consent a right that must stay as easy as giving it was.
+        /// </summary>
+        public bool PrivacyOptionsRequired
+        {
+            get
+            {
+                for (int i = 0; i < _providers.Count; i++)
+                {
+                    if (_providers[i].PrivacyOptionsRequired)
+                    {
+                        return true;
+                    }
+                }
+
+                return false;
+            }
+        }
+
+        public void ShowPrivacyOptions()
+        {
+            for (int i = 0; i < _providers.Count; i++)
+            {
+                if (_providers[i].PrivacyOptionsRequired)
+                {
+                    _providers[i].ShowPrivacyOptions();
+                    return;
+                }
+            }
+        }
+
         /// <summary>Creates the singleton the first time it is needed; safe to call repeatedly.</summary>
         public static AdsManager EnsureInstance()
         {

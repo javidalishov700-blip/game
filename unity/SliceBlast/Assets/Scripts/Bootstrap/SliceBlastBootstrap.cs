@@ -175,6 +175,7 @@ namespace SliceBlast.Bootstrap
             _hud.ContinueRequested += OnContinueRequested;
             _hud.ShopRequested += OnShopRequested;
             _hud.LeaderboardRequested += OnLeaderboardRequested;
+            _hud.PrivacyRequested += OnPrivacyRequested;
 
             BuildShop(hudObject.transform);
 
@@ -412,6 +413,7 @@ namespace SliceBlast.Bootstrap
                 _hud.ContinueRequested -= OnContinueRequested;
                 _hud.ShopRequested -= OnShopRequested;
                 _hud.LeaderboardRequested -= OnLeaderboardRequested;
+                _hud.PrivacyRequested -= OnPrivacyRequested;
             }
         }
 
@@ -884,7 +886,22 @@ namespace SliceBlast.Bootstrap
 
         private void OnPauseChanged(bool paused)
         {
+            if (paused && AdsManager.Instance != null)
+            {
+                // Asked each time rather than once: the answer only arrives after Google's
+                // consent check has run, which can be after the first pause.
+                _hud.SetPrivacyOptionsAvailable(AdsManager.Instance.PrivacyOptionsRequired);
+            }
+
             _hud.ShowPaused(paused);
+        }
+
+        private void OnPrivacyRequested()
+        {
+            if (AdsManager.Instance != null)
+            {
+                AdsManager.Instance.ShowPrivacyOptions();
+            }
         }
 
         private static void CreateEventSystem()
