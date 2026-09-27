@@ -30,9 +30,6 @@ namespace SliceBlast.Core
         public Vector3 NextTop;
         public Color Color;
         public bool FromNeon;
-
-        /// <summary>Cracked layers the blast carried on through under the ones it asked for.</summary>
-        public int Chain;
     }
 
     public struct RewardEvent

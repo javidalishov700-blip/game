@@ -83,20 +83,6 @@ namespace SliceBlast.Core
         // finishing a lap, from the moment the current starts.
         [SerializeField] private int currentVisibleLayers = 14;
 
-        [Header("Fault Line")]
-        // A sliced layer stays in the tower but is damaged, and a blast that reaches one keeps
-        // going down through it.
-        //
-        // A chained layer pays *less* than one the blast was asked for, and that is the whole
-        // balance of the mechanic. Damage is a debt: it costs width immediately, it makes the
-        // very next placement harder (see BlockSlicer's cracked-footing penalty), and the
-        // chain is what finally clears it. Paying a premium for chained layers would have made
-        // the optimal line "miss on purpose, then cash in" — the spectacle is the reward here,
-        // not the score.
-        [SerializeField] private int maxChainLayers = 12;
-        [SerializeField] private int chainLayerBonus = 10;
-        [SerializeField] private float chainShakePerLayer = 0.12f;
-
         [Header("Shields")]
         [SerializeField] private int maxShieldCharges = 3;
 
@@ -105,14 +91,10 @@ namespace SliceBlast.Core
         [SerializeField] private int blastLayerBonus = 15;
 
         [Header("Coins")]
-        // Chained layers pay the same as requested ones, not more. Coins are the meta
-        // currency, and making damage the fastest way to earn them would push the same
-        // "miss on purpose" line the score already refuses to reward.
         // Halved the blast payout and raised the score conversion: coins were piling up fast
         // enough that the shop's economy — priced assuming a slower drip — stopped meaning
         // anything after a handful of runs.
         [SerializeField] private int coinsPerBlastLayer = 1;
-        [SerializeField] private int coinsPerChainLayer = 1;
         [SerializeField] private int scorePerCoin = 40;
 
         // Onboarding grace: the very first block can never kill the run.
@@ -177,7 +159,6 @@ namespace SliceBlast.Core
         private int _shieldCharges;
         private int _runCoins;
         private int _biggestBlast;
-        private int _longestChain;
         private int _perfectCount;
         private int _specialCount;
 
@@ -347,7 +328,6 @@ namespace SliceBlast.Core
 
             _runCoins = 0;
             _biggestBlast = 0;
-            _longestChain = 0;
             _perfectCount = 0;
             _specialCount = 0;
 
@@ -820,10 +800,6 @@ namespace SliceBlast.Core
                     _score += TotalMultiplier;
                     _slowdown = Mathf.Min(_slowdown + comboBreakSlowdown, maxSlowdown);
 
-                    // The fault line: this layer was cut, so it goes into the tower damaged
-                    // and a future blast will carry on through it.
-                    block.Fracture();
-
                     PlayImpact(block, 0.16f, 6f, false, Color.white);
                     Haptics.Medium();
                     Shake(sliceShake);
@@ -961,43 +937,18 @@ namespace SliceBlast.Core
                 RemoveTopLayer(epicenter, 1f);
             }
 
-            // The fault line. Every layer that was sliced on the way in is a charge already
-            // sitting in the tower, and the blast keeps going down for as long as it keeps
-            // finding them. A run that stacked cleanly gets a clean blast; a run that fought
-            // for every layer gets one that tears the tower open — which is the whole trade,
-            // and why a chained layer pays double what a requested one does.
-            int chain = 0;
-
-            while (chain < maxChainLayers
-                   && _stack.Count > 1
-                   && _stack[_stack.Count - 1] != null
-                   && _stack[_stack.Count - 1].IsCracked)
-            {
-                chain++;
-
-                // Each link throws harder than the last, so the propagation is legible as an
-                // escalation rather than as one undifferentiated cloud of debris.
-                RemoveTopLayer(epicenter, 1f + chain * 0.15f);
-            }
-
-            int bonus = blastLayerBonus * removable * TotalMultiplier
-                        + chainLayerBonus * chain * TotalMultiplier;
+            int bonus = blastLayerBonus * removable * TotalMultiplier;
 
             _score += bonus;
             _blastCount++;
-            _biggestBlast = Mathf.Max(_biggestBlast, removable + chain);
-            _longestChain = Mathf.Max(_longestChain, chain);
+            _biggestBlast = Mathf.Max(_biggestBlast, removable);
 
-            AwardCoins(coinsPerBlastLayer * removable + coinsPerChainLayer * chain, epicenter);
+            AwardCoins(coinsPerBlastLayer * removable, epicenter);
 
-            // The "xN" the player sees is now, by definition, the exact block count this
-            // blast just cleared. It used to climb by 1 every blast (2, 3, 4, 5...) while the
-            // blast itself cleared blastBaseLayers + blastLayerStep*level (3, 5, 7, 9...) —
-            // two different formulas that only coincidentally lined up on the very first
-            // blast, so "x3" could mean anything from a 3-block blast to a much bigger one by
-            // the third or fourth. A chain from earlier misses is still added on top of this
-            // and called out on its own in the banner ("FAULT CHAIN xN") — that part is a
-            // separate, clearly labelled bonus, not folded into this number.
+            // The "xN" the player sees is, by definition, the exact block count this blast
+            // just cleared — it used to climb by a flat +1 per blast while the blast itself
+            // cleared blastBaseLayers + blastLayerStep*level (3, 5, 7, 9...), two formulas
+            // that only coincidentally lined up on the very first blast.
             _comboMultiplier = removable;
             _blastLevel = exhausted ? 0 : Mathf.Min(_blastLevel + 1, maxBlastLevel);
             _perfectStreak = 0;
@@ -1010,12 +961,6 @@ namespace SliceBlast.Core
             {
                 // The exposed layer becomes the new base: clearing downwards hands the
                 // player back the width those lower blocks still have.
-                //
-                // This is also what closes the fault line's loop, and it is worth spelling
-                // out because it is load-bearing and not obvious: a deep chain digs down to
-                // an older, *wider* layer, so the run that earned the chain by playing badly
-                // is handed a wide block to restart from. Sloppy play narrows the tower and
-                // plants charges; the blast that finds them pays the width back.
                 Vector3 exposed = top.CachedTransform.localScale;
                 _nextSize = new Vector2(exposed.x, exposed.z);
 
@@ -1028,9 +973,9 @@ namespace SliceBlast.Core
                 }
             }
 
-            Shake(blastShake + chainShakePerLayer * chain);
+            Shake(blastShake);
 
-            if (removable + chain >= hitstopBlastThreshold)
+            if (removable >= hitstopBlastThreshold)
             {
                 _hitstopHold = hitstopSeconds;
                 Time.timeScale = hitstopTimeScale;
@@ -1050,8 +995,7 @@ namespace SliceBlast.Core
                 Epicenter = epicenter,
                 NextTop = nextTop,
                 Color = fromNeon ? _neonColor : ThemeCatalogue.Equipped.Accent,
-                FromNeon = fromNeon,
-                Chain = chain
+                FromNeon = fromNeon
             });
 
             GameEvents.RaiseScoreChanged(_score, TotalMultiplier);
@@ -1210,8 +1154,8 @@ namespace SliceBlast.Core
             // counting mission would all be credited a second time for one tower — and a
             // player could farm the payout by reviving.
             //
-            // The two "personal best" shapes (a run's score, a chain length) are exempt: they
-            // are maxima, so reporting the running total again is idempotent.
+            // The run's score is exempt: it's a maximum, so reporting the running total again
+            // is idempotent.
             int scoreDelta = Mathf.Max(0, _score - _bankedScore);
             int blastDelta = Mathf.Max(0, _blastCount - _bankedBlasts);
             int perfectDelta = Mathf.Max(0, _perfectCount - _bankedPerfects);
@@ -1219,11 +1163,12 @@ namespace SliceBlast.Core
 
             AwardCoins(scoreDelta / Mathf.Max(1, scorePerCoin), TopBlockCenter());
 
-            PlayerProfile.RecordRun(_score, scoreDelta, blastDelta, _biggestBlast, _longestChain, !_runRecorded);
+            // The chain mechanic this used to also report is gone; the parameter stays (and
+            // always reads 0 now) because it is still what PlayerProfile's save schema stores.
+            PlayerProfile.RecordRun(_score, scoreDelta, blastDelta, _biggestBlast, 0, !_runRecorded);
             _bestScore = PlayerProfile.BestScore;
 
             MissionSystem.Report(MissionKind.RunScore, _score);
-            MissionSystem.Report(MissionKind.Chain, _longestChain);
             MissionSystem.Report(MissionKind.Perfects, perfectDelta);
             MissionSystem.Report(MissionKind.Blasts, blastDelta);
             MissionSystem.Report(MissionKind.Specials, specialDelta);

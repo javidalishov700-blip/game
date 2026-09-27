@@ -656,8 +656,8 @@ namespace SliceBlast.UI
             }
 
             // A second payout inside the same beat adds to the one already in flight rather
-            // than replacing it — a chained blast pays twice in two frames, and two numbers
-            // fighting over the same slot reads as a glitch.
+            // than replacing it — a blast and a reward landing in the same couple of frames
+            // both pay out, and two numbers fighting over the same slot reads as a glitch.
             _coinPopAmount = _coinPopLife > 0.35f ? _coinPopAmount + amount : amount;
             _coinPop.text = "+" + _coinPopAmount;
             _coinPopLife = 1f;

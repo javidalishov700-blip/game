@@ -666,17 +666,6 @@ namespace SliceBlast.Bootstrap
 
                 case PlacementKind.Sliced:
                     _audio.PlaySlice();
-
-                    // The fault line is invisible as a rule: the player sees a layer go dark
-                    // and has no way to know a blast will tear through it later. Said once,
-                    // the first time it ever happens to them, and never again — an unexplained
-                    // mechanic is a mechanic nobody plays around.
-                    if (!PlayerProfile.Data.sawFaultHint)
-                    {
-                        PlayerProfile.MarkFaultHintSeen();
-                        _hud.ShowBanner("CRACKED", "BLASTS CHAIN THROUGH DAMAGE", MissRed);
-                    }
-
                     break;
 
                 case PlacementKind.Shielded:
@@ -752,40 +741,22 @@ namespace SliceBlast.Bootstrap
         {
             _audio.PlayBlast();
 
-            int total = blast.Layers + blast.Chain;
-
-            // A chain is the rarer and better thing that just happened, so it takes the
-            // headline; the plain count only leads when the blast stopped where it was asked
-            // to. Spelled out rather than left as a multiplier — a 3/5/7/9 escalation reads
+            // Spelled out rather than left as a bare multiplier — a 3/5/7/9 escalation reads
             // as a score bonus until it says "block" somewhere.
-            string headline;
-            string detail;
-
-            if (blast.Chain > 0)
-            {
-                headline = "FAULT CHAIN x" + blast.Chain;
-                detail = total + " BLOCKS  +" + blast.Bonus;
-            }
-            else
-            {
-                headline = blast.FromNeon ? "NEON BLAST" : blast.Layers + " BLOCK BLAST";
-                detail = "+" + blast.Bonus;
-            }
+            string headline = blast.FromNeon ? "NEON BLAST" : blast.Layers + " BLOCK BLAST";
+            string detail = "+" + blast.Bonus;
 
             _hud.ShowBanner(headline, detail, blast.Color);
-            _hud.Flash(blast.Chain > 0 ? 1f : 0.9f);
+            _hud.Flash(0.9f);
 
-            // The sky reacts to what the blast actually cost the tower, chained layers and
-            // all — a 4-block blast that tore five faults open is a bigger moment than a
-            // clean 7 and should be allowed to say so.
-            int tier = SkyTierForBlast(total);
+            int tier = SkyTierForBlast(blast.Layers);
 
             if (tier > _skyTier)
             {
                 SetSkyTier(tier, false);
             }
 
-            EmitSparks(blast.Epicenter, blast.Color, 8.5f + blast.Chain * 0.9f, 0.15f);
+            EmitSparks(blast.Epicenter, blast.Color, 8.5f, 0.15f);
             EmitShockwave(blast.Epicenter, blast.Color);
 
             // Mark where the tower now ends, so the next block never appears out of nowhere.
@@ -794,12 +765,7 @@ namespace SliceBlast.Bootstrap
 
             if (_starField != null)
             {
-                _starField.Pulse(Mathf.Lerp(0.6f, 1.4f, Mathf.InverseLerp(3f, 9f, total)));
-            }
-
-            if (blast.Chain >= 3)
-            {
-                Haptics.Heavy();
+                _starField.Pulse(Mathf.Lerp(0.6f, 1.4f, Mathf.InverseLerp(3f, 9f, blast.Layers)));
             }
         }
 

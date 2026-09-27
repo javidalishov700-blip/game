@@ -15,7 +15,6 @@ namespace SliceBlast.Meta
         RunScore = 0,
         Perfects = 1,
         Blasts = 2,
-        Chain = 3,
         Specials = 4
     }
 
@@ -41,8 +40,6 @@ namespace SliceBlast.Meta
             new MissionDefinition { Id = "perfect80", Kind = MissionKind.Perfects, Target = 80,   Reward = 300, Text = "LAND 80 PERFECT DROPS" },
             new MissionDefinition { Id = "blast5",    Kind = MissionKind.Blasts,   Target = 5,    Reward = 150, Text = "TRIGGER 5 BLASTS" },
             new MissionDefinition { Id = "blast15",   Kind = MissionKind.Blasts,   Target = 15,   Reward = 340, Text = "TRIGGER 15 BLASTS" },
-            new MissionDefinition { Id = "chain3",    Kind = MissionKind.Chain,    Target = 3,    Reward = 220, Text = "SET OFF A 3-CHAIN" },
-            new MissionDefinition { Id = "chain5",    Kind = MissionKind.Chain,    Target = 5,    Reward = 420, Text = "SET OFF A 5-CHAIN" },
             new MissionDefinition { Id = "special6",  Kind = MissionKind.Specials, Target = 6,    Reward = 180, Text = "LAND 6 SPECIAL BLOCKS" },
             new MissionDefinition { Id = "special15", Kind = MissionKind.Specials, Target = 15,   Reward = 360, Text = "LAND 15 SPECIAL BLOCKS" }
         };
@@ -104,7 +101,7 @@ namespace SliceBlast.Meta
             System.Random random = new System.Random(seed);
 
             // Walk the pool in a shuffled order rather than re-rolling indices: with only
-            // eleven entries a retry loop can spin for a long time once most kinds are taken.
+            // nine entries a retry loop can spin for a long time once most kinds are taken.
             var order = new List<int>(Pool.Length);
 
             for (int i = 0; i < Pool.Length; i++)
@@ -207,9 +204,9 @@ namespace SliceBlast.Meta
         }
 
         /// <summary>
-        /// Counters accumulate; a personal-best style mission (a run score, a chain length)
-        /// keeps the largest single value instead, which is why the two are split here rather
-        /// than at the call site.
+        /// Counters accumulate; a personal-best style mission (a run's score) keeps the
+        /// largest single value instead, which is why the two are split here rather than at
+        /// the call site.
         /// </summary>
         public static void Report(MissionKind kind, int value)
         {
@@ -230,7 +227,7 @@ namespace SliceBlast.Meta
                     continue;
                 }
 
-                bool best = kind == MissionKind.RunScore || kind == MissionKind.Chain;
+                bool best = kind == MissionKind.RunScore;
                 int current = data.missionProgress[i];
                 int updated = best ? Mathf.Max(current, value) : current + value;
                 updated = Mathf.Min(updated, definition.Target);
