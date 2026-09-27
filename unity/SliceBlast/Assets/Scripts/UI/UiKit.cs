@@ -89,11 +89,15 @@ namespace SliceBlast.UI
             text.raycastTarget = false;
 
             // A word sitting on a coloured panel needs a rim, not a drop shadow, to survive
-            // whatever the panel behind it happens to be.
+            // whatever the panel behind it happens to be. The rim itself has to contrast with
+            // the letters, not just the panel: a dark label (UiKit.Ink, on a Mint "Buy" or
+            // "EQUIP" button) with a black rim reads as a smear of near-identical dark pixels
+            // rather than a crisp edge — OutlineColorFor picks light-on-dark or dark-on-light
+            // to match whichever this label actually is.
             if (outlined)
             {
                 Outline outline = rect.gameObject.AddComponent<Outline>();
-                outline.effectColor = new Color(0f, 0f, 0f, 0.55f);
+                outline.effectColor = OutlineColorFor(color);
                 outline.effectDistance = new Vector2(2.5f, -2.5f);
             }
             else
@@ -104,6 +108,37 @@ namespace SliceBlast.UI
             }
 
             return text;
+        }
+
+        /// <summary>The outline colour that stays visible against a given label colour.</summary>
+        private static Color OutlineColorFor(Color textColor)
+        {
+            float luminance = 0.299f * textColor.r + 0.587f * textColor.g + 0.114f * textColor.b;
+            return luminance < 0.5f ? new Color(1f, 1f, 1f, 0.6f) : new Color(0f, 0f, 0f, 0.55f);
+        }
+
+        /// <summary>
+        /// Changes a label's colour and, if it carries the outline CreateText adds, keeps the
+        /// outline's own colour matching it. Every place in the game that recolours a label at
+        /// runtime (a selected tab, an affordable price, a claimable reward) goes through this
+        /// instead of touching Text.color directly, so the label can never end up dark text on
+        /// a dark outline — or the reverse — after the state it reflects changes.
+        /// </summary>
+        public static void SetLabelColor(Text label, Color color)
+        {
+            if (label == null)
+            {
+                return;
+            }
+
+            label.color = color;
+
+            Outline outline = label.GetComponent<Outline>();
+
+            if (outline != null)
+            {
+                outline.effectColor = OutlineColorFor(color);
+            }
         }
 
         public static MenuControl CreateButton(

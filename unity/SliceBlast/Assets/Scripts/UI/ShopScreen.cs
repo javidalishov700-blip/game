@@ -609,7 +609,7 @@ namespace SliceBlast.UI
 
                     if (_tabs[i].Label != null)
                     {
-                        _tabs[i].Label.color = i == (int)tab ? UiKit.Ink : Color.white;
+                        UiKit.SetLabelColor(_tabs[i].Label, i == (int)tab ? UiKit.Ink : Color.white);
                     }
                 }
             }
@@ -778,7 +778,7 @@ namespace SliceBlast.UI
 
                 // On a dark disabled panel the ink label would be unreadable, so the two
                 // states swap foreground as well as background.
-                row.Cost.color = affordable ? UiKit.Ink : new Color(1f, 1f, 1f, 0.55f);
+                UiKit.SetLabelColor(row.Cost, affordable ? UiKit.Ink : new Color(1f, 1f, 1f, 0.55f));
             }
         }
 
@@ -819,7 +819,7 @@ namespace SliceBlast.UI
                         : affordable ? UiKit.Mint : new Color(1f, 1f, 1f, 0.18f);
                 }
 
-                row.State.color = !active && affordable ? UiKit.Ink : new Color(1f, 1f, 1f, 0.6f);
+                UiKit.SetLabelColor(row.State, !active && affordable ? UiKit.Ink : new Color(1f, 1f, 1f, 0.6f));
                 row.Name.color = owned ? Color.white : new Color(1f, 1f, 1f, 0.7f);
             }
         }
@@ -864,7 +864,7 @@ namespace SliceBlast.UI
                     background.color = complete && !claimed ? UiKit.Gold : new Color(1f, 1f, 1f, 0.16f);
                 }
 
-                row.Reward.color = complete && !claimed ? UiKit.Ink : new Color(1f, 1f, 1f, 0.55f);
+                UiKit.SetLabelColor(row.Reward, complete && !claimed ? UiKit.Ink : new Color(1f, 1f, 1f, 0.55f));
             }
         }
 
