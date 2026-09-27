@@ -150,28 +150,65 @@ namespace SliceBlast.UI
 
             bool hasLabel = !string.IsNullOrEmpty(label);
 
-            if (icon != IconShape.None)
+            if (hasLabel)
+            {
+                // Icon and label as one horizontally centred group, sized and positioned live
+                // by Unity's own layout system rather than fixed pixel offsets (icon at x=92,
+                // label starting at x=160). That scheme assumed one particular button width
+                // and only ever balanced by coincidence — anywhere else, and after several of
+                // these buttons relabel themselves later (Sound/Haptics toggle text, an
+                // upgrade's cost, Remove Ads once bought), the label sat well right of the
+                // button's true centre. Text implements Unity's layout interface itself, so
+                // relabelling it later re-centres this automatically; only the icon, which
+                // never changes, needs an explicit size.
+                RectTransform content = CreateChild(name + "Content", root);
+                content.anchorMin = new Vector2(0.5f, 0.5f);
+                content.anchorMax = new Vector2(0.5f, 0.5f);
+                content.pivot = new Vector2(0.5f, 0.5f);
+
+                HorizontalLayoutGroup layout = content.gameObject.AddComponent<HorizontalLayoutGroup>();
+                layout.childAlignment = TextAnchor.MiddleCenter;
+                layout.spacing = 18f;
+                layout.childControlWidth = true;
+                layout.childControlHeight = true;
+                layout.childForceExpandWidth = false;
+                layout.childForceExpandHeight = false;
+
+                ContentSizeFitter fitter = content.gameObject.AddComponent<ContentSizeFitter>();
+                fitter.horizontalFit = ContentSizeFitter.FitMode.PreferredSize;
+                fitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+
+                if (icon != IconShape.None)
+                {
+                    Image glyph = CreateImage("Icon", content, foreground);
+                    glyph.sprite = IconFactory.GetSprite(icon);
+                    glyph.preserveAspect = true;
+
+                    LayoutElement glyphLayout = glyph.gameObject.AddComponent<LayoutElement>();
+                    glyphLayout.preferredWidth = 74f;
+                    glyphLayout.preferredHeight = 74f;
+
+                    control.Icon = glyph;
+                }
+
+                Text text = CreateText(font, name + "Label", content, fontSize, FontStyle.Bold, foreground, TextAnchor.MiddleCenter, true);
+                text.text = label;
+                control.Label = text;
+            }
+            else if (icon != IconShape.None)
             {
                 Image glyph = CreateImage("Icon", root, foreground);
                 glyph.sprite = IconFactory.GetSprite(icon);
                 glyph.preserveAspect = true;
 
                 RectTransform glyphRect = glyph.rectTransform;
-                glyphRect.anchorMin = new Vector2(hasLabel ? 0f : 0.5f, 0.5f);
-                glyphRect.anchorMax = glyphRect.anchorMin;
+                glyphRect.anchorMin = new Vector2(0.5f, 0.5f);
+                glyphRect.anchorMax = new Vector2(0.5f, 0.5f);
                 glyphRect.pivot = new Vector2(0.5f, 0.5f);
-                glyphRect.sizeDelta = hasLabel ? new Vector2(74f, 74f) : new Vector2(62f, 62f);
-                glyphRect.anchoredPosition = hasLabel ? new Vector2(92f, 0f) : Vector2.zero;
+                glyphRect.sizeDelta = new Vector2(62f, 62f);
+                glyphRect.anchoredPosition = Vector2.zero;
 
                 control.Icon = glyph;
-            }
-
-            if (hasLabel)
-            {
-                Text text = CreateText(font, name + "Label", root, fontSize, FontStyle.Bold, foreground, TextAnchor.MiddleCenter, true);
-                Anchor(text.rectTransform, Vector2.zero, Vector2.one, new Vector2(160f, 0f), new Vector2(-40f, 0f));
-                text.text = label;
-                control.Label = text;
             }
 
             // Leaving a control selected keeps it highlighted for the rest of the run.

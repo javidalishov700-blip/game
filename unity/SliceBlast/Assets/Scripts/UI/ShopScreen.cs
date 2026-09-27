@@ -367,18 +367,10 @@ namespace SliceBlast.UI
 
             MenuControl privacy = UiKit.CreateButton(_font, "SettingsPrivacy", page, "PRIVACY POLICY", 38, new Color(1f, 1f, 1f, 0.08f), UiKit.Dim, IconShape.None);
             PlaceSettingsRow(privacy.Root, 2);
-            if (privacy.Label != null)
-            {
-                UiKit.Anchor(privacy.Label.rectTransform, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
-            }
             privacy.Button.onClick.AddListener(() => Application.OpenURL(PrivacyUrl));
 
             MenuControl terms = UiKit.CreateButton(_font, "SettingsTerms", page, "TERMS OF USE", 38, new Color(1f, 1f, 1f, 0.08f), UiKit.Dim, IconShape.None);
             PlaceSettingsRow(terms.Root, 3);
-            if (terms.Label != null)
-            {
-                UiKit.Anchor(terms.Label.rectTransform, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
-            }
             terms.Button.onClick.AddListener(() => Application.OpenURL(TermsUrl));
 
             return page;
@@ -481,11 +473,6 @@ namespace SliceBlast.UI
             restoreRect.pivot = new Vector2(0.5f, 0f);
             restoreRect.offsetMin = new Vector2(40f, 36f);
             restoreRect.offsetMax = new Vector2(-40f, 106f);
-
-            if (restore.Label != null)
-            {
-                UiKit.Anchor(restore.Label.rectTransform, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
-            }
 
             restore.Button.onClick.AddListener(() => RestoreRequested?.Invoke());
         }
