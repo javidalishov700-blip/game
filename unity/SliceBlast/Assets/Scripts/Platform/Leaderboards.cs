@@ -5,11 +5,35 @@
 // spent fighting CocoaPods, is the entire reason it is done this way.
 //
 // Authentication is fire-and-forget. Everything below is safe to call whether or not it
-// succeeded: an unauthenticated report is dropped, and the board UI simply does not open.
+// succeeded: an unauthenticated report is dropped, and a load answers null.
+using System;
+using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.SocialPlatforms;
 
 namespace SliceBlast.Platform
 {
+    /// <summary>One row of the board, already resolved to a display name.</summary>
+    public struct LeaderboardEntry
+    {
+        public int Rank;
+        public string Name;
+        public long Score;
+        public bool IsLocalPlayer;
+    }
+
+    /// <summary>The top of the board plus where the local player stands, wherever that is.</summary>
+    public sealed class LeaderboardPage
+    {
+        public LeaderboardEntry[] Top;
+
+        /// <summary>False until the player has posted a score at all.</summary>
+        public bool HasLocalScore;
+        public int LocalRank;
+        public long LocalScore;
+        public string LocalName;
+    }
+
     public static class Leaderboards
     {
         // Must match the leaderboard ID created in App Store Connect under the app's
@@ -19,7 +43,7 @@ namespace SliceBlast.Platform
         private static bool _attempted;
 
         /// <summary>Raised once sign-in has an answer, successful or not.</summary>
-        public static event System.Action<bool> AuthenticationResolved;
+        public static event Action<bool> AuthenticationResolved;
 
         // Every reference to the engine's Social class is fully qualified on purpose. This
         // file used to live in a namespace called SliceBlast.Social, where a bare `Social`
@@ -72,20 +96,102 @@ namespace SliceBlast.Platform
         }
 
         /// <summary>
-        /// Opens Game Center's own leaderboard UI. Returns false when there is nothing to
-        /// open, so the caller can leave its button hidden rather than showing one that does
-        /// nothing when tapped.
+        /// Loads ranks 1..count of the all-time board with Game Center display names, plus
+        /// the local player's own entry even when it sits far below that. Answers null on any
+        /// failure — not signed in, the leaderboard missing from App Store Connect, no network.
         /// </summary>
-        public static bool ShowUi()
+        public static void LoadTop(int count, Action<LeaderboardPage> done)
         {
             if (!IsAuthenticated)
             {
-                Authenticate();
-                return false;
+                done?.Invoke(null);
+                return;
             }
 
-            UnityEngine.Social.ShowLeaderboardUI();
-            return true;
+            ILeaderboard board = UnityEngine.Social.CreateLeaderboard();
+            board.id = BestScoreId;
+            board.userScope = UserScope.Global;
+            board.timeScope = TimeScope.AllTime;
+            // Qualified on purpose: System.Range exists too, and a bare Range is ambiguous the
+            // moment this file gains a `using System;`.
+            board.range = new UnityEngine.SocialPlatforms.Range(1, count);
+
+            board.LoadScores(success =>
+            {
+                if (!success)
+                {
+                    done?.Invoke(null);
+                    return;
+                }
+
+                IScore[] scores = board.scores ?? new IScore[0];
+
+                if (scores.Length == 0)
+                {
+                    done?.Invoke(BuildPage(board, scores, null));
+                    return;
+                }
+
+                // Scores carry player IDs only; the names are a second round trip.
+                string[] ids = new string[scores.Length];
+
+                for (int i = 0; i < scores.Length; i++)
+                {
+                    ids[i] = scores[i].userID;
+                }
+
+                UnityEngine.Social.LoadUsers(ids, profiles => done?.Invoke(BuildPage(board, scores, profiles)));
+            });
+        }
+
+        private static LeaderboardPage BuildPage(ILeaderboard board, IScore[] scores, IUserProfile[] profiles)
+        {
+            Dictionary<string, string> names = new Dictionary<string, string>(scores.Length);
+
+            if (profiles != null)
+            {
+                foreach (IUserProfile profile in profiles)
+                {
+                    if (profile != null && !string.IsNullOrEmpty(profile.id) && !string.IsNullOrEmpty(profile.userName))
+                    {
+                        names[profile.id] = profile.userName;
+                    }
+                }
+            }
+
+            ILocalUser local = UnityEngine.Social.localUser;
+            string localId = local != null ? local.id : null;
+            string localName = local != null && !string.IsNullOrEmpty(local.userName) ? local.userName : "YOU";
+
+            LeaderboardEntry[] top = new LeaderboardEntry[scores.Length];
+
+            for (int i = 0; i < scores.Length; i++)
+            {
+                IScore score = scores[i];
+                bool isLocal = !string.IsNullOrEmpty(localId) && score.userID == localId;
+
+                top[i] = new LeaderboardEntry
+                {
+                    Rank = score.rank > 0 ? score.rank : i + 1,
+                    Name = isLocal ? localName : names.TryGetValue(score.userID ?? string.Empty, out string name) ? name : "PLAYER",
+                    Score = score.value,
+                    IsLocalPlayer = isLocal
+                };
+            }
+
+            Array.Sort(top, (a, b) => a.Rank.CompareTo(b.Rank));
+
+            IScore mine = board.localUserScore;
+            bool hasLocal = mine != null && mine.rank > 0 && mine.value > 0;
+
+            return new LeaderboardPage
+            {
+                Top = top,
+                HasLocalScore = hasLocal,
+                LocalRank = hasLocal ? mine.rank : 0,
+                LocalScore = hasLocal ? mine.value : 0,
+                LocalName = localName
+            };
         }
     }
 }

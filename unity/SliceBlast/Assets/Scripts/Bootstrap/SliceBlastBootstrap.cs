@@ -55,6 +55,7 @@ namespace SliceBlast.Bootstrap
         private AudioDirector _audio;
         private GameHud _hud;
         private ShopScreen _shop;
+        private LeaderboardScreen _board;
         private PoolManager _pools;
 
         private bool _gameOver;
@@ -178,6 +179,7 @@ namespace SliceBlast.Bootstrap
             _hud.PrivacyRequested += OnPrivacyRequested;
 
             BuildShop(hudObject.transform);
+            BuildLeaderboard(hudObject.transform);
 
             AdsManager.EnsureInstance();
 
@@ -288,6 +290,17 @@ namespace SliceBlast.Bootstrap
             _shop.SetStoreAvailable(store.IsReady);
         }
 
+        /// <summary>Built the same way as the shop, and for the same reasons.</summary>
+        private void BuildLeaderboard(Transform canvasRoot)
+        {
+            GameObject boardObject = new GameObject("Leaderboard", typeof(RectTransform));
+            boardObject.transform.SetParent(canvasRoot, false);
+
+            _board = boardObject.AddComponent<LeaderboardScreen>();
+            _board.Build(UiKit.ResolveFont());
+            _board.Closed += OnLeaderboardClosed;
+        }
+
         private void OnStorePurchaseFinished(bool succeeded)
         {
             OnPurchaseResolved(succeeded);
@@ -318,7 +331,30 @@ namespace SliceBlast.Bootstrap
 
         private void OnLeaderboardRequested()
         {
-            Leaderboards.ShowUi();
+            if (_board == null)
+            {
+                return;
+            }
+
+            _board.Show();
+
+            // Loaded fresh on every open: the point of the board is who is on it right now.
+            int token = _board.BeginLoad();
+            Leaderboards.LoadTop(LeaderboardScreen.RowCount, page =>
+            {
+                if (_board != null)
+                {
+                    _board.Complete(token, page);
+                }
+            });
+        }
+
+        private void OnLeaderboardClosed()
+        {
+            if (_board != null)
+            {
+                _board.Hide();
+            }
         }
 
         private void OnShopRequested()
@@ -383,6 +419,11 @@ namespace SliceBlast.Bootstrap
         private void OnDestroy()
         {
             Unsubscribe();
+
+            if (_board != null)
+            {
+                _board.Closed -= OnLeaderboardClosed;
+            }
 
             if (_shop != null)
             {
@@ -502,7 +543,7 @@ namespace SliceBlast.Bootstrap
             // is a raycast target, so PointerOverUi already covers it — but that makes "the
             // game does not start behind an open sheet" a property of one raycastTarget flag
             // several files away. Checked outright instead.
-            if (_shop != null && _shop.IsOpen)
+            if ((_shop != null && _shop.IsOpen) || (_board != null && _board.IsOpen))
             {
                 return;
             }

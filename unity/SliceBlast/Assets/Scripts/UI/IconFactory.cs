@@ -29,7 +29,9 @@ namespace SliceBlast.UI
         Target,
         Lock,
         Check,
-        Close
+        Close,
+        Disc,
+        Glow
     }
 
     public static class IconFactory
@@ -104,9 +106,11 @@ namespace SliceBlast.UI
                 {
                     float px = (x + 0.5f) * texel - 1f;
 
-                    // Analytic coverage from the distance field: one sample, clean edges.
-                    float distance = Distance(shape, new Vector2(px, py));
-                    float alpha = Mathf.Clamp01(0.5f - distance / texel);
+                    // Analytic coverage from the distance field: one sample, clean edges. The
+                    // glow is the one shape that wants no edge at all.
+                    float alpha = shape == IconShape.Glow
+                        ? SoftFalloff(new Vector2(px, py))
+                        : Mathf.Clamp01(0.5f - Distance(shape, new Vector2(px, py)) / texel);
 
                     pixels[row + x] = new Color32(255, 255, 255, (byte)(alpha * 255f));
                 }
@@ -277,6 +281,9 @@ namespace SliceBlast.UI
                     return Mathf.Max(Mathf.Min(roof, body), -door);
                 }
 
+                case IconShape.Disc:
+                    return Circle(p, 0.94f);
+
                 case IconShape.Crown:
                 {
                     float band = Box(p - new Vector2(0f, -0.42f), new Vector2(0.62f, 0.16f), 0.06f);
@@ -289,6 +296,13 @@ namespace SliceBlast.UI
                 default:
                     return 1f;
             }
+        }
+
+        /// <summary>A radial glow: opaque at the centre, gone at the edge, no visible rim.</summary>
+        private static float SoftFalloff(Vector2 p)
+        {
+            float t = 1f - Mathf.Clamp01(p.magnitude);
+            return t * t;
         }
 
         private static float Speaker(Vector2 p)

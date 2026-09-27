@@ -412,9 +412,9 @@ namespace SliceBlast.UI
             board.Button.onClick.AddListener(() => LeaderboardRequested?.Invoke());
 
             // Hidden until Game Center confirms the player is signed in. Before that — or on a
-            // device where the player declined, or before the leaderboard exists in App Store
-            // Connect — a tap opens nothing, and a control that does nothing is what App Review
-            // rejects. SetLeaderboardAvailable brings it in once there is something behind it.
+            // device where the player declined — there is no board to load, and a control that
+            // does nothing is what App Review rejects. SetLeaderboardAvailable brings it in
+            // once there is something behind it.
             _leaderboardButton = boardRect;
             boardRect.gameObject.SetActive(false);
 
