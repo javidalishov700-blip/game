@@ -35,6 +35,21 @@ jobs:
           key: unity-library-capture-${{ hashFiles('unity/SliceBlast/Assets/**') }}
           restore-keys: unity-library-capture-
 
+      # The shipped game leaves Unity's screenshot and image-encoding modules out; only this
+      # throwaway capture build needs them, so they are added here on the runner and never
+      # committed.
+      - name: Enable the screenshot and image modules for this build only
+        run: |
+          python3 - <<'PY'
+          import json
+          path = "unity/SliceBlast/Packages/manifest.json"
+          manifest = json.load(open(path))
+          manifest["dependencies"]["com.unity.modules.imageconversion"] = "1.0.0"
+          manifest["dependencies"]["com.unity.modules.screencapture"] = "1.0.0"
+          json.dump(manifest, open(path, "w"), indent=2)
+          PY
+          cat unity/SliceBlast/Packages/manifest.json
+
       - uses: game-ci/unity-builder@v4
         env:
           UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
