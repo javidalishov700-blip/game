@@ -588,15 +588,16 @@ namespace SliceBlast.UI
             again.Button.onClick.AddListener(() => RestartRequested?.Invoke());
 
             // Hidden until an ad is actually loaded and ready — never a button that promises
-            // a reward it cannot deliver.
-            _continueButton = CreateButton("Continue", content, "-", 50, new Color(1f, 1f, 1f, 0.1f), Gold, IconShape.Bolt);
-            UiKit.BindLabel(_continueButton, "hud.continue", 390f);
+            // a reward it cannot deliver. A play triangle and the words "WATCH AD" say what it
+            // costs: the old lightning bolt gave nobody a reason to think an ad was involved.
+            _continueButton = CreateButton("Continue", content, "-", 44, new Color(1f, 1f, 1f, 0.1f), Gold, IconShape.Play);
+            UiKit.BindLabel(_continueButton, "hud.continue", 590f);
             RectTransform continueRect = _continueButton.Root;
             continueRect.anchorMin = new Vector2(0.5f, 0f);
             continueRect.anchorMax = new Vector2(0.5f, 0f);
             continueRect.pivot = new Vector2(0.5f, 0.5f);
-            continueRect.sizeDelta = new Vector2(560f, 104f);
-            continueRect.anchoredPosition = new Vector2(0f, 470f);
+            continueRect.sizeDelta = new Vector2(780f, 112f);
+            continueRect.anchoredPosition = new Vector2(0f, 478f);
             _continueButton.Button.onClick.AddListener(() => ContinueRequested?.Invoke());
             _continueButton.Root.gameObject.SetActive(false);
 

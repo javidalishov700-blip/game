@@ -26,7 +26,7 @@ namespace SliceBlast.Core
         // The rewarded-ad "keep going": a real second chance, not a free one — the next block
         // comes in noticeably smaller than whatever was standing at death, and never wider
         // than the tower's own opening platform no matter how wide that last layer was.
-        [SerializeField, Range(0.1f, 1f)] private float reviveSizeFraction = 0.6f;
+        [SerializeField, Range(0.1f, 1f)] private float reviveSizeFraction = 0.7f;
 
         [Header("Invisible Tutorial")]
         [SerializeField] private int tutorialBlocks = 3;

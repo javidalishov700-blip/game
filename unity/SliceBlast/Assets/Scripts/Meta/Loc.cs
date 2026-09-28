@@ -166,7 +166,7 @@ namespace SliceBlast.Meta
             Add("hud.workshop", "WORKSHOP", "ATÖLYE", "МАСТЕРСКАЯ");
             Add("hud.run_over", "RUN OVER", "OYUN BİTTİ", "ИГРА ОКОНЧЕНА");
             Add("hud.play_again", "PLAY AGAIN", "TEKRAR OYNA", "ИГРАТЬ СНОВА");
-            Add("hud.continue", "CONTINUE", "DEVAM ET", "ПРОДОЛЖИТЬ");
+            Add("hud.continue", "WATCH AD TO CONTINUE", "REKLAM İZLE, DEVAM ET", "РЕКЛАМА — И ПРОДОЛЖИТЬ");
             Add("hud.tap_anywhere", "OR TAP ANYWHERE", "YA DA HERHANGİ BİR YERE DOKUN", "ИЛИ НАЖМИ В ЛЮБОМ МЕСТЕ");
             Add("hud.new_best", "NEW BEST!", "YENİ REKOR!", "НОВЫЙ РЕКОРД!");
             Add("hud.run_coins", "+{0} COINS", "+{0} ALTIN", "МОНЕТЫ: +{0}");
