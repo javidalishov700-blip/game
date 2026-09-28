@@ -85,6 +85,35 @@ namespace SliceBlast.Ads
 
         private readonly List<IAdProvider> _providers = new List<IAdProvider>(2);
 
+        // Ad SDK callbacks arrive on native threads. Everything they do touches the game, so
+        // they are queued here and run on the main thread at the start of the next frame.
+        private static readonly System.Collections.Concurrent.ConcurrentQueue<Action> s_mainThread =
+            new System.Collections.Concurrent.ConcurrentQueue<Action>();
+
+        /// <summary>Runs <paramref name="action"/> on Unity's main thread, next frame. Safe from any thread.</summary>
+        public static void Post(Action action)
+        {
+            if (action != null)
+            {
+                s_mainThread.Enqueue(action);
+            }
+        }
+
+        private void Update()
+        {
+            while (s_mainThread.TryDequeue(out Action action))
+            {
+                try
+                {
+                    action();
+                }
+                catch (Exception exception)
+                {
+                    Debug.LogException(exception);
+                }
+            }
+        }
+
         private int _runsSinceInterstitial;
         private bool _initialized;
 

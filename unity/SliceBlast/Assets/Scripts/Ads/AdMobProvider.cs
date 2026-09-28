@@ -69,9 +69,11 @@ namespace SliceBlast.Ads
 
         public void Initialize()
         {
-            // The plugin does not otherwise promise which thread its callbacks arrive on, and
-            // the reward callback goes straight into the HUD and the revive.
-            GoogleMobileAds.Api.MobileAds.RaiseAdEventsOnUnityMainThread = true;
+            // Every plugin callback below is handed to AdsManager.Post, which runs it on the main
+            // thread on the next frame. The plugin's own RaiseAdEventsOnUnityMainThread must NOT
+            // be used here: it queues callbacks on an executor the plugin only creates inside
+            // MobileAds.Initialize — and Initialize waits for the consent answer, which was
+            // itself sitting in that queue. Ads never started, in any build, because of it.
             _consentStatus = "consent: checking";
 
             // Google's consent flow (UMP) comes first. For players in the EEA, the UK and
@@ -80,7 +82,7 @@ namespace SliceBlast.Ads
             // as they always did. Update runs every launch so a changed decision is picked up.
             GoogleMobileAds.Ump.Api.ConsentInformation.Update(
                 new GoogleMobileAds.Ump.Api.ConsentRequestParameters(),
-                updateError =>
+                updateError => AdsManager.Post(() =>
                 {
                     if (updateError != null)
                     {
@@ -91,19 +93,19 @@ namespace SliceBlast.Ads
                         return;
                     }
 
-                    GoogleMobileAds.Ump.Api.ConsentForm.LoadAndShowConsentFormIfRequired(formError =>
+                    GoogleMobileAds.Ump.Api.ConsentForm.LoadAndShowConsentFormIfRequired(formError => AdsManager.Post(() =>
                     {
                         _consentStatus = formError != null ? "consent: form error " + formError.Message : "consent: ok";
                         StartIfConsented();
-                    });
-                });
+                    }));
+                }));
         }
 
         public void ShowPrivacyOptions()
         {
             // The player can grant consent here that they refused at launch, so ads may be
             // allowed to start only now.
-            GoogleMobileAds.Ump.Api.ConsentForm.ShowPrivacyOptionsForm(_ => StartIfConsented());
+            GoogleMobileAds.Ump.Api.ConsentForm.ShowPrivacyOptionsForm(_ => AdsManager.Post(StartIfConsented));
         }
 
         /// <summary>
@@ -127,12 +129,12 @@ namespace SliceBlast.Ads
             _started = true;
             _sdkStatus = "sdk: initializing";
 
-            GoogleMobileAds.Api.MobileAds.Initialize(_ =>
+            GoogleMobileAds.Api.MobileAds.Initialize(_ => AdsManager.Post(() =>
             {
                 _sdkStatus = "sdk: ready" + (AdsManager.TestAds ? " (TEST UNITS)" : " (real units)");
                 LoadInterstitial();
                 LoadRewarded();
-            });
+            }));
         }
 
         public void ShowInterstitial()
@@ -179,7 +181,7 @@ namespace SliceBlast.Ads
                 }
 
                 finished = true;
-                ad.OnAdFullScreenContentClosed -= Finish;
+                ad.OnAdFullScreenContentClosed -= HandleClosed;
                 ad.OnAdFullScreenContentFailed -= HandleFailed;
                 LoadRewarded();
 
@@ -189,19 +191,26 @@ namespace SliceBlast.Ads
                 }
             }
 
-            void HandleFailed(GoogleMobileAds.Api.AdError error)
+            void HandleClosed()
             {
-                Finish();
+                AdsManager.Post(Finish);
             }
 
-            ad.OnAdFullScreenContentClosed += Finish;
+            void HandleFailed(GoogleMobileAds.Api.AdError error)
+            {
+                AdsManager.Post(Finish);
+            }
+
+            ad.OnAdFullScreenContentClosed += HandleClosed;
             ad.OnAdFullScreenContentFailed += HandleFailed;
 
-            ad.Show(_ =>
+            // Posted in the order the SDK reports them, so a reward that arrives before the
+            // close is still counted before Finish decides whether it was earned.
+            ad.Show(_ => AdsManager.Post(() =>
             {
                 earned = true;
                 onEarned?.Invoke();
-            });
+            }));
         }
 
         private void LoadInterstitial()
@@ -214,7 +223,7 @@ namespace SliceBlast.Ads
 
             _interstitialStatus = "interstitial: loading";
 
-            GoogleMobileAds.Api.InterstitialAd.Load(InterstitialUnit, new GoogleMobileAds.Api.AdRequest(), (ad, error) =>
+            GoogleMobileAds.Api.InterstitialAd.Load(InterstitialUnit, new GoogleMobileAds.Api.AdRequest(), (ad, error) => AdsManager.Post(() =>
             {
                 if (error != null || ad == null)
                 {
@@ -226,9 +235,9 @@ namespace SliceBlast.Ads
                 _interstitialFailures = 0;
                 _interstitialStatus = "interstitial: ready";
                 _interstitialAd = ad;
-                _interstitialAd.OnAdFullScreenContentClosed += LoadInterstitial;
-                _interstitialAd.OnAdFullScreenContentFailed += _ => LoadInterstitial();
-            });
+                _interstitialAd.OnAdFullScreenContentClosed += () => AdsManager.Post(LoadInterstitial);
+                _interstitialAd.OnAdFullScreenContentFailed += _ => AdsManager.Post(LoadInterstitial);
+            }));
         }
 
         private void LoadRewarded()
@@ -241,7 +250,7 @@ namespace SliceBlast.Ads
 
             _rewardedStatus = "rewarded: loading";
 
-            GoogleMobileAds.Api.RewardedAd.Load(RewardedUnit, new GoogleMobileAds.Api.AdRequest(), (ad, error) =>
+            GoogleMobileAds.Api.RewardedAd.Load(RewardedUnit, new GoogleMobileAds.Api.AdRequest(), (ad, error) => AdsManager.Post(() =>
             {
                 if (error != null || ad == null)
                 {
@@ -253,11 +262,11 @@ namespace SliceBlast.Ads
                 _rewardedFailures = 0;
                 _rewardedStatus = "rewarded: loaded";
                 _rewardedAd = ad;
-            });
+            }));
         }
 
-        // Started from a load callback, which RaiseAdEventsOnUnityMainThread puts on the main
-        // thread — so the await resumes there too, through Unity's synchronisation context.
+        // Started from a load callback that AdsManager.Post already moved to the main thread,
+        // so the await resumes there too, through Unity's synchronisation context.
         private static async void RetryAfterBackoff(int failures, Action load)
         {
             int seconds = 1 << Math.Min(failures, MaxBackoffExponent);
