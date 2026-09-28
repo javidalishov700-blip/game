@@ -60,6 +60,7 @@ namespace SliceBlast.Bootstrap
         private PoolManager _pools;
 
         private bool _gameOver;
+        private bool _continueOffered;
         private float _gameOverTime;
         private bool _home;
         private float _homeTime;
@@ -628,6 +629,15 @@ namespace SliceBlast.Bootstrap
                 _pools.Tick(Time.deltaTime);
             }
 
+            // The continue offer used to be decided once, the instant the run ended — so a
+            // rewarded ad that finished loading a moment later never got its button. It now
+            // appears whenever an ad becomes ready while the run-over screen is up.
+            if (_gameOver && !_continueOffered && AdsManager.Instance != null && AdsManager.Instance.IsRewardedReady)
+            {
+                _continueOffered = true;
+                _hud.SetContinueAvailable(true);
+            }
+
             // Both paths below start or restart a run on a tap anywhere. The shop's backdrop
             // is a raycast target, so PointerOverUi already covers it — but that makes "the
             // game does not start behind an open sheet" a property of one raycastTarget flag
@@ -977,7 +987,8 @@ namespace SliceBlast.Bootstrap
                 AdsManager.Instance.NotifyRunEnded();
             }
 
-            _hud.SetContinueAvailable(AdsManager.Instance.IsRewardedReady);
+            _continueOffered = AdsManager.Instance.IsRewardedReady;
+            _hud.SetContinueAvailable(_continueOffered);
         }
 
         /// <summary>
@@ -1003,7 +1014,11 @@ namespace SliceBlast.Bootstrap
                     _hud.SetHintText(Loc.T("hud.tap_to_drop"));
                     _hud.ShowHint(true);
                 },
-                onUnavailable: () => _hud.SetContinueAvailable(false));
+                onUnavailable: () =>
+                {
+                    _continueOffered = false;
+                    _hud.SetContinueAvailable(false);
+                });
         }
 
         private void OnUiButtonTapped()
