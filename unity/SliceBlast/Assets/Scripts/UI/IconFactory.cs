@@ -31,7 +31,8 @@ namespace SliceBlast.UI
         Check,
         Close,
         Disc,
-        Glow
+        Glow,
+        Gear
     }
 
     public static class IconFactory
@@ -284,6 +285,25 @@ namespace SliceBlast.UI
                 case IconShape.Disc:
                     return Circle(p, 0.94f);
 
+                case IconShape.Gear:
+                {
+                    // A hollow ring (the annulus reads as the gear's body) with eight square
+                    // teeth rotated evenly around it — the same "combine simple fields" approach
+                    // as Burst and Target, just with the teeth attached to a ring instead of the
+                    // spikes meeting at a point.
+                    float ring = Ring(p, 0.44f, 0.16f);
+                    float teeth = 1f;
+
+                    for (int i = 0; i < 8; i++)
+                    {
+                        float angle = i * Mathf.PI / 4f;
+                        Vector2 rotated = Rotate(p, angle);
+                        teeth = Mathf.Min(teeth, Box(rotated - new Vector2(0.62f, 0f), new Vector2(0.13f, 0.13f), 0.02f));
+                    }
+
+                    return Mathf.Min(ring, teeth);
+                }
+
                 case IconShape.Crown:
                 {
                     // Shifted down 0.07 from the original coordinates: the band-plus-spikes
@@ -329,6 +349,13 @@ namespace SliceBlast.UI
         private static float Circle(Vector2 p, float radius)
         {
             return p.magnitude - radius;
+        }
+
+        private static Vector2 Rotate(Vector2 p, float radians)
+        {
+            float cos = Mathf.Cos(radians);
+            float sin = Mathf.Sin(radians);
+            return new Vector2(p.x * cos + p.y * sin, -p.x * sin + p.y * cos);
         }
 
         private static float Ring(Vector2 p, float radius, float thickness)
