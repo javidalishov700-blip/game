@@ -56,6 +56,7 @@ namespace SliceBlast.Bootstrap
         private GameHud _hud;
         private ShopScreen _shop;
         private LeaderboardScreen _board;
+        private SettingsScreen _settings;
         private PoolManager _pools;
 
         private bool _gameOver;
@@ -176,10 +177,12 @@ namespace SliceBlast.Bootstrap
             _hud.ContinueRequested += OnContinueRequested;
             _hud.ShopRequested += OnShopRequested;
             _hud.LeaderboardRequested += OnLeaderboardRequested;
+            _hud.SettingsRequested += OnSettingsRequested;
             _hud.PrivacyRequested += OnPrivacyRequested;
 
             BuildShop(hudObject.transform);
             BuildLeaderboard(hudObject.transform);
+            BuildSettings(hudObject.transform);
 
             AdsManager.EnsureInstance();
 
@@ -277,8 +280,6 @@ namespace SliceBlast.Bootstrap
             _shop.RemoveAdsRequested += OnRemoveAdsRequested;
             _shop.RestoreRequested += OnRestoreRequested;
             _shop.CoinPackRequested += OnCoinPackRequested;
-            _shop.SoundToggled += OnSoundToggled;
-            _shop.HapticsToggled += OnHapticsToggled;
 
             // Touching Instance is what brings the store up, so this is also the point the
             // catalogue starts loading — well before the player can reach a buy button.
@@ -301,6 +302,22 @@ namespace SliceBlast.Bootstrap
             _board = boardObject.AddComponent<LeaderboardScreen>();
             _board.Build(UiKit.ResolveFont());
             _board.Closed += OnLeaderboardClosed;
+        }
+
+        /// <summary>Built the same way as the shop and the leaderboard, and for the same
+        /// reasons. Sound, haptics and the policy links used to live as a tab inside the
+        /// Workshop; they raise the same events GameHud's own pause-sheet toggles do, so the
+        /// handlers are shared rather than duplicated.</summary>
+        private void BuildSettings(Transform canvasRoot)
+        {
+            GameObject settingsObject = new GameObject("Settings", typeof(RectTransform));
+            settingsObject.transform.SetParent(canvasRoot, false);
+
+            _settings = settingsObject.AddComponent<SettingsScreen>();
+            _settings.Build(UiKit.ResolveFont());
+            _settings.Closed += OnSettingsClosed;
+            _settings.SoundToggled += OnSoundToggled;
+            _settings.HapticsToggled += OnHapticsToggled;
         }
 
         private void OnStorePurchaseFinished(bool succeeded)
@@ -387,6 +404,31 @@ namespace SliceBlast.Bootstrap
             _hud.SetShopBadge(MissionSystem.ClaimableCount());
         }
 
+        private void OnSettingsRequested()
+        {
+            if (_settings == null)
+            {
+                return;
+            }
+
+            // Same reasoning as the Workshop: reachable mid-run, so it pauses first rather
+            // than leaving a block swinging behind the sheet.
+            if (_flow != null && _flow.IsRunning && !_flow.IsPaused)
+            {
+                _flow.SetPaused(true);
+            }
+
+            _settings.Show();
+        }
+
+        private void OnSettingsClosed()
+        {
+            if (_settings != null)
+            {
+                _settings.Hide();
+            }
+        }
+
         private void OnPurchaseResolved(bool succeeded)
         {
             if (succeeded)
@@ -434,8 +476,13 @@ namespace SliceBlast.Bootstrap
                 _shop.RemoveAdsRequested -= OnRemoveAdsRequested;
                 _shop.RestoreRequested -= OnRestoreRequested;
                 _shop.CoinPackRequested -= OnCoinPackRequested;
-                _shop.SoundToggled -= OnSoundToggled;
-                _shop.HapticsToggled -= OnHapticsToggled;
+            }
+
+            if (_settings != null)
+            {
+                _settings.Closed -= OnSettingsClosed;
+                _settings.SoundToggled -= OnSoundToggled;
+                _settings.HapticsToggled -= OnHapticsToggled;
             }
 
             // The store outlives this object (DontDestroyOnLoad), so its subscriptions have
@@ -458,6 +505,7 @@ namespace SliceBlast.Bootstrap
                 _hud.ContinueRequested -= OnContinueRequested;
                 _hud.ShopRequested -= OnShopRequested;
                 _hud.LeaderboardRequested -= OnLeaderboardRequested;
+                _hud.SettingsRequested -= OnSettingsRequested;
                 _hud.PrivacyRequested -= OnPrivacyRequested;
             }
         }
@@ -553,7 +601,7 @@ namespace SliceBlast.Bootstrap
             // is a raycast target, so PointerOverUi already covers it — but that makes "the
             // game does not start behind an open sheet" a property of one raycastTarget flag
             // several files away. Checked outright instead.
-            if ((_shop != null && _shop.IsOpen) || (_board != null && _board.IsOpen))
+            if ((_shop != null && _shop.IsOpen) || (_board != null && _board.IsOpen) || (_settings != null && _settings.IsOpen))
             {
                 return;
             }
@@ -964,9 +1012,9 @@ namespace SliceBlast.Bootstrap
             _flow.ShowHome();
         }
 
-        // Also reached from the shop's Settings tab now, not only GameHud's own pause-menu
-        // and title-screen buttons — all three read the same PlayerProfile field, so whichever
-        // one is on screen shows the truth once this returns.
+        // Reached from three places — GameHud's own pause-menu toggle, its title-screen icon,
+        // and the standalone Settings screen — all of which read the same PlayerProfile field,
+        // so whichever one is on screen shows the truth once this returns.
         private void OnSoundToggled(bool on)
         {
             _audio.Muted = !on;
