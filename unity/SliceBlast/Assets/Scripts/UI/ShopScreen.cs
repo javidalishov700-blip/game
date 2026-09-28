@@ -19,11 +19,10 @@ namespace SliceBlast.UI
         {
             Upgrades = 0,
             Themes = 1,
-            Settings = 2,
             // Kept last: the mission badge is anchored to the top-right corner of the whole
             // tab strip on the assumption that the rightmost tab is Daily. Insert any future
             // tab before this one, not after it.
-            Missions = 3
+            Missions = 2
         }
 
         private sealed class UpgradeRow
@@ -72,19 +71,10 @@ namespace SliceBlast.UI
 
         public static readonly int[] CoinPackAmounts = { 1200, 4000, 12000 };
 
-        // Kept in one place rather than reopened from GameHud's private copies, so the
-        // in-game links and the shop's own copies can never point at two different pages.
-        private const string PrivacyUrl = "https://javidalishov700-blip.github.io/steady-site/sliceblast/legal/privacy.html";
-        private const string TermsUrl = "https://javidalishov700-blip.github.io/steady-site/sliceblast/legal/terms.html";
-
         public event Action Closed;
         public event Action RemoveAdsRequested;
         public event Action RestoreRequested;
         public event Action<string> CoinPackRequested;
-
-        /// <summary>Mirrors GameHud's own Sound/Haptics toggles — same event, same handler.</summary>
-        public event Action<bool> SoundToggled;
-        public event Action<bool> HapticsToggled;
 
         /// <summary>Fired when something was actually bought, so the caller can play a sound.</summary>
         public event Action<bool> PurchaseResolved;
@@ -103,8 +93,6 @@ namespace SliceBlast.UI
         private UpgradeRow[] _upgradeRows;
         private ThemeRow[] _themeRows;
         private MissionRow[] _missionRows;
-        private MenuControl _settingsSound;
-        private MenuControl _settingsHaptics;
         private MenuControl _removeAds;
         private MenuControl _restore;
         private RectTransform[] _coinPacks;
@@ -143,11 +131,10 @@ namespace SliceBlast.UI
             _content = UiKit.CreateChild("Content", safeContent);
             UiKit.Anchor(_content, new Vector2(0f, 0f), new Vector2(1f, 1f), new Vector2(40f, 366f), new Vector2(-40f, -430f));
 
-            _pages = new RectTransform[4];
+            _pages = new RectTransform[3];
 
             _pages[(int)Tab.Upgrades] = BuildUpgradesPage();
             _pages[(int)Tab.Themes] = BuildThemesPage();
-            _pages[(int)Tab.Settings] = BuildSettingsPage();
             _pages[(int)Tab.Missions] = BuildMissionsPage();
 
             BuildFooter(safeContent);
@@ -188,9 +175,9 @@ namespace SliceBlast.UI
 
         private void BuildTabs(RectTransform root)
         {
-            _tabs = new MenuControl[4];
+            _tabs = new MenuControl[3];
 
-            string[] labels = { "UPGRADES", "THEMES", "SETTINGS", "DAILY" };
+            string[] labels = { "UPGRADES", "THEMES", "DAILY" };
 
             for (int i = 0; i < _tabs.Length; i++)
             {
@@ -340,63 +327,6 @@ namespace SliceBlast.UI
             }
 
             return page;
-        }
-
-        /// <summary>
-        /// One place for everything that isn't upgrades, themes or missions: the toggles that
-        /// otherwise only lived in the pause menu, and the two policy links that otherwise
-        /// only lived as small text on the title screen. Nothing here is new behaviour — it is
-        /// the same events and the same PlayerProfile fields GameHud's own controls use — just
-        /// somewhere a player would actually think to look for "settings".
-        /// </summary>
-        private RectTransform BuildSettingsPage()
-        {
-            RectTransform page = UiKit.CreateChild("Settings", _content);
-            UiKit.Stretch(page);
-
-            _settingsSound = UiKit.CreateButton(_font, "SettingsSound", page, "SOUND", 46, UiKit.Panel, Color.white, IconShape.SoundOn);
-            PlaceSettingsRow(_settingsSound.Root, 0);
-            _settingsSound.Button.onClick.AddListener(ToggleSound);
-
-            _settingsHaptics = UiKit.CreateButton(_font, "SettingsHaptics", page, "VIBRATION", 46, UiKit.Panel, Color.white, IconShape.VibrateOn);
-            PlaceSettingsRow(_settingsHaptics.Root, 1);
-            _settingsHaptics.Button.onClick.AddListener(ToggleHaptics);
-
-            MenuControl privacy = UiKit.CreateButton(_font, "SettingsPrivacy", page, "PRIVACY POLICY", 38, new Color(1f, 1f, 1f, 0.08f), UiKit.Dim, IconShape.None);
-            PlaceSettingsRow(privacy.Root, 2);
-            privacy.Button.onClick.AddListener(() => Application.OpenURL(PrivacyUrl));
-
-            MenuControl terms = UiKit.CreateButton(_font, "SettingsTerms", page, "TERMS OF USE", 38, new Color(1f, 1f, 1f, 0.08f), UiKit.Dim, IconShape.None);
-            PlaceSettingsRow(terms.Root, 3);
-            terms.Button.onClick.AddListener(() => Application.OpenURL(TermsUrl));
-
-            return page;
-        }
-
-        /// <summary>Same stacking math as CreateCard, without a card panel of its own — the
-        /// button's "Hit" background already is one.</summary>
-        private static void PlaceSettingsRow(RectTransform rect, int index)
-        {
-            const float height = 140f;
-            const float gap = 20f;
-
-            rect.anchorMin = new Vector2(0f, 1f);
-            rect.anchorMax = new Vector2(1f, 1f);
-            rect.pivot = new Vector2(0.5f, 1f);
-            rect.offsetMin = new Vector2(0f, -(index + 1) * height - index * gap);
-            rect.offsetMax = new Vector2(0f, -index * (height + gap));
-        }
-
-        private void ToggleSound()
-        {
-            SoundToggled?.Invoke(!PlayerProfile.Data.soundOn);
-            Refresh();
-        }
-
-        private void ToggleHaptics()
-        {
-            HapticsToggled?.Invoke(!PlayerProfile.Data.hapticsOn);
-            Refresh();
         }
 
         private RectTransform BuildMissionsPage()
@@ -703,41 +633,6 @@ namespace SliceBlast.UI
                 {
                     _removeAds.Label.text = removed ? "ADS REMOVED" : "REMOVE ADS";
                     _removeAds.Label.color = removed ? UiKit.Mint : Color.white;
-                }
-            }
-
-            RefreshSettings();
-        }
-
-        private void RefreshSettings()
-        {
-            bool soundOn = PlayerProfile.Data.soundOn;
-
-            if (_settingsSound != null)
-            {
-                if (_settingsSound.Label != null)
-                {
-                    _settingsSound.Label.text = soundOn ? "SOUND" : "MUTED";
-                }
-
-                if (_settingsSound.Icon != null)
-                {
-                    _settingsSound.Icon.sprite = IconFactory.GetSprite(soundOn ? IconShape.SoundOn : IconShape.SoundOff);
-                }
-            }
-
-            bool hapticsOn = PlayerProfile.Data.hapticsOn;
-
-            if (_settingsHaptics != null)
-            {
-                if (_settingsHaptics.Label != null)
-                {
-                    _settingsHaptics.Label.text = hapticsOn ? "VIBRATION" : "NO VIBRATION";
-                }
-
-                if (_settingsHaptics.Icon != null)
-                {
-                    _settingsHaptics.Icon.sprite = IconFactory.GetSprite(hapticsOn ? IconShape.VibrateOn : IconShape.VibrateOff);
                 }
             }
         }
