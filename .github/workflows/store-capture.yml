@@ -3,7 +3,7 @@
 # Linux build with SLICEBLAST_SCREENSHOTS defined (see SliceBlastBootstrap.Capture.cs); the
 # iOS build never contains that code.
 #
-# Output: the rolling "store-capture-latest" release — stills.zip (PNG candidates, the event
+# Output: a "store-capture-<run id>" release — stills.zip (PNG candidates, the event
 # log and the player log) and one MP4 per recorded clip.
 name: Store capture
 
@@ -101,15 +101,31 @@ jobs:
           (cd capture && zip -qr ../out/stills.zip stills events.txt player.log DONE 2>/dev/null || zip -qr ../out/stills.zip .)
           ls -la out
 
-      - name: Publish as the rolling store-capture-latest release
+      # Kept as a workflow artifact too, so a failed publish never throws a 30-minute capture away.
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: store-capture
+          path: out
+          retention-days: 5
+
+      # A fresh tag per run: re-creating a just-deleted tag was refused once (HTTP 403).
+      - name: Publish as a store-capture release
         if: always()
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -eu
-          gh release delete store-capture-latest --cleanup-tag --yes || true
-          gh release create store-capture-latest out/* \
-            --prerelease \
-            --title "Store capture (latest)" \
-            --notes "Screenshots and footage recorded from ${{ github.sha }}." \
-            --target "${{ github.sha }}"
+          TAG="store-capture-${{ github.run_id }}"
+          for attempt in 1 2 3; do
+            if gh release create "$TAG" out/* \
+                --prerelease \
+                --title "Store capture ${{ github.run_id }}" \
+                --notes "Screenshots and footage recorded from ${{ github.sha }}." \
+                --target "${{ github.sha }}"; then
+              echo "published $TAG"
+              exit 0
+            fi
+            sleep $((attempt * 20))
+          done
+          exit 1
