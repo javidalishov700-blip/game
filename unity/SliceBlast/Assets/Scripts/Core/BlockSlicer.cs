@@ -57,6 +57,22 @@ namespace SliceBlast.Core
             ResolvePlacement();
         }
 
+#if SLICEBLAST_SCREENSHOTS
+        /// <summary>Store-capture autoplay only: resolves a tap without an input device.</summary>
+        public void ScriptedDrop()
+        {
+            if (flow == null)
+            {
+                flow = GameFlowManager.Instance;
+            }
+
+            if (flow != null && flow.AcceptsInput)
+            {
+                ResolvePlacement();
+            }
+        }
+#endif
+
         private void ResolvePlacement()
         {
             MovingBlock moving = flow.ActiveBlock;

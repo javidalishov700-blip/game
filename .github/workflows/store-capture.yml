@@ -1,0 +1,100 @@
+# Plays the real game on a Linux runner and records it: App Store screenshots (1284x2778)
+# and raw footage for the App Preview and the promo video. The capture player is a separate
+# Linux build with SLICEBLAST_SCREENSHOTS defined (see SliceBlastBootstrap.Capture.cs); the
+# iOS build never contains that code.
+#
+# Output: the rolling "store-capture-latest" release — stills.zip (PNG candidates, the event
+# log and the player log) and one MP4 per recorded clip.
+name: Store capture
+
+on:
+  workflow_dispatch:
+    inputs:
+      unityVersion:
+        description: "Unity version (must have a GameCI image published)"
+        required: false
+        default: "6000.3.22f1"
+
+jobs:
+  capture:
+    name: Play, record, publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: false
+
+      - uses: actions/cache@v4
+        with:
+          path: unity/SliceBlast/Library
+          key: unity-library-capture-${{ hashFiles('unity/SliceBlast/Assets/**') }}
+          restore-keys: unity-library-capture-
+
+      - uses: game-ci/unity-builder@v4
+        env:
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+        with:
+          projectPath: unity/SliceBlast
+          unityVersion: ${{ inputs.unityVersion }}
+          targetPlatform: StandaloneLinux64
+          allowDirtyBuild: true
+          buildMethod: SliceBlast.EditorTools.SliceBlastBuild.BuildCaptureLinux
+
+      - name: Install a virtual display, software OpenGL and ffmpeg
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq xvfb libgl1-mesa-dri libglu1-mesa mesa-utils ffmpeg > /dev/null
+
+      - name: Play and record
+        run: |
+          set -u
+          sudo chown -R "$(id -u):$(id -g)" build
+          PLAYER="$(find build -name 'SliceBlast.x86_64' | head -1)"
+          echo "Player: $PLAYER"
+          chmod +x "$PLAYER"
+          mkdir -p capture
+          export LIBGL_ALWAYS_SOFTWARE=1
+          export GALLIUM_DRIVER=llvmpipe
+          timeout 110m xvfb-run -a -s "-screen 0 1284x2778x24" \
+            "$PLAYER" -screen-fullscreen 0 -screen-width 1284 -screen-height 2778 -force-glcore \
+            -captureDir "$PWD/capture" -logFile "$PWD/capture/player.log" || echo "player exited with $?"
+          echo "---- events (tail)"; tail -n 40 capture/events.txt || true
+          echo "---- player log (grep)"; grep -E "Capture|Exception|Error|error" capture/player.log | tail -n 60 || true
+          ls -la capture capture/stills || true
+          test -f capture/DONE
+
+      - name: Encode the clips
+        if: always()
+        run: |
+          set -eu
+          mkdir -p out
+          for dir in capture/clips/*/; do
+            name="$(basename "$dir")"
+            count="$(ls "$dir" | wc -l)"
+            echo "$name: $count frames"
+            [ "$count" -gt 0 ] || continue
+            ffmpeg -loglevel error -y -framerate 30 -i "$dir/%05d.jpg" \
+              -c:v libx264 -preset medium -crf 12 -pix_fmt yuv420p -movflags +faststart "out/$name.mp4"
+          done
+          (cd capture && zip -qr ../out/stills.zip stills events.txt player.log DONE 2>/dev/null || zip -qr ../out/stills.zip .)
+          ls -la out
+
+      - name: Publish as the rolling store-capture-latest release
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -eu
+          gh release delete store-capture-latest --cleanup-tag --yes || true
+          gh release create store-capture-latest out/* \
+            --prerelease \
+            --title "Store capture (latest)" \
+            --notes "Screenshots and footage recorded from ${{ github.sha }}." \
+            --target "${{ github.sha }}"

@@ -21,6 +21,8 @@ namespace SliceBlast.EditorTools
         private const string DefaultBundleId = "com.javidalishov.sliceblast";
         private const string ProductName = "Slice Blast";
 
+        private static bool s_capturing;
+
         // What an Xcode project needs before Codemagic can link AdMob into it: the SDK itself,
         // pulled in by CocoaPods, and Google's Objective-C bridge the C# plugin calls into.
         private const string AdsPod = "Google-Mobile-Ads-SDK";
@@ -61,6 +63,59 @@ namespace SliceBlast.EditorTools
             // what lets CI call *this* entry point rather than Unity's default build — see
             // .github/workflows/ios-xcode.yml for why that matters.
             Run(BuildTarget.iOS, BuildTargetGroup.iOS, CommandLineArgument("-customBuildPath", "ios"));
+        }
+
+        /// <summary>
+        /// A Linux player that plays itself and records App Store screenshots and footage for
+        /// the App Preview and promo video (Bootstrap/SliceBlastBootstrap.Capture.cs). Built
+        /// by .github/workflows/store-capture.yml and run there under a virtual display; it is
+        /// never shipped. Mono rather than IL2CPP because nothing here needs to be fast to
+        /// build a second time, and no ads or tracking defines: the capture shows the game.
+        /// </summary>
+        public static void BuildCaptureLinux()
+        {
+            // The build preprocessor would otherwise re-apply the shipping settings (IL2CPP,
+            // the ads and tracking defines) over the ones set below.
+            s_capturing = true;
+            SliceBlastAssets.EnsureMaterials();
+            string scenePath = EnsureScene(false);
+            EditorBuildSettings.scenes = new[] { new EditorBuildSettingsScene(scenePath, true) };
+
+            NamedBuildTarget named = NamedBuildTarget.Standalone;
+            PlayerSettings.companyName = EnvOr("COMPANY_NAME", "Slice Blast Games");
+            PlayerSettings.productName = ProductName;
+            PlayerSettings.SetScriptingBackend(named, ScriptingImplementation.Mono2x);
+            PlayerSettings.SetScriptingDefineSymbols(named, "SLICEBLAST_SCREENSHOTS");
+            PlayerSettings.fullScreenMode = FullScreenMode.Windowed;
+            PlayerSettings.defaultIsNativeResolution = false;
+            PlayerSettings.defaultScreenWidth = 1284;
+            PlayerSettings.defaultScreenHeight = 2778;
+            PlayerSettings.resizableWindow = false;
+            PlayerSettings.runInBackground = true;
+            PlayerSettings.SetUseDefaultGraphicsAPIs(BuildTarget.StandaloneLinux64, false);
+            PlayerSettings.SetGraphicsAPIs(BuildTarget.StandaloneLinux64, new[] { UnityEngine.Rendering.GraphicsDeviceType.OpenGLCore });
+            ApplySplashSettings();
+
+            string custom = CommandLineArgument("-customBuildPath", null);
+            string folder = string.IsNullOrEmpty(custom) ? "build/capture" : Path.GetDirectoryName(custom);
+            Directory.CreateDirectory(folder);
+            string outputPath = Path.Combine(folder, "SliceBlast.x86_64");
+
+            BuildReport report = BuildPipeline.BuildPlayer(new BuildPlayerOptions
+            {
+                scenes = new[] { scenePath },
+                locationPathName = outputPath,
+                target = BuildTarget.StandaloneLinux64,
+                targetGroup = BuildTargetGroup.Standalone,
+                options = BuildOptions.None
+            });
+
+            Debug.Log($"[SliceBlast] Capture build {report.summary.result} at {outputPath}.");
+
+            if (Application.isBatchMode)
+            {
+                EditorApplication.Exit(report.summary.result == BuildResult.Succeeded ? 0 : 1);
+            }
         }
 
         [MenuItem("Slice & Blast/Build Android APK")]
@@ -239,6 +294,11 @@ namespace SliceBlast.EditorTools
         /// </summary>
         public static void PrepareProject()
         {
+            if (s_capturing)
+            {
+                return;
+            }
+
             SliceBlastAssets.EnsureMaterials();
             SliceBlastAssets.EnsureIcon(false);
 

@@ -1167,6 +1167,14 @@ namespace SliceBlast.UI
 
         // ---- State -------------------------------------------------------------------------
 
+#if SLICEBLAST_SCREENSHOTS
+        /// <summary>Store-capture autoplay only: opens a tab by index, as a tap on it would.</summary>
+        public void ShowTabForCapture(int index)
+        {
+            SelectTab((Tab)index);
+        }
+#endif
+
         private void SelectTab(Tab tab)
         {
             _tab = tab;

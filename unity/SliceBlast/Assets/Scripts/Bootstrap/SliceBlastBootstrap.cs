@@ -17,7 +17,7 @@ namespace SliceBlast.Bootstrap
 {
     [DefaultExecutionOrder(-500)]
     [DisallowMultipleComponent]
-    public sealed class SliceBlastBootstrap : MonoBehaviour
+    public sealed partial class SliceBlastBootstrap : MonoBehaviour
     {
         // Six is enough to read as a live discharge without looking like a swarm.
         private const int ArcNodeCount = 6;
@@ -215,6 +215,10 @@ namespace SliceBlast.Bootstrap
             flowObject.SetActive(true);
 
             StartCoroutine(WarmUpGlass(glass));
+
+#if SLICEBLAST_SCREENSHOTS
+            StartCoroutine(RunStoreCapture());
+#endif
         }
 
         /// <summary>
