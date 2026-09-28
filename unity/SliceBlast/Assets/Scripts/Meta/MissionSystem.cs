@@ -31,17 +31,20 @@ namespace SliceBlast.Meta
     {
         public const int DailyCount = 3;
 
+        // Raised across the board after scoring itself got more generous (a blast now always
+        // pays its full combo rather than the short-tower-clamped amount) — the same session
+        // was clearing these noticeably faster than the targets intended.
         private static readonly MissionDefinition[] Pool =
         {
-            new MissionDefinition { Id = "score800",  Kind = MissionKind.RunScore, Target = 800,  Reward = 120, Text = "SCORE 800 IN ONE RUN" },
-            new MissionDefinition { Id = "score2000", Kind = MissionKind.RunScore, Target = 2000, Reward = 260, Text = "SCORE 2000 IN ONE RUN" },
-            new MissionDefinition { Id = "score5000", Kind = MissionKind.RunScore, Target = 5000, Reward = 520, Text = "SCORE 5000 IN ONE RUN" },
-            new MissionDefinition { Id = "perfect30", Kind = MissionKind.Perfects, Target = 30,   Reward = 140, Text = "LAND 30 PERFECT DROPS" },
-            new MissionDefinition { Id = "perfect80", Kind = MissionKind.Perfects, Target = 80,   Reward = 300, Text = "LAND 80 PERFECT DROPS" },
-            new MissionDefinition { Id = "blast5",    Kind = MissionKind.Blasts,   Target = 5,    Reward = 150, Text = "TRIGGER 5 BLASTS" },
-            new MissionDefinition { Id = "blast15",   Kind = MissionKind.Blasts,   Target = 15,   Reward = 340, Text = "TRIGGER 15 BLASTS" },
-            new MissionDefinition { Id = "special6",  Kind = MissionKind.Specials, Target = 6,    Reward = 180, Text = "LAND 6 SPECIAL BLOCKS" },
-            new MissionDefinition { Id = "special15", Kind = MissionKind.Specials, Target = 15,   Reward = 360, Text = "LAND 15 SPECIAL BLOCKS" }
+            new MissionDefinition { Id = "score800",  Kind = MissionKind.RunScore, Target = 1000, Reward = 120, Text = "SCORE 1000 IN ONE RUN" },
+            new MissionDefinition { Id = "score2000", Kind = MissionKind.RunScore, Target = 2500, Reward = 260, Text = "SCORE 2500 IN ONE RUN" },
+            new MissionDefinition { Id = "score5000", Kind = MissionKind.RunScore, Target = 6500, Reward = 520, Text = "SCORE 6500 IN ONE RUN" },
+            new MissionDefinition { Id = "perfect30", Kind = MissionKind.Perfects, Target = 40,   Reward = 140, Text = "LAND 40 PERFECT DROPS" },
+            new MissionDefinition { Id = "perfect80", Kind = MissionKind.Perfects, Target = 100,  Reward = 300, Text = "LAND 100 PERFECT DROPS" },
+            new MissionDefinition { Id = "blast5",    Kind = MissionKind.Blasts,   Target = 7,    Reward = 150, Text = "TRIGGER 7 BLASTS" },
+            new MissionDefinition { Id = "blast15",   Kind = MissionKind.Blasts,   Target = 20,   Reward = 340, Text = "TRIGGER 20 BLASTS" },
+            new MissionDefinition { Id = "special6",  Kind = MissionKind.Specials, Target = 8,    Reward = 180, Text = "LAND 8 SPECIAL BLOCKS" },
+            new MissionDefinition { Id = "special15", Kind = MissionKind.Specials, Target = 20,   Reward = 360, Text = "LAND 20 SPECIAL BLOCKS" }
         };
 
         public static event Action Changed;

@@ -53,7 +53,7 @@ namespace SliceBlast.Meta
             {
                 Id = "ember",
                 Name = "EMBER",
-                Price = 900,
+                Price = 2500,
                 SkyTop = new Color(0.26f, 0.09f, 0.06f),
                 SkyBottom = new Color(0.05f, 0.02f, 0.03f),
                 StarTint = new Color(1f, 0.85f, 0.70f),
@@ -68,7 +68,7 @@ namespace SliceBlast.Meta
             {
                 Id = "vapor",
                 Name = "VAPOUR",
-                Price = 1400,
+                Price = 4000,
                 SkyTop = new Color(0.22f, 0.07f, 0.28f),
                 SkyBottom = new Color(0.04f, 0.02f, 0.09f),
                 StarTint = new Color(1f, 0.78f, 0.95f),
@@ -83,7 +83,7 @@ namespace SliceBlast.Meta
             {
                 Id = "signal",
                 Name = "SIGNAL",
-                Price = 1800,
+                Price = 5200,
                 SkyTop = new Color(0.03f, 0.14f, 0.08f),
                 SkyBottom = new Color(0.01f, 0.03f, 0.02f),
                 StarTint = new Color(0.72f, 1f, 0.80f),
@@ -98,7 +98,7 @@ namespace SliceBlast.Meta
             {
                 Id = "mono",
                 Name = "MONOLITH",
-                Price = 2400,
+                Price = 7000,
                 SkyTop = new Color(0.13f, 0.13f, 0.14f),
                 SkyBottom = new Color(0.02f, 0.02f, 0.02f),
                 StarTint = Color.white,
@@ -115,7 +115,7 @@ namespace SliceBlast.Meta
             {
                 Id = "aurora",
                 Name = "AURORA",
-                Price = 3000,
+                Price = 9000,
                 SkyTop = new Color(0.04f, 0.20f, 0.24f),
                 SkyBottom = new Color(0.06f, 0.02f, 0.14f),
                 StarTint = new Color(0.75f, 1f, 0.95f),

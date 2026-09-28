@@ -51,8 +51,8 @@ namespace SliceBlast.Meta
         // an upgrade. Two more levels spread the same ceiling thinner, and the price of
         // reaching it now runs several times the cost of maxing Shield or Fortune outright.
         private static readonly int[] MagnetCosts = { 300, 900, 2200, 4500, 8500, 15000, 26000 };
-        private static readonly int[] ShieldCosts = { 600, 1500, 3000 };
-        private static readonly int[] LuckCosts = { 250, 700, 1500, 2800 };
+        private static readonly int[] ShieldCosts = { 1000, 2500, 5000 };
+        private static readonly int[] LuckCosts = { 400, 1100, 2400, 4500 };
 
         public static int Count => Definitions.Length;
 

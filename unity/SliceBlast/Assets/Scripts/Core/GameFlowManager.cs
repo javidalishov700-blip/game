@@ -91,11 +91,11 @@ namespace SliceBlast.Core
         [SerializeField] private int blastLayerBonus = 15;
 
         [Header("Coins")]
-        // Halved the blast payout and raised the score conversion: coins were piling up fast
-        // enough that the shop's economy — priced assuming a slower drip — stopped meaning
-        // anything after a handful of runs.
+        // The only coin income during a run. A second, score-based payout used to also fire
+        // once at EndRun — meant as a small top-up for score earned outside of blasts, but it
+        // read to the player as being paid twice for the same run. Removed; blasts are now the
+        // one place coins come from mid-run.
         [SerializeField] private int coinsPerBlastLayer = 1;
-        [SerializeField] private int scorePerCoin = 40;
 
         // Onboarding grace: the very first block can never kill the run.
         [SerializeField] private bool forgiveFirstBlock = true;
@@ -1163,9 +1163,8 @@ namespace SliceBlast.Core
 
             // A rewarded continue resumes the same tower, so this method runs again when that
             // continued run finally ends. Everything cumulative is therefore banked as a
-            // delta: without this the end-of-run coin payout, the lifetime score and every
-            // counting mission would all be credited a second time for one tower — and a
-            // player could farm the payout by reviving.
+            // delta: without this the lifetime score and every counting mission would be
+            // credited a second time for one tower.
             //
             // The run's score is exempt: it's a maximum, so reporting the running total again
             // is idempotent.
@@ -1173,8 +1172,6 @@ namespace SliceBlast.Core
             int blastDelta = Mathf.Max(0, _blastCount - _bankedBlasts);
             int perfectDelta = Mathf.Max(0, _perfectCount - _bankedPerfects);
             int specialDelta = Mathf.Max(0, _specialCount - _bankedSpecials);
-
-            AwardCoins(scoreDelta / Mathf.Max(1, scorePerCoin), TopBlockCenter());
 
             // The chain mechanic this used to also report is gone; the parameter stays (and
             // always reads 0 now) because it is still what PlayerProfile's save schema stores.
