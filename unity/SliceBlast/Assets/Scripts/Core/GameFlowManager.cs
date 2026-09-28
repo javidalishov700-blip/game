@@ -928,7 +928,6 @@ namespace SliceBlast.Core
 
             int available = _stack.Count - 1; // the base platform is never removed
             int removable = Mathf.Min(Mathf.Max(1, requestedLayers), available);
-            bool exhausted = removable < requestedLayers;
 
             Vector3 epicenter = _stack[_stack.Count - 1].CachedTransform.position;
 
@@ -937,20 +936,31 @@ namespace SliceBlast.Core
                 RemoveTopLayer(epicenter, 1f);
             }
 
-            int bonus = blastLayerBonus * removable * TotalMultiplier;
+            // Score, coins and the displayed "xN" are all paid on requestedLayers — what the
+            // player's combo actually earned — not on removable, which a short tower can clamp
+            // down for reasons that have nothing to do with how well the player just played.
+            // A tower that ran out of height still only loses the blocks it actually has
+            // (removable, above); it was never fair to also dock the payout and reset the
+            // streak of a combo the player earned in full.
+            int bonus = blastLayerBonus * requestedLayers * TotalMultiplier;
 
             _score += bonus;
             _blastCount++;
-            _biggestBlast = Mathf.Max(_biggestBlast, removable);
+            _biggestBlast = Mathf.Max(_biggestBlast, requestedLayers);
 
-            AwardCoins(coinsPerBlastLayer * removable, epicenter);
+            AwardCoins(coinsPerBlastLayer * requestedLayers, epicenter);
 
-            // The "xN" the player sees is, by definition, the exact block count this blast
-            // just cleared — it used to climb by a flat +1 per blast while the blast itself
-            // cleared blastBaseLayers + blastLayerStep*level (3, 5, 7, 9...), two formulas
-            // that only coincidentally lined up on the very first blast.
-            _comboMultiplier = removable;
-            _blastLevel = exhausted ? 0 : Mathf.Min(_blastLevel + 1, maxBlastLevel);
+            // Neon fires on its own fuse, not on a perfect streak, and asks for a small fixed
+            // layer count (neonLayers) that has nothing to do with the combo ladder — letting
+            // it drive _comboMultiplier/_blastLevel the same way a real combo blast does would
+            // overwrite a high combo in progress down to that small fixed number the moment a
+            // neon special happened to go off.
+            if (!fromNeon)
+            {
+                _comboMultiplier = requestedLayers;
+                _blastLevel = Mathf.Min(_blastLevel + 1, maxBlastLevel);
+            }
+
             _perfectStreak = 0;
             _slowdown = 0f;
 
@@ -989,7 +999,10 @@ namespace SliceBlast.Core
 
             GameEvents.RaiseBlastFired(new BlastEvent
             {
-                Layers = removable,
+                // requestedLayers, not removable: the banner and the combo badge must always
+                // agree, even the rare time a short tower couldn't physically supply the full
+                // amount.
+                Layers = requestedLayers,
                 Multiplier = _comboMultiplier,
                 Bonus = bonus,
                 Epicenter = epicenter,
