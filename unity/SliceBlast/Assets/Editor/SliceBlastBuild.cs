@@ -343,6 +343,18 @@ namespace SliceBlast.EditorTools
             // instead of compiling to a no-op.
             AddScriptingDefine(named, "SLICEBLAST_ATT_ENABLED");
 
+            // Test ads only in a build explicitly made for testing (ios-xcode.yml's "testAds"
+            // option passes -sliceblastTestAds 1). Removed otherwise, so a build for the App
+            // Store can never inherit it from an earlier test build on the same machine.
+            if (CommandLineArgument("-sliceblastTestAds", "0") == "1")
+            {
+                AddScriptingDefine(named, "SLICEBLAST_TEST_ADS");
+            }
+            else
+            {
+                RemoveScriptingDefine(named, "SLICEBLAST_TEST_ADS");
+            }
+
             ApplySplashSettings();
 
             if (target != BuildTarget.iOS)
@@ -377,6 +389,19 @@ namespace SliceBlast.EditorTools
 
             string updated = existing.Length > 0 ? existing + ";" + define : define;
             PlayerSettings.SetScriptingDefineSymbols(named, updated);
+        }
+
+        private static void RemoveScriptingDefine(NamedBuildTarget named, string define)
+        {
+            string existing = PlayerSettings.GetScriptingDefineSymbols(named);
+            string[] symbols = existing.Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries);
+
+            if (Array.IndexOf(symbols, define) < 0)
+            {
+                return;
+            }
+
+            PlayerSettings.SetScriptingDefineSymbols(named, string.Join(";", Array.FindAll(symbols, s => s != define)));
         }
 
         /// <summary>

@@ -21,6 +21,11 @@ on:
         description: "Unity version (must have a GameCI image published)"
         required: false
         default: "6000.3.22f1"
+      testAds:
+        description: "TestFlight-only build: include the hidden test-ads switch (never for the App Store)"
+        type: boolean
+        required: false
+        default: false
 
 jobs:
   xcode-project:
@@ -96,6 +101,7 @@ jobs:
           # build has taken. Getting it wrong ships ads and the App Tracking Transparency
           # prompt silently stubbed out, which is exactly what got 1.1 rejected.
           buildMethod: SliceBlast.EditorTools.SliceBlastBuild.BuildIos
+          customParameters: ${{ inputs.testAds && '-sliceblastTestAds 1' || '-sliceblastTestAds 0' }}
 
       - name: Package the Xcode project
         run: |
@@ -121,5 +127,5 @@ jobs:
           gh release delete ios-xcode-latest --cleanup-tag --yes || true
           gh release create ios-xcode-latest ios-xcode.zip \
             --title "iOS Xcode project (latest)" \
-            --notes "Generated from ${{ github.sha }} by the iOS Xcode project workflow." \
+            --notes "Generated from ${{ github.sha }} by the iOS Xcode project workflow. Test ads: ${{ inputs.testAds && 'YES (TestFlight testing only, do not submit)' || 'no (App Store ready)' }}." \
             --target "${{ github.sha }}"

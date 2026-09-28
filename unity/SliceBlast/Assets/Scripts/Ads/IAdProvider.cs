@@ -43,6 +43,9 @@ namespace SliceBlast.Ads
         /// </summary>
         void Reload();
 
+        /// <summary>One line per stage (consent, SDK, each format) for the test-ads screen.</summary>
+        string DebugStatus { get; }
+
         /// <summary>
         /// onEarned fires only once the player actually finished watching. onUnavailable fires
         /// immediately when nothing is loaded, and also when the player closes the ad early

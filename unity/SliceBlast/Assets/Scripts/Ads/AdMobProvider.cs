@@ -50,6 +50,15 @@ namespace SliceBlast.Ads
         private int _rewardedFailures;
         private bool _started;
 
+        private string _consentStatus = "consent: waiting for ATT";
+        private string _sdkStatus = "sdk: not started";
+        private string _interstitialStatus = "interstitial: -";
+        private string _rewardedStatus = "rewarded: -";
+
+        public string DebugStatus =>
+            _consentStatus + "\n" + _sdkStatus + "\n" + _interstitialStatus + "\n" + _rewardedStatus
+            + (IsRewardedReady ? "\nREWARDED READY" : string.Empty);
+
         public bool IsInterstitialReady => _interstitialAd != null && _interstitialAd.CanShowAd();
 
         public bool IsRewardedReady => _rewardedAd != null && _rewardedAd.CanShowAd();
@@ -63,6 +72,7 @@ namespace SliceBlast.Ads
             // The plugin does not otherwise promise which thread its callbacks arrive on, and
             // the reward callback goes straight into the HUD and the revive.
             GoogleMobileAds.Api.MobileAds.RaiseAdEventsOnUnityMainThread = true;
+            _consentStatus = "consent: checking";
 
             // Google's consent flow (UMP) comes first. For players in the EEA, the UK and
             // Switzerland it shows the GDPR message configured under AdMob → Privacy &
@@ -74,13 +84,18 @@ namespace SliceBlast.Ads
                 {
                     if (updateError != null)
                     {
+                        _consentStatus = "consent: update failed " + updateError.Message;
                         // Offline, most likely. Whatever was consented to last time still
                         // stands, and CanRequestAds() already reflects it.
                         StartIfConsented();
                         return;
                     }
 
-                    GoogleMobileAds.Ump.Api.ConsentForm.LoadAndShowConsentFormIfRequired(_ => StartIfConsented());
+                    GoogleMobileAds.Ump.Api.ConsentForm.LoadAndShowConsentFormIfRequired(formError =>
+                    {
+                        _consentStatus = formError != null ? "consent: form error " + formError.Message : "consent: ok";
+                        StartIfConsented();
+                    });
                 });
         }
 
@@ -98,15 +113,23 @@ namespace SliceBlast.Ads
         /// </summary>
         private void StartIfConsented()
         {
-            if (_started || !GoogleMobileAds.Ump.Api.ConsentInformation.CanRequestAds())
+            if (_started)
             {
                 return;
             }
 
+            if (!GoogleMobileAds.Ump.Api.ConsentInformation.CanRequestAds())
+            {
+                _sdkStatus = "sdk: blocked, consent says ads may not be requested";
+                return;
+            }
+
             _started = true;
+            _sdkStatus = "sdk: initializing";
 
             GoogleMobileAds.Api.MobileAds.Initialize(_ =>
             {
+                _sdkStatus = "sdk: ready" + (AdsManager.TestAds ? " (TEST UNITS)" : " (real units)");
                 LoadInterstitial();
                 LoadRewarded();
             });
@@ -189,15 +212,19 @@ namespace SliceBlast.Ads
                 _interstitialAd = null;
             }
 
+            _interstitialStatus = "interstitial: loading";
+
             GoogleMobileAds.Api.InterstitialAd.Load(InterstitialUnit, new GoogleMobileAds.Api.AdRequest(), (ad, error) =>
             {
                 if (error != null || ad == null)
                 {
+                    _interstitialStatus = "interstitial: failed " + (error != null ? error.GetCode() + " " + error.GetMessage() : "no ad");
                     RetryAfterBackoff(++_interstitialFailures, LoadInterstitial);
                     return;
                 }
 
                 _interstitialFailures = 0;
+                _interstitialStatus = "interstitial: ready";
                 _interstitialAd = ad;
                 _interstitialAd.OnAdFullScreenContentClosed += LoadInterstitial;
                 _interstitialAd.OnAdFullScreenContentFailed += _ => LoadInterstitial();
@@ -212,15 +239,19 @@ namespace SliceBlast.Ads
                 _rewardedAd = null;
             }
 
+            _rewardedStatus = "rewarded: loading";
+
             GoogleMobileAds.Api.RewardedAd.Load(RewardedUnit, new GoogleMobileAds.Api.AdRequest(), (ad, error) =>
             {
                 if (error != null || ad == null)
                 {
+                    _rewardedStatus = "rewarded: failed " + (error != null ? error.GetCode() + " " + error.GetMessage() : "no ad");
                     RetryAfterBackoff(++_rewardedFailures, LoadRewarded);
                     return;
                 }
 
                 _rewardedFailures = 0;
+                _rewardedStatus = "rewarded: loaded";
                 _rewardedAd = ad;
             });
         }
@@ -260,6 +291,8 @@ namespace SliceBlast.Ads
         public void Reload()
         {
         }
+
+        public string DebugStatus => "ads are not compiled into this build (SLICEBLAST_ADS_ENABLED off)";
 
         public void ShowRewarded(Action onEarned, Action onUnavailable)
         {

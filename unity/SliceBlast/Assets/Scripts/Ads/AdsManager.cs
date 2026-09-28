@@ -39,24 +39,36 @@ namespace SliceBlast.Ads
         /// </summary>
         public static bool TestAds => TestAdsAllowed && PlayerPrefs.GetInt(TestAdsKey, 0) == 1;
 
-#if UNITY_IOS && !UNITY_EDITOR
-        [System.Runtime.InteropServices.DllImport("__Internal")]
-        private static extern int _SliceBlastIsSandboxInstall();
-#endif
-
         /// <summary>
-        /// Only a TestFlight (sandbox) install may use test ads. An App Store install ignores
-        /// the switch entirely, so a player who stumbles on the taps changes nothing.
+        /// Test ads exist only in a build made for testing: the iOS workflow run with its
+        /// "testAds" option defines SLICEBLAST_TEST_ADS. The build sent to the App Store is
+        /// made without it, so the switch is not in it at all.
         /// </summary>
         public static bool TestAdsAllowed
         {
             get
             {
-#if UNITY_IOS && !UNITY_EDITOR
-                return _SliceBlastIsSandboxInstall() != 0;
+#if SLICEBLAST_TEST_ADS || UNITY_EDITOR
+                return true;
 #else
-                return Application.isEditor || Debug.isDebugBuild;
+                return false;
 #endif
+            }
+        }
+
+        /// <summary>Every provider's own stage-by-stage status, for the test-ads screen.</summary>
+        public string DebugStatus
+        {
+            get
+            {
+                string text = string.Empty;
+
+                for (int i = 0; i < _providers.Count; i++)
+                {
+                    text += (i > 0 ? "\n" : string.Empty) + _providers[i].Name + "\n" + _providers[i].DebugStatus;
+                }
+
+                return text;
             }
         }
 

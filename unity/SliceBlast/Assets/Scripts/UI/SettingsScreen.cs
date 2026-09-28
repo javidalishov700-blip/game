@@ -50,6 +50,7 @@ namespace SliceBlast.UI
         private int _titleTaps;
         private float _lastTitleTap;
         private Text _testAdsLabel;
+        private Text _adStatus;
 
         public bool IsOpen { get; private set; }
 
@@ -112,6 +113,13 @@ namespace SliceBlast.UI
             UiKit.Anchor(_testAdsLabel.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0f, -250f), new Vector2(0f, -200f));
             _testAdsLabel.text = "TEST ADS ON";
             _testAdsLabel.gameObject.SetActive(AdsManager.TestAds);
+
+            // What the ad SDK is doing, stage by stage, while test ads are on — the only way to
+            // see why an ad does not load without a Mac and Xcode's console.
+            _adStatus = UiKit.CreateText(_font, "AdStatus", root, 26, FontStyle.Normal, UiKit.Dim, TextAnchor.UpperLeft);
+            UiKit.Anchor(_adStatus.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(Margin, -1560f), new Vector2(-Margin, -1280f));
+            _adStatus.horizontalOverflow = HorizontalWrapMode.Wrap;
+            _adStatus.gameObject.SetActive(AdsManager.TestAds);
 
             MenuControl close = UiKit.CreateButton(_font, "Close", root, string.Empty, 0, new Color(1f, 1f, 1f, 0.14f), Color.white, IconShape.Close);
             RectTransform closeRect = close.Root;
@@ -223,6 +231,7 @@ namespace SliceBlast.UI
             bool on = !AdsManager.TestAds;
             ads.SetTestAds(on);
             _testAdsLabel.gameObject.SetActive(on);
+            _adStatus.gameObject.SetActive(on);
         }
 
         private void ChooseLanguage(Language language)
@@ -320,6 +329,11 @@ namespace SliceBlast.UI
         private void Update()
         {
             _group.alpha = Mathf.MoveTowards(_group.alpha, _targetAlpha, Clock.UnscaledDelta * 6f);
+
+            if (IsOpen && _adStatus != null && _adStatus.gameObject.activeSelf && AdsManager.Instance != null)
+            {
+                _adStatus.text = AdsManager.Instance.DebugStatus;
+            }
         }
     }
 }
