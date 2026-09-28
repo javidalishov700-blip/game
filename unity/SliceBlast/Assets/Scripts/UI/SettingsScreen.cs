@@ -199,6 +199,11 @@ namespace SliceBlast.UI
 
         private void OnTitleTapped()
         {
+            if (!AdsManager.TestAdsAllowed)
+            {
+                return;
+            }
+
             _titleTaps = Time.unscaledTime - _lastTitleTap < 1.2f ? _titleTaps + 1 : 1;
             _lastTitleTap = Time.unscaledTime;
 

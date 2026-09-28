@@ -37,7 +37,28 @@ namespace SliceBlast.Ads
         /// so the rewarded continue can be tested in TestFlight while the account's real ads
         /// are not being served yet.
         /// </summary>
-        public static bool TestAds => PlayerPrefs.GetInt(TestAdsKey, 0) == 1;
+        public static bool TestAds => TestAdsAllowed && PlayerPrefs.GetInt(TestAdsKey, 0) == 1;
+
+#if UNITY_IOS && !UNITY_EDITOR
+        [System.Runtime.InteropServices.DllImport("__Internal")]
+        private static extern int _SliceBlastIsSandboxInstall();
+#endif
+
+        /// <summary>
+        /// Only a TestFlight (sandbox) install may use test ads. An App Store install ignores
+        /// the switch entirely, so a player who stumbles on the taps changes nothing.
+        /// </summary>
+        public static bool TestAdsAllowed
+        {
+            get
+            {
+#if UNITY_IOS && !UNITY_EDITOR
+                return _SliceBlastIsSandboxInstall() != 0;
+#else
+                return Application.isEditor || Debug.isDebugBuild;
+#endif
+            }
+        }
 
         public void SetTestAds(bool on)
         {
