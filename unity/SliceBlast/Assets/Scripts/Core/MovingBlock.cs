@@ -71,6 +71,9 @@ namespace SliceBlast.Core
         private float _impactSpeed = 4f;
         private bool _impactFlashes;
 
+        /// <summary>The block's true size — the landing squash-and-stretch animates localScale.</summary>
+        public Vector3 RestScale => _impact > 0f ? _restScale : CachedTransform.localScale;
+
         public float AxisCenter
         {
             get

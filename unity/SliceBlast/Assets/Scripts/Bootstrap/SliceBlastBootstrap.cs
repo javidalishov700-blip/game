@@ -63,6 +63,7 @@ namespace SliceBlast.Bootstrap
         private float _gameOverTime;
         private bool _home;
         private float _homeTime;
+        private float _signInPoll;
 
         // A 7/9/11-block blast is rare enough to mark, so the sky itself changes to say so —
         // each tier a little more intense than the last, held for the rest of the run rather
@@ -345,7 +346,7 @@ namespace SliceBlast.Bootstrap
 
         private void OnLeaderboardAuthResolved(bool signedIn)
         {
-            _hud.SetLeaderboardAvailable(signedIn);
+            _hud.SetLeaderboardAvailable(signedIn || Leaderboards.IsAuthenticated);
         }
 
         private void OnLeaderboardRequested()
@@ -608,6 +609,8 @@ namespace SliceBlast.Bootstrap
 
             if (_home)
             {
+                PollLeaderboardSignIn();
+
                 if (Time.unscaledTime - _homeTime < homeInputDelay)
                 {
                     return;
@@ -640,6 +643,27 @@ namespace SliceBlast.Bootstrap
             _hud.HideHome();
             _audio.PlayStart();
             _flow.StartGame();
+        }
+
+        /// <summary>
+        /// Game Center finishes signing in a second or two after launch — after the title
+        /// screen has already asked and been told no. Its callback can't be relied on to
+        /// report the change (on device it answered before sign-in completed, which is why the
+        /// crown only ever turned up after a first run), so the title screen simply keeps
+        /// asking twice a second. The read is a cached bool and SetLeaderboardAvailable
+        /// ignores a repeat, so it costs nothing.
+        /// </summary>
+        private void PollLeaderboardSignIn()
+        {
+            _signInPoll -= Time.unscaledDeltaTime;
+
+            if (_signInPoll > 0f)
+            {
+                return;
+            }
+
+            _signInPoll = 0.5f;
+            _hud.SetLeaderboardAvailable(Leaderboards.IsAuthenticated);
         }
 
         private void OnHomeShown(int best)
@@ -676,7 +700,10 @@ namespace SliceBlast.Bootstrap
             _hud.ShowPaused(false);
             _hud.SetHintText("TAP TO DROP");
             _hud.ShowHint(true);
-            SetSkyTier(0, true);
+
+            // Zero on a fresh run; a run resumed after the app was closed goes straight back
+            // to the sky its biggest blast had already earned.
+            SetSkyTier(SkyTierForBlast(_flow != null ? _flow.BiggestBlast : 0), true);
         }
 
         private void OnScoreChanged(int score, int multiplier)

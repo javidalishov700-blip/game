@@ -32,7 +32,11 @@ namespace SliceBlast.UI
         Close,
         Disc,
         Glow,
-        Gear
+        Gear,
+        Magnet,
+        Clover,
+        Star,
+        Flame
     }
 
     public static class IconFactory
@@ -304,6 +308,55 @@ namespace SliceBlast.UI
                     return Mathf.Min(ring, teeth);
                 }
 
+                case IconShape.Magnet:
+                {
+                    // A horseshoe opening upward: the lower half of a thick ring, two straight
+                    // arms rising from its ends, and a notch across both arms marking the poles.
+                    Vector2 centre = new Vector2(0f, -0.08f);
+                    float bend = Mathf.Max(Ring(p - centre, 0.42f, 0.17f), p.y - centre.y);
+                    float arms = Mathf.Min(
+                        Box(p - new Vector2(-0.42f, 0.28f), new Vector2(0.17f, 0.36f), 0.03f),
+                        Box(p - new Vector2(0.42f, 0.28f), new Vector2(0.17f, 0.36f), 0.03f));
+                    float notch = Box(p - new Vector2(0f, 0.36f), new Vector2(1f, 0.045f), 0f);
+                    return Mathf.Max(Mathf.Min(bend, arms), -notch);
+                }
+
+                case IconShape.Clover:
+                {
+                    // Four round leaves around a small heart, split apart by hairline gaps on the
+                    // diagonals, with a stem off the bottom.
+                    float leaves = Mathf.Min(
+                        Mathf.Min(Circle(p - new Vector2(0f, 0.3f), 0.27f), Circle(p - new Vector2(0f, -0.3f), 0.27f)),
+                        Mathf.Min(Circle(p - new Vector2(0.3f, 0f), 0.27f), Circle(p - new Vector2(-0.3f, 0f), 0.27f)));
+                    leaves = Mathf.Min(leaves, Circle(p, 0.14f));
+
+                    float gaps = Mathf.Min(
+                        Segment(p, new Vector2(-0.7f, -0.7f), new Vector2(0.7f, 0.7f), 0.035f),
+                        Segment(p, new Vector2(-0.7f, 0.7f), new Vector2(0.7f, -0.7f), 0.035f));
+                    leaves = Mathf.Max(leaves, -gaps);
+
+                    float stem = Segment(p, new Vector2(0.16f, -0.5f), new Vector2(0.36f, -0.86f), 0.065f);
+                    return Mathf.Min(leaves, stem);
+                }
+
+                case IconShape.Star:
+                    // Shifted so the five points' bounding box, not the star's own centre, sits
+                    // on the origin — otherwise it reads as riding high in a round badge.
+                    return Star5(p + new Vector2(0f, 0.08f), 0.82f, 0.46f);
+
+                case IconShape.Flame:
+                {
+                    // A teardrop — a round base under a tapering tip that leans a touch — with a
+                    // hollow inner tongue so it reads as fire rather than a water drop.
+                    float outer = Mathf.Min(
+                        Circle(p - new Vector2(0f, -0.28f), 0.46f),
+                        Triangle(p, new Vector2(-0.43f, -0.12f), new Vector2(0.43f, -0.12f), new Vector2(0.06f, 0.86f)));
+                    float inner = Mathf.Min(
+                        Circle(p - new Vector2(0f, -0.36f), 0.2f),
+                        Triangle(p, new Vector2(-0.19f, -0.3f), new Vector2(0.19f, -0.3f), new Vector2(0.02f, 0.2f)));
+                    return Mathf.Max(outer, -inner);
+                }
+
                 case IconShape.Crown:
                 {
                     // Shifted down 0.07 from the original coordinates: the band-plus-spikes
@@ -349,6 +402,23 @@ namespace SliceBlast.UI
         private static float Circle(Vector2 p, float radius)
         {
             return p.magnitude - radius;
+        }
+
+        /// <summary>A five-pointed star of outer radius r; rf sets how deep the inner corners cut.</summary>
+        private static float Star5(Vector2 p, float r, float rf)
+        {
+            Vector2 k1 = new Vector2(0.809016994375f, -0.587785252292f);
+            Vector2 k2 = new Vector2(-k1.x, k1.y);
+
+            p.x = Mathf.Abs(p.x);
+            p -= 2f * Mathf.Max(Vector2.Dot(k1, p), 0f) * k1;
+            p -= 2f * Mathf.Max(Vector2.Dot(k2, p), 0f) * k2;
+            p.x = Mathf.Abs(p.x);
+            p.y -= r;
+
+            Vector2 ba = rf * new Vector2(-k1.y, k1.x) - new Vector2(0f, 1f);
+            float h = Mathf.Clamp(Vector2.Dot(p, ba) / Vector2.Dot(ba, ba), 0f, r);
+            return (p - ba * h).magnitude * Mathf.Sign(p.y * ba.x - p.x * ba.y);
         }
 
         private static Vector2 Rotate(Vector2 p, float radians)

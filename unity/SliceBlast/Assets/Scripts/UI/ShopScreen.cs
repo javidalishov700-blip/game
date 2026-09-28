@@ -1,11 +1,13 @@
-// The meta screen: upgrades, themes, daily missions and the store rows. Built once in code
-// like the rest of the interface, then refreshed in place — nothing here is created or
-// destroyed while it is open, so opening it mid-session costs one layout pass and no GC.
+// The Workshop: upgrades, a gallery of themes, the player's profile and the daily missions,
+// with the store rows along the bottom. Built once in code like the rest of the interface,
+// then refreshed in place — nothing here is created or destroyed while it is open, so opening
+// it mid-session costs one layout pass and no GC.
 //
 // It owns no store logic. Buying a real product raises an event the bootstrap wires to the
 // IAP manager, exactly as the run-over screen raises ContinueRequested rather than talking to
 // the ad SDK itself. Coin purchases are local, so those it does resolve directly.
 using System;
+using System.Globalization;
 using SliceBlast.Meta;
 using UnityEngine;
 using UnityEngine.UI;
@@ -19,43 +21,114 @@ namespace SliceBlast.UI
         {
             Upgrades = 0,
             Themes = 1,
-            // Kept last: the mission badge is anchored to the top-right corner of the whole
-            // tab strip on the assumption that the rightmost tab is Daily. Insert any future
-            // tab before this one, not after it.
-            Missions = 2
+            Profile = 2,
+            Missions = 3
+        }
+
+        /// <summary>A coloured disc with a glyph on it and a soft glow behind: a card's identity mark.</summary>
+        private sealed class Badge
+        {
+            public Image Glow;
+            public Image Disc;
+            public Image Glyph;
         }
 
         private sealed class UpgradeRow
         {
             public UpgradeId Id;
-            public Text Name;
-            public Text Detail;
-            public Text Cost;
-            public MenuControl Buy;
+            public Color Accent;
+            public Badge Badge;
+            public Text Effect;
             public Image[] Pips;
+            public GameObject MaxStar;
+            public MenuControl Buy;
         }
 
-        private sealed class ThemeRow
+        private sealed class ThemeTile
         {
             public string Id;
+            public RectTransform Root;
+            public GameObject Border;
+            public GameObject Lock;
+            public GameObject Check;
             public Text Name;
-            public Text State;
-            public Image Swatch;
             public MenuControl Button;
         }
 
         private sealed class MissionRow
         {
-            public int Index;
+            public RectTransform Card;
+            public Badge Badge;
             public Text Label;
             public Text Progress;
-            public RectTransform Fill;
+            public Image Fill;
             public MenuControl Claim;
-            public Text Reward;
         }
 
-        // Magnet now runs 7 levels (see UpgradeCatalogue); the others still use fewer.
-        private const int MaxPips = 7;
+        // Layout, in safe-area canvas units. The content column sits between the tab strip and
+        // either the store rows or, when there is no store, the bottom of the screen.
+        private const float ContentTop = -404f;
+        private const float FooterReserve = 366f;
+        private const float NoFooterReserve = 40f;
+
+        private const float PageInset = 8f;
+        private const float CardGap = 18f;
+        private const float UpgradeCardHeight = 214f;
+        private const float MissionCardHeight = 204f;
+        private const float RankCardHeight = 280f;
+        private const float StatTileHeight = 164f;
+
+        private const int ThemeColumns = 3;
+        private const float TileHeight = 358f;
+        private const float TileGap = 16f;
+        private const float PreviewHeight = 200f;
+        private const int PreviewBlocks = 7;
+        private const float PreviewBlockHeight = 17f;
+
+        // BlockSpawner's own step, doubled per preview block so seven blocks show the whole band.
+        private const float PreviewHueStep = 0.035f;
+
+        private const float ChipWidth = 300f;
+        private const float ChipHeight = 66f;
+        private const float ChipY = -238f;
+        private const float ChipOffset = 165f;
+
+        private const int StarCount = 18;
+
+        private static readonly Color CardFill = new Color(1f, 1f, 1f, 0.07f);
+
+        // Opaque, unlike CardFill: an equipped tile's highlight border sits behind it and must
+        // not show through the whole tile.
+        private static readonly Color TileFill = new Color(0.11f, 0.12f, 0.19f, 1f);
+        private static readonly Color ChipFill = new Color(1f, 1f, 1f, 0.09f);
+        private static readonly Color TrackFill = new Color(1f, 1f, 1f, 0.13f);
+        private static readonly Color MutedFill = new Color(1f, 1f, 1f, 0.12f);
+        private static readonly Color MutedText = new Color(1f, 1f, 1f, 0.55f);
+        private static readonly Color EmptyPip = new Color(1f, 1f, 1f, 0.16f);
+        private static readonly Color DimGold = new Color(1f, 0.79f, 0.29f, 0.7f);
+        private static readonly Color BackdropTop = new Color(0.12f, 0.1f, 0.24f, 1f);
+        private static readonly Color BackdropBottom = new Color(0.04f, 0.05f, 0.09f, 1f);
+
+        private static readonly Color Coral = new Color(1f, 0.45f, 0.42f);
+        private static readonly Color Sky = new Color(0.45f, 0.8f, 1f);
+        private static readonly Color Leaf = new Color(0.48f, 0.92f, 0.52f);
+        private static readonly Color Ember = new Color(1f, 0.6f, 0.25f);
+        private static readonly Color Violet = new Color(0.72f, 0.56f, 1f);
+        private static readonly Color Bronze = new Color(0.87f, 0.56f, 0.33f);
+        private static readonly Color Silver = new Color(0.8f, 0.84f, 0.9f);
+
+        // One per PlayerRanks title, climbing from dull bronze to gold.
+        private static readonly Color[] RankColors =
+        {
+            new Color(0.72f, 0.62f, 0.52f),
+            Bronze,
+            Silver,
+            UiKit.Mint,
+            Sky,
+            Violet,
+            Coral,
+            UiKit.Gold
+        };
 
         /// <summary>
         /// Product identifiers, which have to match App Store Connect exactly. Kept here
@@ -83,22 +156,52 @@ namespace SliceBlast.UI
         private CanvasGroup _group;
         private float _targetAlpha;
 
-        private Text _coinLabel;
-        private Text _streakLabel;
         private RectTransform _content;
         private MenuControl[] _tabs;
         private RectTransform[] _pages;
+        private ScrollRect[] _scrolls;
         private Tab _tab = Tab.Upgrades;
 
+        private Image _headerGlow;
+        private Color _glowTint = Color.white;
+        private Image[] _stars;
+        private float[] _starPhase;
+        private float[] _starSpeed;
+        private Color _starTint = Color.white;
+
+        private RectTransform _coinChip;
+        private Text _coinLabel;
+        private RectTransform _streakChip;
+        private Text _streakLabel;
+        private GameObject _missionBadge;
+        private Text _missionBadgeLabel;
+
         private UpgradeRow[] _upgradeRows;
-        private ThemeRow[] _themeRows;
+        private ThemeTile[] _themeTiles;
         private MissionRow[] _missionRows;
+        private Text _resetLabel;
+
+        private Image _rankGlow;
+        private Color _rankGlowTint = Color.white;
+        private Image _rankMedal;
+        private Text _rankTitle;
+        private Text _rankNext;
+        private Text _rankProgress;
+        private Image _rankFill;
+        private Text[] _stats;
+
         private MenuControl _removeAds;
         private MenuControl _restore;
         private RectTransform[] _coinPacks;
-        private Text _missionBadge;
         private Text[] _coinPackLabels;
         private bool _storeAvailable;
+
+        private RectTransform _punchTarget;
+        private float _punch;
+        private float _punchAmount;
+        private float _coinPunch;
+        private int _shownCoins = -1;
+        private float _countdown;
 
         public bool IsOpen { get; private set; }
 
@@ -114,13 +217,9 @@ namespace SliceBlast.UI
             _group.blocksRaycasts = false;
             _group.interactable = false;
 
-            // Fully opaque: at 0.96 the title screen's wordmark was still faintly visible
-            // behind every row, competing with the shop's own text.
-            Image dim = UiKit.CreateImage("Dim", root, new Color(UiKit.Ink.r, UiKit.Ink.g, UiKit.Ink.b, 1f));
-            UiKit.Stretch(dim.rectTransform);
-            dim.raycastTarget = true; // nothing behind the shop is tappable while it is open
+            BuildBackdrop(root);
 
-            // Everything below sits on this instead of directly on root: the dim above has to
+            // Everything below sits on this instead of directly on root: the backdrop has to
             // reach every physical edge, but a control here must not, or it ends up under the
             // notch/Dynamic Island or the home indicator.
             RectTransform safeContent = UiKit.CreateSafeAreaChild("SafeContent", root);
@@ -129,22 +228,64 @@ namespace SliceBlast.UI
             BuildTabs(safeContent);
 
             _content = UiKit.CreateChild("Content", safeContent);
-            UiKit.Anchor(_content, new Vector2(0f, 0f), new Vector2(1f, 1f), new Vector2(40f, 366f), new Vector2(-40f, -430f));
+            UiKit.Anchor(_content, Vector2.zero, Vector2.one, new Vector2(40f, FooterReserve), new Vector2(-40f, ContentTop));
 
-            _pages = new RectTransform[3];
+            _pages = new RectTransform[4];
+            _scrolls = new ScrollRect[4];
 
             _pages[(int)Tab.Upgrades] = BuildUpgradesPage();
             _pages[(int)Tab.Themes] = BuildThemesPage();
+            _pages[(int)Tab.Profile] = BuildProfilePage();
             _pages[(int)Tab.Missions] = BuildMissionsPage();
 
             BuildFooter(safeContent);
             SelectTab(Tab.Upgrades);
         }
 
+        // ---- Frame -----------------------------------------------------------------------
+
+        private void BuildBackdrop(RectTransform root)
+        {
+            // Fully opaque: nothing of the title screen behind should compete with the shop's
+            // own text. A deep violet fading down to the game's ink, rather than one flat fill.
+            Image backdrop = UiKit.CreateImage("Backdrop", root, Color.white);
+            UiKit.Stretch(backdrop.rectTransform);
+            backdrop.raycastTarget = true; // nothing behind the shop is tappable while it is open
+            backdrop.gameObject.AddComponent<UiGradient>().SetColors(BackdropTop, BackdropBottom);
+
+            // A few stars twinkling around the header, in the equipped theme's own star colour.
+            // Kept to the top of the screen, clear of the cards, where they read as sky rather
+            // than as noise behind the text.
+            _stars = new Image[StarCount];
+            _starPhase = new float[StarCount];
+            _starSpeed = new float[StarCount];
+
+            for (int i = 0; i < StarCount; i++)
+            {
+                Image star = UiKit.CreateImage("Star" + i, root, Color.white);
+                star.sprite = IconFactory.GetSprite(IconShape.Disc);
+
+                Vector2 at = new Vector2(
+                    Mathf.Lerp(0.04f, 0.96f, Hash(i * 12.9898f + 1.3f)),
+                    Mathf.Lerp(0.8f, 0.985f, Hash(i * 78.233f + 4.1f)));
+                float size = Mathf.Lerp(4f, 10f, Hash(i * 5.31f + 0.7f));
+                Place(star.rectTransform, at, new Vector2(size, size), Vector2.zero);
+
+                _stars[i] = star;
+                _starPhase[i] = Hash(i * 3.7f + 2.2f) * Mathf.PI * 2f;
+                _starSpeed[i] = Mathf.Lerp(0.8f, 2.4f, Hash(i * 9.13f + 5.5f));
+            }
+        }
+
         private void BuildHeader(RectTransform root)
         {
-            Text title = UiKit.CreateText(_font, "ShopTitle", root, 88, FontStyle.Bold, Color.white, TextAnchor.UpperCenter);
-            UiKit.Anchor(title.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0f, -190f), new Vector2(0f, -80f));
+            // A soft wash of the equipped theme's accent behind the title, breathing slowly.
+            _headerGlow = UiKit.CreateImage("HeaderGlow", root, Color.white);
+            _headerGlow.sprite = IconFactory.GetSprite(IconShape.Glow);
+            Place(_headerGlow.rectTransform, new Vector2(0.5f, 1f), new Vector2(820f, 300f), new Vector2(0f, -128f));
+
+            Text title = UiKit.CreateText(_font, "ShopTitle", root, 84, FontStyle.Bold, Color.white, TextAnchor.UpperCenter);
+            UiKit.Anchor(title.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0f, -178f), new Vector2(0f, -76f));
             title.text = "WORKSHOP";
 
             MenuControl close = UiKit.CreateButton(_font, "Close", root, string.Empty, 0, new Color(1f, 1f, 1f, 0.14f), Color.white, IconShape.Close);
@@ -156,228 +297,569 @@ namespace SliceBlast.UI
             closeRect.anchoredPosition = new Vector2(40f, -70f);
             close.Button.onClick.AddListener(() => Closed?.Invoke());
 
-            Image coin = UiKit.CreateImage("HeaderCoin", root, UiKit.Gold);
-            coin.sprite = IconFactory.GetSprite(IconShape.Coin);
-            coin.preserveAspect = true;
-            RectTransform coinRect = coin.rectTransform;
-            coinRect.anchorMin = new Vector2(1f, 1f);
-            coinRect.anchorMax = new Vector2(1f, 1f);
-            coinRect.pivot = new Vector2(1f, 1f);
-            coinRect.sizeDelta = new Vector2(62f, 62f);
-            coinRect.anchoredPosition = new Vector2(-40f, -98f);
+            // The balance and the streak as two chips under the title, rather than a number
+            // squeezed into the title's own row where a five-digit balance ran into the word.
+            _coinChip = CreateChip("CoinChip", root, IconShape.Coin, UiKit.Gold, UiKit.Gold, out _coinLabel);
+            _streakChip = CreateChip("StreakChip", root, IconShape.Flame, Ember, Ember, out _streakLabel);
+        }
 
-            _coinLabel = UiKit.CreateText(_font, "HeaderCoins", root, 56, FontStyle.Bold, UiKit.Gold, TextAnchor.UpperRight);
-            UiKit.Anchor(_coinLabel.rectTransform, new Vector2(0.4f, 1f), new Vector2(1f, 1f), new Vector2(0f, -170f), new Vector2(-114f, -100f));
+        private RectTransform CreateChip(string name, RectTransform parent, IconShape icon, Color iconColor, Color textColor, out Text label)
+        {
+            Image chip = UiKit.CreatePanel(name, parent, ChipFill);
+            RectTransform rect = chip.rectTransform;
+            Place(rect, new Vector2(0.5f, 1f), new Vector2(ChipWidth, ChipHeight), new Vector2(0f, ChipY));
 
-            _streakLabel = UiKit.CreateText(_font, "Streak", root, 38, FontStyle.Bold, UiKit.Mint, TextAnchor.UpperCenter);
-            UiKit.Anchor(_streakLabel.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0f, -244f), new Vector2(0f, -196f));
+            RectTransform row = CreateCentredRow(name + "Row", rect, 12f);
+
+            Image glyph = UiKit.CreateImage("Icon", row, iconColor);
+            glyph.sprite = IconFactory.GetSprite(icon);
+            glyph.preserveAspect = true;
+
+            LayoutElement glyphSize = glyph.gameObject.AddComponent<LayoutElement>();
+            glyphSize.preferredWidth = 42f;
+            glyphSize.preferredHeight = 42f;
+
+            label = UiKit.CreateText(_font, name + "Label", row, 38, FontStyle.Bold, textColor, TextAnchor.MiddleCenter);
+            return rect;
         }
 
         private void BuildTabs(RectTransform root)
         {
-            _tabs = new MenuControl[3];
+            RectTransform strip = UiKit.CreateChild("Tabs", root);
+            UiKit.Anchor(strip, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(40f, -384f), new Vector2(-40f, -292f));
 
-            string[] labels = { "UPGRADES", "THEMES", "DAILY" };
+            HorizontalLayoutGroup layout = strip.gameObject.AddComponent<HorizontalLayoutGroup>();
+            layout.childAlignment = TextAnchor.MiddleCenter;
+            layout.spacing = 12f;
+            layout.childControlWidth = true;
+            layout.childControlHeight = true;
+            layout.childForceExpandWidth = true;
+            layout.childForceExpandHeight = true;
 
-            for (int i = 0; i < _tabs.Length; i++)
+            string[] labels = { "UPGRADES", "THEMES", "PROFILE", "DAILY" };
+            _tabs = new MenuControl[labels.Length];
+
+            for (int i = 0; i < labels.Length; i++)
             {
                 // No icon: a glyph crowds a 30pt word in a quarter-width button, so tabs have
-                // never shown one. Built with IconShape.None from the start rather than built
-                // with one and disabled afterwards — CreateButton's layout group sizes and
-                // centres the label the moment it's created, so there is nothing left over to
-                // correct once the button exists.
-                MenuControl tab = UiKit.CreateButton(_font, "Tab" + i, root, labels[i], 30, UiKit.Panel, Color.white, IconShape.None);
+                // never shown one.
+                MenuControl tab = UiKit.CreateButton(_font, "Tab" + i, strip, labels[i], 30, UiKit.Panel, Color.white, IconShape.None);
 
-                RectTransform rect = tab.Root;
-                rect.anchorMin = new Vector2(i / (float)_tabs.Length, 1f);
-                rect.anchorMax = new Vector2((i + 1) / (float)_tabs.Length, 1f);
-                rect.pivot = new Vector2(0.5f, 1f);
-                rect.offsetMin = new Vector2(46f, -390f);
-                rect.offsetMax = new Vector2(-6f, -290f);
+                // Equal widths whatever the word: nothing on a tab's root reports a size of its
+                // own, so the strip shares its width out by these weights alone — and the strip
+                // is inset evenly from both edges, where the old one sat 46 in on the left and 6
+                // on the right.
+                LayoutElement weight = tab.Root.gameObject.AddComponent<LayoutElement>();
+                weight.minWidth = 0f;
+                weight.preferredWidth = 0f;
+                weight.flexibleWidth = 1f;
 
                 Tab which = (Tab)i;
                 tab.Button.onClick.AddListener(() => SelectTab(which));
                 _tabs[i] = tab;
             }
 
-            // Sits on the DAILY tab and counts finished, unclaimed missions.
-            _missionBadge = UiKit.CreateText(_font, "MissionBadge", root, 34, FontStyle.Bold, UiKit.Ink, TextAnchor.MiddleCenter);
-            RectTransform badgeRect = _missionBadge.rectTransform;
-            badgeRect.anchorMin = new Vector2(1f, 1f);
-            badgeRect.anchorMax = new Vector2(1f, 1f);
-            badgeRect.pivot = new Vector2(1f, 1f);
-            badgeRect.sizeDelta = new Vector2(54f, 54f);
-            badgeRect.anchoredPosition = new Vector2(-46f, -286f);
+            // Counts finished, unclaimed missions, riding the DAILY tab's own corner so it stays
+            // on that tab however the strip is laid out.
+            Image dot = UiKit.CreateImage("MissionBadge", _tabs[(int)Tab.Missions].Root, UiKit.Gold);
+            dot.sprite = IconFactory.GetSprite(IconShape.Disc);
+            Place(dot.rectTransform, new Vector2(1f, 1f), new Vector2(46f, 46f), new Vector2(-12f, -8f));
+
+            _missionBadgeLabel = UiKit.CreateText(_font, "Count", dot.rectTransform, 28, FontStyle.Bold, UiKit.Ink, TextAnchor.MiddleCenter);
+            UiKit.Stretch(_missionBadgeLabel.rectTransform);
+            DisableShadow(_missionBadgeLabel);
+
+            _missionBadge = dot.gameObject;
+            _missionBadge.SetActive(false);
         }
+
+        /// <summary>
+        /// One scrolling page. Every page scrolls, whether or not today's content needs it: a
+        /// shorter screen (or a longer list later) must never push the last card under the store
+        /// rows. The page itself is the viewport and clips what scrolls past its edges.
+        /// </summary>
+        private RectTransform CreatePage(Tab tab, string name, out RectTransform scroll)
+        {
+            RectTransform page = UiKit.CreateChild(name, _content);
+            UiKit.Stretch(page);
+            page.gameObject.AddComponent<RectMask2D>();
+
+            // Invisible, but a raycast target: the gaps between cards are what a drag lands on.
+            Image catcher = page.gameObject.AddComponent<Image>();
+            catcher.color = new Color(0f, 0f, 0f, 0f);
+            catcher.raycastTarget = true;
+
+            scroll = UiKit.CreateChild("Scroll", page);
+            scroll.anchorMin = new Vector2(0f, 1f);
+            scroll.anchorMax = new Vector2(1f, 1f);
+            scroll.pivot = new Vector2(0.5f, 1f);
+            scroll.offsetMin = Vector2.zero;
+            scroll.offsetMax = Vector2.zero;
+
+            ScrollRect scroller = page.gameObject.AddComponent<ScrollRect>();
+            scroller.viewport = page;
+            scroller.content = scroll;
+            scroller.horizontal = false;
+            scroller.vertical = true;
+            scroller.movementType = ScrollRect.MovementType.Elastic;
+            scroller.inertia = true;
+            scroller.decelerationRate = 0.12f;
+            scroller.scrollSensitivity = 30f;
+
+            _scrolls[(int)tab] = scroller;
+            return page;
+        }
+
+        private static void SetScrollHeight(RectTransform scroll, float height)
+        {
+            scroll.sizeDelta = new Vector2(0f, height);
+        }
+
+        // ---- Upgrades ----------------------------------------------------------------------
 
         private RectTransform BuildUpgradesPage()
         {
-            RectTransform page = UiKit.CreateChild("Upgrades", _content);
-            UiKit.Stretch(page);
+            RectTransform page = CreatePage(Tab.Upgrades, "Upgrades", out RectTransform scroll);
 
             int count = UpgradeCatalogue.Count;
             _upgradeRows = new UpgradeRow[count];
+            float top = PageInset;
 
             for (int i = 0; i < count; i++)
             {
                 UpgradeDefinition definition = UpgradeCatalogue.At(i);
-                RectTransform card = CreateCard(page, i, 190f);
+                UpgradeRow row = new UpgradeRow { Id = definition.Id, Accent = UpgradeAccent(definition.Id) };
 
-                UpgradeRow row = new UpgradeRow { Id = definition.Id };
+                RectTransform card = CreateCard(scroll, "Upgrade" + i, top, UpgradeCardHeight);
+                row.Badge = CreateBadge(card, UpgradeIcon(definition.Id), row.Accent, 112f, 92f);
 
-                row.Name = UiKit.CreateText(_font, "Name", card, 52, FontStyle.Bold, Color.white, TextAnchor.UpperLeft);
-                UiKit.Anchor(row.Name.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(34f, -84f), new Vector2(-320f, -24f));
-                row.Name.text = definition.Name;
+                // A gold star on the badge's rim once the track is complete.
+                Image star = UiKit.CreateImage("MaxStar", row.Badge.Disc.rectTransform, UiKit.Gold);
+                star.sprite = IconFactory.GetSprite(IconShape.Star);
+                Place(star.rectTransform, new Vector2(1f, 1f), new Vector2(46f, 46f), new Vector2(-10f, -10f));
+                row.MaxStar = star.gameObject;
 
-                row.Detail = UiKit.CreateText(_font, "Detail", card, 34, FontStyle.Normal, UiKit.Dim, TextAnchor.UpperLeft);
-                UiKit.Anchor(row.Detail.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(34f, -126f), new Vector2(-320f, -84f));
-                row.Detail.text = definition.Description;
+                Text name = UiKit.CreateText(_font, "Name", card, 46, FontStyle.Bold, Color.white, TextAnchor.UpperLeft);
+                UiKit.Anchor(name.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(174f, -76f), new Vector2(-290f, -22f));
+                name.text = definition.Name;
 
-                row.Pips = new Image[MaxPips];
+                Text detail = UiKit.CreateText(_font, "Detail", card, 30, FontStyle.Normal, UiKit.Dim, TextAnchor.UpperLeft);
+                UiKit.Anchor(detail.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(174f, -116f), new Vector2(-290f, -80f));
+                detail.text = definition.Description;
+                FitOneLine(detail, 22);
 
-                for (int p = 0; p < MaxPips; p++)
+                // What the next level actually buys, in numbers — "+30% → +40%" says more than
+                // a row of pips ever could.
+                row.Effect = UiKit.CreateText(_font, "Effect", card, 30, FontStyle.Bold, row.Accent, TextAnchor.UpperLeft);
+                UiKit.Anchor(row.Effect.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(174f, -156f), new Vector2(-290f, -120f));
+                FitOneLine(row.Effect, 22);
+
+                // Tracks are different lengths; a track only ever gets the pips it can fill.
+                row.Pips = new Image[definition.MaxLevel];
+
+                for (int p = 0; p < definition.MaxLevel; p++)
                 {
-                    Image pip = UiKit.CreatePanel("Pip" + p, card, Color.white);
+                    Image pip = UiKit.CreatePanel("Pip" + p, card, EmptyPip);
                     RectTransform pipRect = pip.rectTransform;
-                    pipRect.anchorMin = new Vector2(0f, 0f);
-                    pipRect.anchorMax = new Vector2(0f, 0f);
-                    pipRect.pivot = new Vector2(0f, 0f);
-                    pipRect.sizeDelta = new Vector2(46f, 16f);
-                    pipRect.anchoredPosition = new Vector2(34f + p * 56f, 34f);
-
-                    // Tracks are different lengths; the spare pips simply never exist.
-                    pip.gameObject.SetActive(p < definition.MaxLevel);
+                    pipRect.anchorMin = Vector2.zero;
+                    pipRect.anchorMax = Vector2.zero;
+                    pipRect.pivot = Vector2.zero;
+                    pipRect.sizeDelta = new Vector2(38f, 14f);
+                    pipRect.anchoredPosition = new Vector2(174f + p * 48f, 26f);
                     row.Pips[p] = pip;
                 }
 
-                row.Buy = UiKit.CreateButton(_font, "Buy", card, string.Empty, 0, UiKit.Mint, UiKit.Ink, IconShape.None);
-                RectTransform buyRect = row.Buy.Root;
-                buyRect.anchorMin = new Vector2(1f, 0.5f);
-                buyRect.anchorMax = new Vector2(1f, 0.5f);
-                buyRect.pivot = new Vector2(1f, 0.5f);
-                buyRect.sizeDelta = new Vector2(264f, 108f);
-                buyRect.anchoredPosition = new Vector2(-28f, 0f);
-
-                row.Cost = UiKit.CreateText(_font, "Cost", buyRect, 44, FontStyle.Bold, UiKit.Ink, TextAnchor.MiddleCenter, true);
-                UiKit.Anchor(row.Cost.rectTransform, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
+                row.Buy = CreatePriceButton("Buy", card, 40, 40f);
+                PlaceRight(row.Buy.Root, new Vector2(250f, 100f), 24f);
 
                 UpgradeId id = definition.Id;
                 row.Buy.Button.onClick.AddListener(() => BuyUpgrade(id));
 
                 _upgradeRows[i] = row;
+                top += UpgradeCardHeight + CardGap;
             }
 
+            SetScrollHeight(scroll, top - CardGap + PageInset);
             return page;
         }
+
+        private static Color UpgradeAccent(UpgradeId id)
+        {
+            switch (id)
+            {
+                case UpgradeId.Shield:
+                    return Sky;
+
+                case UpgradeId.Luck:
+                    return Leaf;
+
+                default:
+                    return Coral;
+            }
+        }
+
+        private static IconShape UpgradeIcon(UpgradeId id)
+        {
+            switch (id)
+            {
+                case UpgradeId.Shield:
+                    return IconShape.Shield;
+
+                case UpgradeId.Luck:
+                    return IconShape.Clover;
+
+                default:
+                    return IconShape.Magnet;
+            }
+        }
+
+        private static string UpgradeEffect(UpgradeId id, int level, bool maxed)
+        {
+            switch (id)
+            {
+                case UpgradeId.Magnet:
+                {
+                    string now = "+" + UpgradeCatalogue.MagnetWindowPercent(level) + "%";
+                    return maxed ? "WINDOW " + now + " · MAX" : "WINDOW " + now + " → +" + UpgradeCatalogue.MagnetWindowPercent(level + 1) + "%";
+                }
+
+                case UpgradeId.Shield:
+                {
+                    int now = UpgradeCatalogue.StartingShieldsAt(level);
+                    int next = UpgradeCatalogue.StartingShieldsAt(level + 1);
+                    return maxed ? now + " SHIELDS · MAX" : now + " → " + next + (next == 1 ? " SHIELD" : " SHIELDS");
+                }
+
+                default:
+                {
+                    int now = UpgradeCatalogue.SpecialGapReductionAt(level);
+                    int next = UpgradeCatalogue.SpecialGapReductionAt(level + 1);
+                    return maxed ? now + " BLOCKS SOONER · MAX" : now + " → " + next + " BLOCKS SOONER";
+                }
+            }
+        }
+
+        // ---- Themes ------------------------------------------------------------------------
 
         private RectTransform BuildThemesPage()
         {
-            RectTransform page = UiKit.CreateChild("Themes", _content);
-            UiKit.Stretch(page);
+            RectTransform page = CreatePage(Tab.Themes, "Themes", out RectTransform scroll);
 
             int count = ThemeCatalogue.Count;
-            _themeRows = new ThemeRow[count];
+            _themeTiles = new ThemeTile[count];
 
             for (int i = 0; i < count; i++)
             {
-                ThemeDefinition definition = ThemeCatalogue.At(i);
-                RectTransform card = CreateCard(page, i, 132f);
+                ThemeDefinition theme = ThemeCatalogue.At(i);
+                int column = i % ThemeColumns;
+                int row = i / ThemeColumns;
+                float top = PageInset + row * (TileHeight + TileGap);
 
-                ThemeRow row = new ThemeRow { Id = definition.Id };
+                RectTransform tile = UiKit.CreateChild("Theme" + i, scroll);
+                tile.anchorMin = new Vector2(column / (float)ThemeColumns, 1f);
+                tile.anchorMax = new Vector2((column + 1) / (float)ThemeColumns, 1f);
 
-                // The swatch is the theme's own sky and accent side by side — the honest
-                // preview, since those are the two colours the player will actually be
-                // looking at for the whole run.
-                Image sky = UiKit.CreatePanel("Sky", card, definition.SkyTop);
-                RectTransform skyRect = sky.rectTransform;
-                skyRect.anchorMin = new Vector2(0f, 0.5f);
-                skyRect.anchorMax = new Vector2(0f, 0.5f);
-                skyRect.pivot = new Vector2(0f, 0.5f);
-                skyRect.sizeDelta = new Vector2(96f, 84f);
-                skyRect.anchoredPosition = new Vector2(28f, 0f);
+                // Centre pivot, so the purchase pop grows the tile from its middle.
+                tile.pivot = new Vector2(0.5f, 0.5f);
+                tile.offsetMin = new Vector2(PageInset, -top - TileHeight);
+                tile.offsetMax = new Vector2(-PageInset, -top);
 
-                Image accent = UiKit.CreatePanel("Accent", card, definition.Accent);
-                RectTransform accentRect = accent.rectTransform;
-                accentRect.anchorMin = new Vector2(0f, 0.5f);
-                accentRect.anchorMax = new Vector2(0f, 0.5f);
-                accentRect.pivot = new Vector2(0f, 0.5f);
-                accentRect.sizeDelta = new Vector2(40f, 84f);
-                accentRect.anchoredPosition = new Vector2(128f, 0f);
-                row.Swatch = accent;
+                ThemeTile entry = new ThemeTile { Id = theme.Id, Root = tile };
 
-                row.Name = UiKit.CreateText(_font, "Name", card, 48, FontStyle.Bold, Color.white, TextAnchor.MiddleLeft);
-                UiKit.Anchor(row.Name.rectTransform, new Vector2(0f, 0f), new Vector2(1f, 1f), new Vector2(196f, 0f), new Vector2(-300f, 0f));
-                row.Name.text = definition.Name;
+                Image border = UiKit.CreatePanel("Border", tile, UiKit.Mint);
+                UiKit.Anchor(border.rectTransform, Vector2.zero, Vector2.one, new Vector2(-5f, -5f), new Vector2(5f, 5f));
+                entry.Border = border.gameObject;
 
-                row.Button = UiKit.CreateButton(_font, "Equip", card, string.Empty, 0, UiKit.Mint, UiKit.Ink, IconShape.None);
-                RectTransform buttonRect = row.Button.Root;
-                buttonRect.anchorMin = new Vector2(1f, 0.5f);
-                buttonRect.anchorMax = new Vector2(1f, 0.5f);
-                buttonRect.pivot = new Vector2(1f, 0.5f);
-                buttonRect.sizeDelta = new Vector2(252f, 92f);
-                buttonRect.anchoredPosition = new Vector2(-24f, 0f);
+                Image body = UiKit.CreatePanel("Body", tile, TileFill);
+                UiKit.Stretch(body.rectTransform);
 
-                row.State = UiKit.CreateText(_font, "State", buttonRect, 40, FontStyle.Bold, UiKit.Ink, TextAnchor.MiddleCenter, true);
-                UiKit.Anchor(row.State.rectTransform, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
+                RectTransform preview = BuildPreview(tile, theme, i);
+                entry.Lock = CreateCornerMark(preview, IconShape.Lock, new Color(0f, 0f, 0f, 0.45f), Color.white, new Vector2(1f, 1f), new Vector2(-28f, -28f));
+                entry.Check = CreateCornerMark(preview, IconShape.Check, UiKit.Mint, UiKit.Ink, new Vector2(0f, 1f), new Vector2(28f, -28f));
 
-                string id = definition.Id;
-                row.Button.Button.onClick.AddListener(() => ChooseTheme(id));
+                entry.Name = UiKit.CreateText(_font, "Name", tile, 30, FontStyle.Bold, Color.white, TextAnchor.MiddleCenter);
+                UiKit.Anchor(
+                    entry.Name.rectTransform,
+                    new Vector2(0f, 1f),
+                    new Vector2(1f, 1f),
+                    new Vector2(8f, -12f - PreviewHeight - 52f),
+                    new Vector2(-8f, -12f - PreviewHeight - 8f));
+                entry.Name.text = theme.Name;
+                FitOneLine(entry.Name, 22);
 
-                _themeRows[i] = row;
+                entry.Button = CreatePriceButton("Action", tile, 30, 32f);
+                RectTransform action = entry.Button.Root;
+                action.anchorMin = new Vector2(0f, 0f);
+                action.anchorMax = new Vector2(1f, 0f);
+                action.pivot = new Vector2(0.5f, 0f);
+                action.offsetMin = new Vector2(12f, 12f);
+                action.offsetMax = new Vector2(-12f, 84f);
+
+                string id = theme.Id;
+                entry.Button.Button.onClick.AddListener(() => ChooseTheme(id));
+
+                _themeTiles[i] = entry;
             }
 
+            int rows = (count + ThemeColumns - 1) / ThemeColumns;
+            SetScrollHeight(scroll, PageInset * 2f + rows * TileHeight + Mathf.Max(0, rows - 1) * TileGap);
             return page;
         }
 
+        /// <summary>
+        /// A little diorama of the theme: its own sky, a few of its stars, the glow of its
+        /// accent and a short tower in the exact colours its blocks will wear in play — painted
+        /// by ThemeCatalogue.BlockColor, the same formula the spawner uses. A swatch told the
+        /// player two colours; this shows them what the run will actually look like.
+        /// </summary>
+        private static RectTransform BuildPreview(RectTransform tile, ThemeDefinition theme, int seed)
+        {
+            Image sky = UiKit.CreatePanel("Preview", tile, Color.white);
+            RectTransform preview = sky.rectTransform;
+            UiKit.Anchor(preview, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(12f, -12f - PreviewHeight), new Vector2(-12f, -12f));
+            sky.gameObject.AddComponent<UiGradient>().SetColors(theme.SkyTop, theme.SkyBottom);
+
+            Color starColor = new Color(theme.StarTint.r, theme.StarTint.g, theme.StarTint.b, 0.85f);
+
+            for (int s = 0; s < 6; s++)
+            {
+                Image star = UiKit.CreateImage("Star" + s, preview, starColor);
+                star.sprite = IconFactory.GetSprite(IconShape.Disc);
+
+                Vector2 at = new Vector2(
+                    Mathf.Lerp(0.12f, 0.88f, Hash(seed * 7.1f + s * 3.3f)),
+                    Mathf.Lerp(0.78f, 0.93f, Hash(seed * 1.9f + s * 5.7f)));
+                float size = Mathf.Lerp(4f, 8f, Hash(seed * 2.3f + s * 9.1f));
+                Place(star.rectTransform, at, new Vector2(size, size), Vector2.zero);
+            }
+
+            Image glow = UiKit.CreateImage("Glow", preview, new Color(theme.Accent.r, theme.Accent.g, theme.Accent.b, 0.45f));
+            glow.sprite = IconFactory.GetSprite(IconShape.Glow);
+            Place(glow.rectTransform, new Vector2(0.5f, 0f), new Vector2(230f, 170f), new Vector2(0f, 84f));
+
+            Image platform = UiKit.CreateImage("Platform", preview, theme.Platform);
+            PlaceBottom(platform.rectTransform, new Vector2(150f, 14f), new Vector2(0f, 18f));
+
+            for (int b = 0; b < PreviewBlocks; b++)
+            {
+                Color colour = ThemeCatalogue.BlockColor(theme, b * 2, PreviewHueStep);
+                float width = 112f - b * 7f;
+                float lean = (b % 2 == 0 ? -1f : 1f) * (2f + b);
+
+                Image block = UiKit.CreateImage("Block" + b, preview, colour);
+                PlaceBottom(block.rectTransform, new Vector2(width, PreviewBlockHeight - 1f), new Vector2(lean, 32f + b * PreviewBlockHeight));
+
+                // A lighter strip along the top edge — the lit face that makes a flat rectangle
+                // read as a block.
+                Image face = UiKit.CreateImage("Face", block.rectTransform, Color.Lerp(colour, Color.white, 0.35f));
+                RectTransform faceRect = face.rectTransform;
+                faceRect.anchorMin = new Vector2(0f, 1f);
+                faceRect.anchorMax = new Vector2(1f, 1f);
+                faceRect.pivot = new Vector2(0.5f, 1f);
+                faceRect.offsetMin = new Vector2(0f, -4f);
+                faceRect.offsetMax = Vector2.zero;
+            }
+
+            return preview;
+        }
+
+        private static GameObject CreateCornerMark(RectTransform parent, IconShape icon, Color fill, Color ink, Vector2 corner, Vector2 offset)
+        {
+            Image disc = UiKit.CreateImage("Mark", parent, fill);
+            disc.sprite = IconFactory.GetSprite(IconShape.Disc);
+            Place(disc.rectTransform, corner, new Vector2(44f, 44f), offset);
+
+            Image glyph = UiKit.CreateImage("Glyph", disc.rectTransform, ink);
+            glyph.sprite = IconFactory.GetSprite(icon);
+            glyph.preserveAspect = true;
+            Place(glyph.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(26f, 26f), Vector2.zero);
+
+            return disc.gameObject;
+        }
+
+        // ---- Profile -----------------------------------------------------------------------
+
+        private RectTransform BuildProfilePage()
+        {
+            RectTransform page = CreatePage(Tab.Profile, "Profile", out RectTransform scroll);
+            float top = PageInset;
+
+            RectTransform rank = CreateCard(scroll, "Rank", top, RankCardHeight);
+
+            _rankGlow = UiKit.CreateImage("RankGlow", rank, UiKit.Gold);
+            _rankGlow.sprite = IconFactory.GetSprite(IconShape.Glow);
+            PlaceLeft(_rankGlow.rectTransform, 118f, 290f);
+
+            _rankMedal = UiKit.CreateImage("RankMedal", rank, UiKit.Gold);
+            _rankMedal.sprite = IconFactory.GetSprite(IconShape.Disc);
+            PlaceLeft(_rankMedal.rectTransform, 118f, 156f);
+
+            Image star = UiKit.CreateImage("RankStar", _rankMedal.rectTransform, UiKit.Ink);
+            star.sprite = IconFactory.GetSprite(IconShape.Star);
+            star.preserveAspect = true;
+            Place(star.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(92f, 92f), Vector2.zero);
+
+            Text caption = UiKit.CreateText(_font, "RankCaption", rank, 26, FontStyle.Bold, UiKit.Dim, TextAnchor.UpperLeft);
+            UiKit.Anchor(caption.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(222f, -62f), new Vector2(-28f, -28f));
+            caption.text = "BUILDER RANK";
+
+            _rankTitle = UiKit.CreateText(_font, "RankTitle", rank, 56, FontStyle.Bold, UiKit.Gold, TextAnchor.UpperLeft);
+            UiKit.Anchor(_rankTitle.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(222f, -128f), new Vector2(-28f, -62f));
+            FitOneLine(_rankTitle, 36);
+
+            _rankNext = UiKit.CreateText(_font, "RankNext", rank, 28, FontStyle.Bold, Color.white, TextAnchor.UpperLeft);
+            UiKit.Anchor(_rankNext.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(222f, -170f), new Vector2(-28f, -134f));
+            FitOneLine(_rankNext, 22);
+
+            Image track = UiKit.CreatePanel("Track", rank, TrackFill);
+            UiKit.Anchor(track.rectTransform, new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(222f, 64f), new Vector2(-32f, 92f));
+            track.pixelsPerUnitMultiplier = 3f;
+
+            _rankFill = UiKit.CreatePanel("Fill", track.rectTransform, UiKit.Gold);
+            RectTransform fill = _rankFill.rectTransform;
+            fill.anchorMin = Vector2.zero;
+            fill.anchorMax = new Vector2(0f, 1f);
+            fill.offsetMin = Vector2.zero;
+            fill.offsetMax = Vector2.zero;
+            _rankFill.pixelsPerUnitMultiplier = 3f;
+
+            _rankProgress = UiKit.CreateText(_font, "RankProgress", rank, 26, FontStyle.Bold, UiKit.Dim, TextAnchor.LowerLeft);
+            UiKit.Anchor(_rankProgress.rectTransform, new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(222f, 22f), new Vector2(-32f, 58f));
+            FitOneLine(_rankProgress, 20);
+
+            top += RankCardHeight + CardGap;
+
+            string[] labels = { "BEST SCORE", "RUNS PLAYED", "BLASTS", "BIGGEST BLAST", "DAY STREAK", "COLLECTION" };
+            IconShape[] icons = { IconShape.Target, IconShape.Replay, IconShape.Burst, IconShape.Bolt, IconShape.Flame, IconShape.Bag };
+            Color[] colours = { UiKit.Gold, UiKit.Mint, Coral, Sky, Ember, Violet };
+
+            _stats = new Text[labels.Length];
+
+            for (int i = 0; i < labels.Length; i++)
+            {
+                int column = i % 2;
+                float tileTop = top + (i / 2) * (StatTileHeight + CardGap);
+
+                Image tile = UiKit.CreatePanel("Stat" + i, scroll, CardFill);
+                RectTransform rect = tile.rectTransform;
+                rect.anchorMin = new Vector2(column * 0.5f, 1f);
+                rect.anchorMax = new Vector2((column + 1) * 0.5f, 1f);
+                rect.pivot = new Vector2(0.5f, 1f);
+                rect.offsetMin = new Vector2(column == 0 ? PageInset : CardGap * 0.5f, -tileTop - StatTileHeight);
+                rect.offsetMax = new Vector2(column == 0 ? -CardGap * 0.5f : -PageInset, -tileTop);
+
+                CreateBadge(rect, icons[i], colours[i], 78f, 66f);
+
+                Text value = UiKit.CreateText(_font, "Value", rect, 48, FontStyle.Bold, Color.white, TextAnchor.LowerLeft);
+                UiKit.Anchor(value.rectTransform, new Vector2(0f, 0.5f), new Vector2(1f, 0.5f), new Vector2(124f, -4f), new Vector2(-16f, 58f));
+                FitOneLine(value, 30);
+
+                Text label = UiKit.CreateText(_font, "Label", rect, 24, FontStyle.Bold, UiKit.Dim, TextAnchor.UpperLeft);
+                UiKit.Anchor(label.rectTransform, new Vector2(0f, 0.5f), new Vector2(1f, 0.5f), new Vector2(124f, -44f), new Vector2(-16f, -8f));
+                label.text = labels[i];
+                FitOneLine(label, 18);
+
+                _stats[i] = value;
+            }
+
+            int statRows = (labels.Length + 1) / 2;
+            top += statRows * StatTileHeight + (statRows - 1) * CardGap;
+
+            SetScrollHeight(scroll, top + PageInset);
+            return page;
+        }
+
+        // ---- Daily missions ----------------------------------------------------------------
+
         private RectTransform BuildMissionsPage()
         {
-            RectTransform page = UiKit.CreateChild("Missions", _content);
-            UiKit.Stretch(page);
+            RectTransform page = CreatePage(Tab.Missions, "Missions", out RectTransform scroll);
+            float top = PageInset;
+
+            _resetLabel = UiKit.CreateText(_font, "Reset", scroll, 30, FontStyle.Bold, UiKit.Dim, TextAnchor.MiddleCenter);
+            UiKit.Anchor(_resetLabel.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(PageInset, -top - 48f), new Vector2(-PageInset, -top));
+            top += 60f;
 
             _missionRows = new MissionRow[MissionSystem.DailyCount];
 
             for (int i = 0; i < _missionRows.Length; i++)
             {
-                RectTransform card = CreateCard(page, i, 200f);
+                MissionRow row = new MissionRow();
+                row.Card = CreateCard(scroll, "Mission" + i, top, MissionCardHeight);
 
-                MissionRow row = new MissionRow { Index = i };
+                // Recoloured and re-iconed per mission kind on every refresh.
+                row.Badge = CreateBadge(row.Card, IconShape.Target, UiKit.Gold, 96f, 82f);
 
-                row.Label = UiKit.CreateText(_font, "Label", card, 40, FontStyle.Bold, Color.white, TextAnchor.UpperLeft);
-                UiKit.Anchor(row.Label.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(30f, -76f), new Vector2(-280f, -22f));
+                row.Label = UiKit.CreateText(_font, "Label", row.Card, 34, FontStyle.Bold, Color.white, TextAnchor.UpperLeft);
+                UiKit.Anchor(row.Label.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(150f, -72f), new Vector2(-272f, -24f));
+                FitOneLine(row.Label, 24);
 
-                Image track = UiKit.CreatePanel("Track", card, new Color(1f, 1f, 1f, 0.13f));
-                UiKit.Anchor(track.rectTransform, new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(30f, 62f), new Vector2(-280f, 98f));
+                Image track = UiKit.CreatePanel("Track", row.Card, TrackFill);
+                UiKit.Anchor(track.rectTransform, new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(150f, 64f), new Vector2(-272f, 92f));
+                track.pixelsPerUnitMultiplier = 3f;
 
-                Image fill = UiKit.CreatePanel("Fill", track.rectTransform, UiKit.Mint);
-                RectTransform fillRect = fill.rectTransform;
+                row.Fill = UiKit.CreatePanel("Fill", track.rectTransform, UiKit.Mint);
+                RectTransform fillRect = row.Fill.rectTransform;
                 fillRect.anchorMin = Vector2.zero;
                 fillRect.anchorMax = new Vector2(0f, 1f);
                 fillRect.offsetMin = Vector2.zero;
                 fillRect.offsetMax = Vector2.zero;
-                row.Fill = fillRect;
+                row.Fill.pixelsPerUnitMultiplier = 3f;
 
-                row.Progress = UiKit.CreateText(_font, "Progress", card, 32, FontStyle.Bold, UiKit.Dim, TextAnchor.LowerLeft);
-                UiKit.Anchor(row.Progress.rectTransform, new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(30f, 20f), new Vector2(-280f, 56f));
+                row.Progress = UiKit.CreateText(_font, "Progress", row.Card, 28, FontStyle.Bold, UiKit.Dim, TextAnchor.LowerLeft);
+                UiKit.Anchor(row.Progress.rectTransform, new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(150f, 18f), new Vector2(-272f, 56f));
 
-                row.Claim = UiKit.CreateButton(_font, "Claim", card, string.Empty, 0, UiKit.Gold, UiKit.Ink, IconShape.None);
-                RectTransform claimRect = row.Claim.Root;
-                claimRect.anchorMin = new Vector2(1f, 0.5f);
-                claimRect.anchorMax = new Vector2(1f, 0.5f);
-                claimRect.pivot = new Vector2(1f, 0.5f);
-                claimRect.sizeDelta = new Vector2(232f, 104f);
-                claimRect.anchoredPosition = new Vector2(-24f, 0f);
-
-                row.Reward = UiKit.CreateText(_font, "Reward", claimRect, 40, FontStyle.Bold, UiKit.Ink, TextAnchor.MiddleCenter, true);
-                UiKit.Anchor(row.Reward.rectTransform, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
+                row.Claim = CreatePriceButton("Claim", row.Card, 38, 38f);
+                PlaceRight(row.Claim.Root, new Vector2(232f, 100f), 22f);
 
                 int index = i;
                 row.Claim.Button.onClick.AddListener(() => ClaimMission(index));
 
                 _missionRows[i] = row;
+                top += MissionCardHeight + CardGap;
             }
 
+            SetScrollHeight(scroll, top - CardGap + PageInset);
             return page;
         }
+
+        private static Color MissionColor(MissionKind kind)
+        {
+            switch (kind)
+            {
+                case MissionKind.Perfects:
+                    return UiKit.Mint;
+
+                case MissionKind.Blasts:
+                    return Coral;
+
+                case MissionKind.Specials:
+                    return Sky;
+
+                default:
+                    return UiKit.Gold;
+            }
+        }
+
+        private static IconShape MissionIcon(MissionKind kind)
+        {
+            switch (kind)
+            {
+                case MissionKind.Perfects:
+                    return IconShape.Check;
+
+                case MissionKind.Blasts:
+                    return IconShape.Burst;
+
+                case MissionKind.Specials:
+                    return IconShape.Bolt;
+
+                default:
+                    return IconShape.Target;
+            }
+        }
+
+        // ---- Store rows --------------------------------------------------------------------
 
         private void BuildFooter(RectTransform root)
         {
@@ -393,15 +875,13 @@ namespace SliceBlast.UI
             _removeAds.Button.onClick.AddListener(() => RemoveAdsRequested?.Invoke());
 
             _restore = UiKit.CreateButton(_font, "Restore", root, "RESTORE PURCHASES", 32, new Color(1f, 1f, 1f, 0.08f), UiKit.Dim, IconShape.None);
-            MenuControl restore = _restore;
-            RectTransform restoreRect = restore.Root;
+            RectTransform restoreRect = _restore.Root;
             restoreRect.anchorMin = new Vector2(0f, 0f);
             restoreRect.anchorMax = new Vector2(1f, 0f);
             restoreRect.pivot = new Vector2(0.5f, 0f);
             restoreRect.offsetMin = new Vector2(40f, 36f);
             restoreRect.offsetMax = new Vector2(-40f, 106f);
-
-            restore.Button.onClick.AddListener(() => RestoreRequested?.Invoke());
+            _restore.Button.onClick.AddListener(() => RestoreRequested?.Invoke());
         }
 
         /// <summary>
@@ -437,7 +917,7 @@ namespace SliceBlast.UI
 
                 Text amount = UiKit.CreateText(_font, "PackAmount" + i, rect, 40, FontStyle.Bold, Color.white, TextAnchor.MiddleCenter, true);
                 UiKit.Anchor(amount.rectTransform, new Vector2(0f, 0f), new Vector2(1f, 1f), new Vector2(0f, 4f), new Vector2(0f, -30f));
-                amount.text = CoinPackAmounts[i].ToString();
+                amount.text = CoinPackAmounts[i].ToString(CultureInfo.InvariantCulture);
 
                 Text price = UiKit.CreateText(_font, "PackPrice" + i, rect, 30, FontStyle.Bold, UiKit.Gold, TextAnchor.LowerCenter);
                 UiKit.Anchor(price.rectTransform, new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(0f, 10f), new Vector2(0f, 46f));
@@ -455,6 +935,7 @@ namespace SliceBlast.UI
         /// package — or a device where the store never came up — cannot complete any of these,
         /// and a row that takes a tap and does nothing is exactly what App Review rejects. The
         /// run-over screen already holds its rewarded-ad button back on the same principle.
+        /// Without the store rows, the pages above take the room they leave.
         /// </summary>
         public void SetStoreAvailable(bool available)
         {
@@ -480,6 +961,11 @@ namespace SliceBlast.UI
                     }
                 }
             }
+
+            if (_content != null)
+            {
+                _content.offsetMin = new Vector2(40f, available ? FooterReserve : NoFooterReserve);
+            }
         }
 
         /// <summary>Called once the store has resolved a localised price string.</summary>
@@ -500,22 +986,184 @@ namespace SliceBlast.UI
             }
         }
 
-        /// <summary>One row of the list, stacked from the top of the content area.</summary>
-        private RectTransform CreateCard(Transform parent, int index, float height)
+        // ---- Shared pieces -----------------------------------------------------------------
+
+        /// <summary>One full-width row of a page, stacked from the top of its scroll content.</summary>
+        private static RectTransform CreateCard(RectTransform parent, string name, float top, float height)
         {
-            const float gap = 18f;
-
-            Image card = UiKit.CreatePanel("Card" + index, parent, new Color(1f, 1f, 1f, 0.07f));
-
+            Image card = UiKit.CreatePanel(name, parent, CardFill);
             RectTransform rect = card.rectTransform;
             rect.anchorMin = new Vector2(0f, 1f);
             rect.anchorMax = new Vector2(1f, 1f);
             rect.pivot = new Vector2(0.5f, 1f);
-            rect.offsetMin = new Vector2(0f, -(index + 1) * height - index * gap);
-            rect.offsetMax = new Vector2(0f, -index * (height + gap));
-
+            rect.offsetMin = new Vector2(PageInset, -top - height);
+            rect.offsetMax = new Vector2(-PageInset, -top);
             return rect;
         }
+
+        private static Badge CreateBadge(RectTransform parent, IconShape icon, Color accent, float size, float x)
+        {
+            Badge badge = new Badge();
+
+            badge.Glow = UiKit.CreateImage("BadgeGlow", parent, new Color(accent.r, accent.g, accent.b, 0.35f));
+            badge.Glow.sprite = IconFactory.GetSprite(IconShape.Glow);
+            PlaceLeft(badge.Glow.rectTransform, x, size * 1.9f);
+
+            badge.Disc = UiKit.CreateImage("Badge", parent, accent);
+            badge.Disc.sprite = IconFactory.GetSprite(IconShape.Disc);
+            PlaceLeft(badge.Disc.rectTransform, x, size);
+
+            badge.Glyph = UiKit.CreateImage("Glyph", badge.Disc.rectTransform, UiKit.Ink);
+            badge.Glyph.sprite = IconFactory.GetSprite(icon);
+            badge.Glyph.preserveAspect = true;
+            Place(badge.Glyph.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(size * 0.58f, size * 0.58f), Vector2.zero);
+
+            return badge;
+        }
+
+        /// <summary>A button carrying a coin and a number — every price in the Workshop.</summary>
+        private MenuControl CreatePriceButton(string name, RectTransform parent, int fontSize, float coinSize)
+        {
+            MenuControl button = UiKit.CreateButton(_font, name, parent, "0", fontSize, UiKit.Mint, UiKit.Ink, IconShape.Coin);
+
+            // CreateButton sizes its glyph for a full-height menu button; a price reads better
+            // with a coin about the height of its digits.
+            LayoutElement coin = button.Icon != null ? button.Icon.GetComponent<LayoutElement>() : null;
+
+            if (coin != null)
+            {
+                coin.preferredWidth = coinSize;
+                coin.preferredHeight = coinSize;
+            }
+
+            return button;
+        }
+
+        /// <summary>One of the few looks every price button in the Workshop takes.</summary>
+        private static void StylePrice(MenuControl button, string text, bool showCoin, Color fill, Color ink, Color coin, bool interactable)
+        {
+            button.Button.interactable = interactable;
+
+            Image background = button.Button.targetGraphic as Image;
+
+            if (background != null)
+            {
+                background.color = fill;
+            }
+
+            if (button.Label != null)
+            {
+                button.Label.text = text;
+                UiKit.SetLabelColor(button.Label, ink);
+            }
+
+            if (button.Icon != null)
+            {
+                SetActive(button.Icon.gameObject, showCoin);
+                button.Icon.color = coin;
+            }
+        }
+
+        /// <summary>A horizontally centred, self-sizing row — the arrangement CreateButton uses for a glyph and its word.</summary>
+        private static RectTransform CreateCentredRow(string name, RectTransform parent, float spacing)
+        {
+            RectTransform row = UiKit.CreateChild(name, parent);
+            row.anchorMin = new Vector2(0.5f, 0.5f);
+            row.anchorMax = new Vector2(0.5f, 0.5f);
+            row.pivot = new Vector2(0.5f, 0.5f);
+
+            HorizontalLayoutGroup layout = row.gameObject.AddComponent<HorizontalLayoutGroup>();
+            layout.childAlignment = TextAnchor.MiddleCenter;
+            layout.spacing = spacing;
+            layout.childControlWidth = true;
+            layout.childControlHeight = true;
+            layout.childForceExpandWidth = false;
+            layout.childForceExpandHeight = false;
+
+            ContentSizeFitter fitter = row.gameObject.AddComponent<ContentSizeFitter>();
+            fitter.horizontalFit = ContentSizeFitter.FitMode.PreferredSize;
+            fitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+
+            return row;
+        }
+
+        /// <summary>Shrinks a label to stay on one line rather than wrapping or running under a button.</summary>
+        private static void FitOneLine(Text text, int minSize)
+        {
+            text.horizontalOverflow = HorizontalWrapMode.Wrap;
+            text.verticalOverflow = VerticalWrapMode.Truncate;
+            text.resizeTextForBestFit = true;
+            text.resizeTextMinSize = minSize;
+            text.resizeTextMaxSize = text.fontSize;
+        }
+
+        private static void Place(RectTransform rect, Vector2 anchor, Vector2 size, Vector2 offset)
+        {
+            rect.anchorMin = anchor;
+            rect.anchorMax = anchor;
+            rect.pivot = new Vector2(0.5f, 0.5f);
+            rect.sizeDelta = size;
+            rect.anchoredPosition = offset;
+        }
+
+        /// <summary>A square element centred <paramref name="x"/> in from its parent's left edge.</summary>
+        private static void PlaceLeft(RectTransform rect, float x, float size)
+        {
+            rect.anchorMin = new Vector2(0f, 0.5f);
+            rect.anchorMax = new Vector2(0f, 0.5f);
+            rect.pivot = new Vector2(0.5f, 0.5f);
+            rect.sizeDelta = new Vector2(size, size);
+            rect.anchoredPosition = new Vector2(x, 0f);
+        }
+
+        private static void PlaceRight(RectTransform rect, Vector2 size, float inset)
+        {
+            rect.anchorMin = new Vector2(1f, 0.5f);
+            rect.anchorMax = new Vector2(1f, 0.5f);
+            rect.pivot = new Vector2(1f, 0.5f);
+            rect.sizeDelta = size;
+            rect.anchoredPosition = new Vector2(-inset, 0f);
+        }
+
+        private static void PlaceBottom(RectTransform rect, Vector2 size, Vector2 offset)
+        {
+            rect.anchorMin = new Vector2(0.5f, 0f);
+            rect.anchorMax = new Vector2(0.5f, 0f);
+            rect.pivot = new Vector2(0.5f, 0f);
+            rect.sizeDelta = size;
+            rect.anchoredPosition = offset;
+        }
+
+        private static void DisableShadow(Text text)
+        {
+            Shadow shadow = text.GetComponent<Shadow>();
+
+            if (shadow != null)
+            {
+                shadow.enabled = false;
+            }
+        }
+
+        private static void SetActive(GameObject target, bool active)
+        {
+            if (target != null && target.activeSelf != active)
+            {
+                target.SetActive(active);
+            }
+        }
+
+        /// <summary>A repeatable pseudo-random 0..1, so decoration lands in the same place every launch.</summary>
+        private static float Hash(float seed)
+        {
+            return Mathf.Repeat(Mathf.Sin(seed) * 43758.5453f, 1f);
+        }
+
+        private static string Format(long value)
+        {
+            return value.ToString("N0", CultureInfo.InvariantCulture);
+        }
+
+        // ---- State -------------------------------------------------------------------------
 
         private void SelectTab(Tab tab)
         {
@@ -523,9 +1171,11 @@ namespace SliceBlast.UI
 
             for (int i = 0; i < _pages.Length; i++)
             {
+                bool selected = i == (int)tab;
+
                 if (_pages[i] != null)
                 {
-                    _pages[i].gameObject.SetActive(i == (int)tab);
+                    _pages[i].gameObject.SetActive(selected);
                 }
 
                 if (_tabs[i] != null)
@@ -534,17 +1184,29 @@ namespace SliceBlast.UI
 
                     if (background != null)
                     {
-                        background.color = i == (int)tab ? UiKit.Mint : UiKit.Panel;
+                        background.color = selected ? UiKit.Mint : UiKit.Panel;
                     }
 
-                    if (_tabs[i].Label != null)
-                    {
-                        UiKit.SetLabelColor(_tabs[i].Label, i == (int)tab ? UiKit.Ink : Color.white);
-                    }
+                    UiKit.SetLabelColor(_tabs[i].Label, selected ? UiKit.Ink : Color.white);
                 }
             }
 
+            _countdown = 0f;
+            ScrollToTop(tab);
             Refresh();
+        }
+
+        private void ScrollToTop(Tab tab)
+        {
+            ScrollRect scroll = _scrolls != null ? _scrolls[(int)tab] : null;
+
+            if (scroll == null || scroll.content == null)
+            {
+                return;
+            }
+
+            scroll.StopMovement();
+            scroll.content.anchoredPosition = Vector2.zero;
         }
 
         public void Show()
@@ -556,6 +1218,12 @@ namespace SliceBlast.UI
             _group.blocksRaycasts = true;
             _group.interactable = true;
 
+            // Coins that changed while the Workshop was closed (a run's payout) are not news
+            // worth a pop; only a change made in here is.
+            _shownCoins = -1;
+            _countdown = 0f;
+
+            ScrollToTop(_tab);
             Refresh();
         }
 
@@ -571,21 +1239,50 @@ namespace SliceBlast.UI
         {
             bool bought = UpgradeCatalogue.TryPurchase(id);
             PurchaseResolved?.Invoke(bought);
+
+            if (bought)
+            {
+                for (int i = 0; i < _upgradeRows.Length; i++)
+                {
+                    if (_upgradeRows[i].Id == id)
+                    {
+                        Punch(_upgradeRows[i].Badge.Disc.rectTransform, 0.28f);
+                        break;
+                    }
+                }
+            }
+
             Refresh();
         }
 
         private void ChooseTheme(string id)
         {
+            bool changed;
+
             if (ThemeCatalogue.IsOwned(id))
             {
                 // Owned already: this is an equip, which always succeeds and is not a
                 // purchase — reporting it as one would play the coin sound for free.
                 PlayerProfile.EquipTheme(id);
                 PurchaseResolved?.Invoke(true);
+                changed = true;
             }
             else
             {
-                PurchaseResolved?.Invoke(ThemeCatalogue.TryPurchase(id));
+                changed = ThemeCatalogue.TryPurchase(id);
+                PurchaseResolved?.Invoke(changed);
+            }
+
+            if (changed)
+            {
+                for (int i = 0; i < _themeTiles.Length; i++)
+                {
+                    if (_themeTiles[i].Id == id)
+                    {
+                        Punch(_themeTiles[i].Root, 0.06f);
+                        break;
+                    }
+                }
             }
 
             Refresh();
@@ -595,6 +1292,12 @@ namespace SliceBlast.UI
         {
             int reward = MissionSystem.TryClaim(index);
             PurchaseResolved?.Invoke(reward > 0);
+
+            if (reward > 0 && index >= 0 && index < _missionRows.Length)
+            {
+                Punch(_missionRows[index].Badge.Disc.rectTransform, 0.28f);
+            }
+
             Refresh();
         }
 
@@ -611,18 +1314,37 @@ namespace SliceBlast.UI
             }
 
             int coins = PlayerProfile.Coins;
-            _coinLabel.text = coins.ToString();
+            _coinLabel.text = Format(coins);
+
+            if (_shownCoins >= 0 && coins != _shownCoins)
+            {
+                _coinPunch = 1f;
+            }
+
+            _shownCoins = coins;
 
             int streak = PlayerProfile.Data.dailyStreak;
-            _streakLabel.text = streak > 1 ? "DAY STREAK " + streak : string.Empty;
+            bool showStreak = streak > 1;
+            SetActive(_streakChip.gameObject, showStreak);
+            _streakLabel.text = "STREAK " + streak.ToString(CultureInfo.InvariantCulture);
+            _coinChip.anchoredPosition = new Vector2(showStreak ? -ChipOffset : 0f, ChipY);
+            _streakChip.anchoredPosition = new Vector2(ChipOffset, ChipY);
+
+            // The Workshop wears the equipped theme: equip one and the header glow and the
+            // stars change with it.
+            ThemeDefinition theme = ThemeCatalogue.Equipped;
+            _glowTint = theme.Accent;
+            _starTint = theme.StarTint;
 
             RefreshUpgrades(coins);
             RefreshThemes(coins);
+            RefreshProfile();
             RefreshMissions();
+            UpdateResetLabel();
 
             int claimable = MissionSystem.ClaimableCount();
-            _missionBadge.text = claimable > 0 ? claimable.ToString() : string.Empty;
-            _missionBadge.color = claimable > 0 ? UiKit.Gold : Color.clear;
+            SetActive(_missionBadge, claimable > 0);
+            _missionBadgeLabel.text = claimable.ToString(CultureInfo.InvariantCulture);
 
             if (_removeAds != null && _storeAvailable)
             {
@@ -632,7 +1354,7 @@ namespace SliceBlast.UI
                 if (_removeAds.Label != null)
                 {
                     _removeAds.Label.text = removed ? "ADS REMOVED" : "REMOVE ADS";
-                    _removeAds.Label.color = removed ? UiKit.Mint : Color.white;
+                    UiKit.SetLabelColor(_removeAds.Label, removed ? UiKit.Mint : Color.white);
                 }
             }
         }
@@ -643,37 +1365,32 @@ namespace SliceBlast.UI
             {
                 UpgradeRow row = _upgradeRows[i];
                 int level = PlayerProfile.GetUpgradeLevel(row.Id);
-                int max = UpgradeCatalogue.MaxLevel(row.Id);
-                bool maxed = level >= max;
+                bool maxed = UpgradeCatalogue.IsMaxed(row.Id);
                 int cost = UpgradeCatalogue.CostOfNext(row.Id);
+                bool affordable = !maxed && coins >= cost;
 
                 for (int p = 0; p < row.Pips.Length; p++)
                 {
-                    if (p >= max)
-                    {
-                        continue;
-                    }
-
-                    row.Pips[p].color = p < level ? UiKit.Mint : new Color(1f, 1f, 1f, 0.16f);
+                    row.Pips[p].color = p < level ? row.Accent : EmptyPip;
                 }
 
-                bool affordable = !maxed && coins >= cost;
+                row.Effect.text = UpgradeEffect(row.Id, level, maxed);
+                SetActive(row.MaxStar, maxed);
 
-                row.Cost.text = maxed ? "MAX" : cost.ToString();
-                row.Buy.Button.interactable = affordable;
-
-                Image background = row.Buy.Button.targetGraphic as Image;
-
-                if (background != null)
+                // On a dark disabled panel the ink label would be unreadable, so the states swap
+                // foreground as well as background.
+                if (maxed)
                 {
-                    background.color = maxed
-                        ? new Color(1f, 1f, 1f, 0.12f)
-                        : affordable ? UiKit.Mint : new Color(1f, 1f, 1f, 0.18f);
+                    StylePrice(row.Buy, "MAX", false, MutedFill, UiKit.Gold, UiKit.Gold, false);
                 }
-
-                // On a dark disabled panel the ink label would be unreadable, so the two
-                // states swap foreground as well as background.
-                UiKit.SetLabelColor(row.Cost, affordable ? UiKit.Ink : new Color(1f, 1f, 1f, 0.55f));
+                else if (affordable)
+                {
+                    StylePrice(row.Buy, Format(cost), true, UiKit.Mint, UiKit.Ink, UiKit.Ink, true);
+                }
+                else
+                {
+                    StylePrice(row.Buy, Format(cost), true, MutedFill, MutedText, DimGold, false);
+                }
             }
         }
 
@@ -681,42 +1398,103 @@ namespace SliceBlast.UI
         {
             string equipped = ThemeCatalogue.Equipped.Id;
 
-            for (int i = 0; i < _themeRows.Length; i++)
+            for (int i = 0; i < _themeTiles.Length; i++)
             {
-                ThemeRow row = _themeRows[i];
-                ThemeDefinition definition = ThemeCatalogue.Get(row.Id);
+                ThemeTile tile = _themeTiles[i];
+                ThemeDefinition theme = ThemeCatalogue.Get(tile.Id);
 
-                bool owned = ThemeCatalogue.IsOwned(row.Id);
-                bool active = row.Id == equipped;
-                bool affordable = owned || coins >= definition.Price;
+                bool owned = ThemeCatalogue.IsOwned(tile.Id);
+                bool active = tile.Id == equipped;
+                bool affordable = coins >= theme.Price;
+
+                SetActive(tile.Border, active);
+                SetActive(tile.Check, active);
+                SetActive(tile.Lock, !owned);
+                tile.Name.color = owned ? Color.white : new Color(1f, 1f, 1f, 0.72f);
 
                 if (active)
                 {
-                    row.State.text = "ACTIVE";
+                    StylePrice(tile.Button, "ACTIVE", false, MutedFill, UiKit.Mint, UiKit.Mint, false);
                 }
                 else if (owned)
                 {
-                    row.State.text = "EQUIP";
+                    StylePrice(tile.Button, "EQUIP", false, UiKit.Mint, UiKit.Ink, UiKit.Ink, true);
+                }
+                else if (affordable)
+                {
+                    StylePrice(tile.Button, Format(theme.Price), true, UiKit.Mint, UiKit.Ink, UiKit.Ink, true);
                 }
                 else
                 {
-                    row.State.text = definition.Price.ToString();
+                    StylePrice(tile.Button, Format(theme.Price), true, MutedFill, MutedText, DimGold, false);
                 }
-
-                row.Button.Button.interactable = !active && affordable;
-
-                Image background = row.Button.Button.targetGraphic as Image;
-
-                if (background != null)
-                {
-                    background.color = active
-                        ? new Color(1f, 1f, 1f, 0.12f)
-                        : affordable ? UiKit.Mint : new Color(1f, 1f, 1f, 0.18f);
-                }
-
-                UiKit.SetLabelColor(row.State, !active && affordable ? UiKit.Ink : new Color(1f, 1f, 1f, 0.6f));
-                row.Name.color = owned ? Color.white : new Color(1f, 1f, 1f, 0.7f);
             }
+        }
+
+        private void RefreshProfile()
+        {
+            ProfileData data = PlayerProfile.Data;
+            long lifetime = Math.Max(0L, data.lifetimeScore);
+            int rank = PlayerRanks.IndexFor(lifetime);
+            Color colour = RankColors[Mathf.Clamp(rank, 0, RankColors.Length - 1)];
+
+            _rankTitle.text = PlayerRanks.Name(rank);
+            UiKit.SetLabelColor(_rankTitle, colour);
+            _rankMedal.color = colour;
+            _rankFill.color = colour;
+            _rankGlowTint = colour;
+
+            float ratio;
+
+            if (PlayerRanks.IsHighest(rank))
+            {
+                ratio = 1f;
+                _rankNext.text = "HIGHEST RANK REACHED";
+                _rankProgress.text = Format(lifetime) + " LIFETIME POINTS";
+            }
+            else
+            {
+                long from = PlayerRanks.Threshold(rank);
+                long to = PlayerRanks.Threshold(rank + 1);
+                ratio = to > from ? Mathf.Clamp01((float)(lifetime - from) / (to - from)) : 1f;
+                _rankNext.text = "NEXT: " + PlayerRanks.Name(rank + 1);
+                _rankProgress.text = Format(lifetime) + " / " + Format(to) + " POINTS";
+            }
+
+            _rankFill.rectTransform.anchorMax = new Vector2(ratio, 1f);
+
+            _stats[0].text = Format(data.bestScore);
+            _stats[1].text = Format(data.totalRuns);
+            _stats[2].text = Format(data.totalBlasts);
+            _stats[3].text = Format(data.biggestBlast);
+            _stats[4].text = Format(data.dailyStreak);
+            _stats[5].text = CollectionPercent().ToString(CultureInfo.InvariantCulture) + "%";
+        }
+
+        /// <summary>Everything the Workshop sells, owned — themes and upgrade levels alike.</summary>
+        private static int CollectionPercent()
+        {
+            int have = 0;
+            int total = 0;
+
+            for (int i = 0; i < ThemeCatalogue.Count; i++)
+            {
+                total++;
+
+                if (ThemeCatalogue.IsOwned(ThemeCatalogue.At(i).Id))
+                {
+                    have++;
+                }
+            }
+
+            for (int i = 0; i < UpgradeCatalogue.Count; i++)
+            {
+                UpgradeDefinition upgrade = UpgradeCatalogue.At(i);
+                total += upgrade.MaxLevel;
+                have += Mathf.Min(PlayerProfile.GetUpgradeLevel(upgrade.Id), upgrade.MaxLevel);
+            }
+
+            return total > 0 ? Mathf.FloorToInt(100f * have / total) : 0;
         }
 
         private void RefreshMissions()
@@ -728,7 +1506,7 @@ namespace SliceBlast.UI
                 MissionRow row = _missionRows[i];
                 bool exists = i < count;
 
-                row.Label.transform.parent.gameObject.SetActive(exists);
+                SetActive(row.Card.gameObject, exists);
 
                 if (!exists)
                 {
@@ -739,28 +1517,73 @@ namespace SliceBlast.UI
                 int progress = MissionSystem.ProgressAt(i);
                 bool complete = MissionSystem.IsComplete(i);
                 bool claimed = MissionSystem.IsClaimed(i);
+                Color colour = MissionColor(definition.Kind);
+
+                row.Badge.Disc.color = colour;
+                row.Badge.Glow.color = new Color(colour.r, colour.g, colour.b, 0.35f);
+                row.Badge.Glyph.sprite = IconFactory.GetSprite(MissionIcon(definition.Kind));
 
                 row.Label.text = definition.Text;
-                row.Progress.text = claimed ? "CLAIMED" : progress + " / " + definition.Target;
+                row.Progress.text = claimed ? "CLAIMED" : Format(progress) + " / " + Format(definition.Target);
 
                 float ratio = definition.Target > 0
                     ? Mathf.Clamp01(progress / (float)definition.Target)
                     : 0f;
 
-                row.Fill.anchorMax = new Vector2(ratio, 1f);
+                row.Fill.rectTransform.anchorMax = new Vector2(ratio, 1f);
+                row.Fill.color = colour;
 
-                row.Reward.text = claimed ? "DONE" : "+" + definition.Reward;
-                row.Claim.Button.interactable = complete && !claimed;
+                string reward = "+" + Format(definition.Reward);
 
-                Image background = row.Claim.Button.targetGraphic as Image;
-
-                if (background != null)
+                if (claimed)
                 {
-                    background.color = complete && !claimed ? UiKit.Gold : new Color(1f, 1f, 1f, 0.16f);
+                    StylePrice(row.Claim, "DONE", false, MutedFill, MutedText, MutedText, false);
                 }
-
-                UiKit.SetLabelColor(row.Reward, complete && !claimed ? UiKit.Ink : new Color(1f, 1f, 1f, 0.55f));
+                else if (complete)
+                {
+                    StylePrice(row.Claim, reward, true, UiKit.Gold, UiKit.Ink, UiKit.Ink, true);
+                }
+                else
+                {
+                    StylePrice(row.Claim, reward, true, MutedFill, MutedText, DimGold, false);
+                }
             }
+        }
+
+        private void UpdateResetLabel()
+        {
+            if (_resetLabel == null)
+            {
+                return;
+            }
+
+            // Missions roll on the UTC date (PlayerProfile.TodayKey), so that is the midnight
+            // this counts down to.
+            TimeSpan left = DateTime.UtcNow.Date.AddDays(1) - DateTime.UtcNow;
+            int hours = Mathf.Max(0, (int)left.TotalHours);
+            int minutes = Mathf.Max(0, left.Minutes);
+
+            _resetLabel.text = "NEW MISSIONS IN " + hours.ToString(CultureInfo.InvariantCulture) + "H "
+                               + minutes.ToString("00", CultureInfo.InvariantCulture) + "M";
+        }
+
+        // ---- Animation ---------------------------------------------------------------------
+
+        private void Punch(RectTransform target, float amount)
+        {
+            if (target == null)
+            {
+                return;
+            }
+
+            if (_punchTarget != null && _punchTarget != target)
+            {
+                _punchTarget.localScale = Vector3.one;
+            }
+
+            _punchTarget = target;
+            _punchAmount = amount;
+            _punch = 1f;
         }
 
         private void Update()
@@ -770,9 +1593,90 @@ namespace SliceBlast.UI
                 return;
             }
 
+            float dt = Time.unscaledDeltaTime;
+
             // Unscaled: the shop opens from the run-over screen, where the death slow-motion
-            // still owns Time.timeScale.
-            _group.alpha = Mathf.MoveTowards(_group.alpha, _targetAlpha, Time.unscaledDeltaTime * 6f);
+            // still owns Time.timeScale, and from a paused run, where it is zero.
+            _group.alpha = Mathf.MoveTowards(_group.alpha, _targetAlpha, dt * 6f);
+
+            if (_group.alpha <= 0f)
+            {
+                return;
+            }
+
+            AnimateBackdrop(Time.unscaledTime);
+            AnimatePunch(dt);
+
+            if (IsOpen && _tab == Tab.Missions)
+            {
+                TickCountdown(dt);
+            }
+        }
+
+        private void AnimateBackdrop(float time)
+        {
+            float breath = 0.5f + 0.5f * Mathf.Sin(time * Mathf.PI * 2f / 3.2f);
+            _headerGlow.color = new Color(_glowTint.r, _glowTint.g, _glowTint.b, Mathf.Lerp(0.16f, 0.32f, breath));
+
+            for (int i = 0; i < _stars.Length; i++)
+            {
+                float twinkle = 0.5f + 0.5f * Mathf.Sin(time * _starSpeed[i] + _starPhase[i]);
+                _stars[i].color = new Color(_starTint.r, _starTint.g, _starTint.b, Mathf.Lerp(0.1f, 0.7f, twinkle));
+            }
+
+            if (_tab == Tab.Profile && _rankGlow != null)
+            {
+                float pulse = 0.5f + 0.5f * Mathf.Sin(time * Mathf.PI * 2f / 1.8f);
+                _rankGlow.color = new Color(_rankGlowTint.r, _rankGlowTint.g, _rankGlowTint.b, Mathf.Lerp(0.25f, 0.6f, pulse));
+
+                float scale = Mathf.Lerp(0.94f, 1.08f, pulse);
+                _rankGlow.rectTransform.localScale = new Vector3(scale, scale, 1f);
+            }
+        }
+
+        private void AnimatePunch(float dt)
+        {
+            if (_punchTarget != null && _punch > 0f)
+            {
+                _punch = Mathf.Max(0f, _punch - dt * 3.2f);
+                float scale = 1f + Mathf.Sin(_punch * Mathf.PI) * _punchAmount;
+                _punchTarget.localScale = new Vector3(scale, scale, 1f);
+
+                if (_punch <= 0f)
+                {
+                    _punchTarget.localScale = Vector3.one;
+                    _punchTarget = null;
+                }
+            }
+
+            if (_coinPunch > 0f)
+            {
+                _coinPunch = Mathf.Max(0f, _coinPunch - dt * 4f);
+                float scale = 1f + Mathf.Sin(_coinPunch * Mathf.PI) * 0.14f;
+                _coinChip.localScale = new Vector3(scale, scale, 1f);
+            }
+        }
+
+        private void TickCountdown(float dt)
+        {
+            _countdown -= dt;
+
+            if (_countdown > 0f)
+            {
+                return;
+            }
+
+            _countdown = 1f;
+
+            // A day can end while the Workshop is open; the next set arrives without a reopen.
+            if (PlayerProfile.Data.missionDay != PlayerProfile.TodayKey())
+            {
+                MissionSystem.EnsureToday();
+                Refresh();
+                return;
+            }
+
+            UpdateResetLabel();
         }
     }
 }

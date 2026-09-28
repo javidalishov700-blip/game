@@ -170,6 +170,11 @@ namespace SliceBlast.Core
         private int _bankedSpecials;
         private bool _runRecorded;
 
+        // The spawner's state from just before the block now in flight was spawned. A saved
+        // run rewinds to this, so the block that was swinging when the app closed is spawned
+        // again rather than counted twice.
+        private BlockSpawner.State _spawnerBeforeActive;
+
         public MovingBlock ActiveBlock => _active;
         public MovingBlock TopBlock => _stack.Count > 0 ? _stack[_stack.Count - 1] : null;
         public bool AcceptsInput => _running && !IsPaused && _inputLock <= 0f && _active != null && _active.IsMoving;
@@ -190,6 +195,7 @@ namespace SliceBlast.Core
         public float CurrentSpeed => _speed;
         public int StackHeight => _stack.Count;
         public int BlastCount => _blastCount;
+        public int BiggestBlast => _biggestBlast;
         public int NextBlastLayers => blastBaseLayers + blastLayerStep * _blastLevel;
 
         /// <summary>Extra magnet radius while the opening tutorial is still running.</summary>
@@ -254,7 +260,7 @@ namespace SliceBlast.Core
 
         private void Start()
         {
-            if (autoStart)
+            if (autoStart && !TryResumeSavedRun())
             {
                 ShowHome();
             }
@@ -266,6 +272,9 @@ namespace SliceBlast.Core
         /// </summary>
         public void ShowHome()
         {
+            // Going home is the player abandoning the run, so there is nothing left to resume.
+            RunSnapshot.Clear();
+
             ResetBoard(true);
             IsHome = true;
 
@@ -279,6 +288,8 @@ namespace SliceBlast.Core
 
         public void StartGame()
         {
+            RunSnapshot.Clear();
+
             // Not snapped: the camera eases in from the title framing (or from the pulled
             // back end-of-run shot) while the first block slides on.
             ResetBoard(false);
@@ -716,6 +727,7 @@ namespace SliceBlast.Core
             }
 
             _axisX = !_axisX;
+            _spawnerBeforeActive = spawner.CaptureState();
 
             MovingBlock block = spawner.Spawn(top.CachedTransform.position, _nextSize, basePlatformSize.y, _axisX, _stack.Count);
             _active = block;
@@ -1146,6 +1158,9 @@ namespace SliceBlast.Core
 
         private void EndRun(MovingBlock block)
         {
+            // The run is over: reopening the app lands on the title, not back on a dead tower.
+            RunSnapshot.Clear();
+
             _running = false;
             _active = null;
             _pendingSpawn = false;
@@ -1258,6 +1273,218 @@ namespace SliceBlast.Core
                 cameraRig.SetTargetHeight(top.CachedTransform.position.y + basePlatformSize.y);
             }
 
+            return true;
+        }
+
+        // ---- Suspend and resume ------------------------------------------------------------
+
+        private void OnApplicationPause(bool paused)
+        {
+            if (paused)
+            {
+                SuspendRun();
+            }
+        }
+
+        private void OnApplicationFocus(bool focused)
+        {
+            if (!focused)
+            {
+                SuspendRun();
+            }
+        }
+
+        private void OnApplicationQuit()
+        {
+            SuspendRun();
+        }
+
+        /// <summary>
+        /// Leaving the app mid-run pauses it — coming back must never find a block already
+        /// swinging towards a miss — and writes it down, because iOS can terminate a
+        /// backgrounded app without giving it another callback first.
+        /// </summary>
+        private void SuspendRun()
+        {
+            if (!_running)
+            {
+                return;
+            }
+
+            SetPaused(true);
+            RunSnapshot.Save(CaptureSnapshot());
+        }
+
+        private RunSnapshot CaptureSnapshot()
+        {
+            // The block in flight is not part of the tower yet. Rewind the counters its spawn
+            // advanced, so a resumed run spawns it again as if for the first time.
+            bool inFlight = _active != null;
+            BlockSpawner.State spawnerState = inFlight ? _spawnerBeforeActive : spawner.CaptureState();
+
+            RunSnapshot snapshot = new RunSnapshot
+            {
+                score = _score,
+                perfectStreak = _perfectStreak,
+                spawnCount = inFlight ? Mathf.Max(0, _spawnCount - 1) : _spawnCount,
+                comboMultiplier = Mathf.Max(1, _comboMultiplier),
+                blastLevel = _blastLevel,
+                blastCount = _blastCount,
+
+                speed = _speed,
+                tutorialProgress = _tutorialProgress,
+                slowdown = _slowdown,
+                electricTimer = _electricTimer,
+
+                shieldCharges = _shieldCharges,
+                runCoins = _runCoins,
+                biggestBlast = _biggestBlast,
+                perfectCount = _perfectCount,
+                specialCount = _specialCount,
+
+                bankedScore = _bankedScore,
+                bankedBlasts = _bankedBlasts,
+                bankedPerfects = _bankedPerfects,
+                bankedSpecials = _bankedSpecials,
+                runRecorded = _runRecorded,
+
+                axisX = inFlight ? !_axisX : _axisX,
+                nextSizeX = _nextSize.x,
+                nextSizeZ = _nextSize.y,
+
+                neonLayers = _neonFuse > 0f ? _neonLayers : 0,
+                neonColor = _neonColor,
+
+                spawnerForceStandard = spawnerState.ForceStandard,
+                spawnerSinceSpecial = spawnerState.SinceSpecial,
+                spawnerGap = spawnerState.Gap,
+                spawnerSpawnCount = spawnerState.SpawnCount,
+                spawnerLastNeon = spawnerState.LastNeonIndex
+            };
+
+            // Index 0 is the base platform, which a resumed board rebuilds on its own.
+            List<Vector3> positions = new List<Vector3>(_stack.Count);
+            List<Vector3> scales = new List<Vector3>(_stack.Count);
+            List<Color> tints = new List<Color>(_stack.Count);
+            List<int> types = new List<int>(_stack.Count);
+
+            for (int i = 1; i < _stack.Count; i++)
+            {
+                MovingBlock layer = _stack[i];
+
+                if (layer == null)
+                {
+                    continue;
+                }
+
+                positions.Add(layer.CachedTransform.position);
+                scales.Add(layer.RestScale);
+                tints.Add(layer.Tint);
+                types.Add((int)layer.Type);
+            }
+
+            snapshot.positions = positions.ToArray();
+            snapshot.scales = scales.ToArray();
+            snapshot.tints = tints.ToArray();
+            snapshot.types = types.ToArray();
+
+            return snapshot;
+        }
+
+        /// <summary>
+        /// Rebuilds the run the app was closed on, exactly where it stood, and holds it on the
+        /// pause sheet so the player chooses when it carries on. False when there is nothing
+        /// saved, in which case the caller shows the title screen as normal.
+        /// </summary>
+        private bool TryResumeSavedRun()
+        {
+            RunSnapshot saved = RunSnapshot.Load();
+
+            if (saved == null || spawner == null || blockPool == null)
+            {
+                return false;
+            }
+
+            ResetBoard(true);
+            IsHome = false;
+
+            for (int i = 0; i < saved.positions.Length; i++)
+            {
+                BlockType type = (BlockType)Mathf.Clamp(saved.types[i], 0, BlockCatalogue.Count - 1);
+
+                MovingBlock layer = (MovingBlock)blockPool.Spawn(saved.positions[i], saved.scales[i], Quaternion.identity);
+                layer.SetTint(saved.tints[i]);
+
+                // The same path a block takes to land — dressed for its type, then settled —
+                // so a restored Neon still burns and a restored Glass is still glass.
+                layer.Configure(false, 0f, 1f, 1f, type, 1f);
+                layer.Freeze();
+
+                _stack.Add(layer);
+            }
+
+            _score = saved.score;
+            _perfectStreak = saved.perfectStreak;
+            _spawnCount = saved.spawnCount;
+            _comboMultiplier = Mathf.Max(1, saved.comboMultiplier);
+            _blastLevel = Mathf.Clamp(saved.blastLevel, 0, maxBlastLevel);
+            _blastCount = saved.blastCount;
+
+            _speed = Mathf.Clamp(saved.speed, 0f, maxSpeed);
+            _tutorialProgress = Mathf.Clamp01(saved.tutorialProgress);
+            _slowdown = Mathf.Clamp(saved.slowdown, 0f, maxSlowdown);
+            _electricTimer = Mathf.Clamp(saved.electricTimer, 0f, electricDuration);
+
+            _shieldCharges = Mathf.Clamp(saved.shieldCharges, 0, maxShieldCharges);
+            _runCoins = Mathf.Max(0, saved.runCoins);
+            _biggestBlast = Mathf.Max(0, saved.biggestBlast);
+            _perfectCount = Mathf.Max(0, saved.perfectCount);
+            _specialCount = Mathf.Max(0, saved.specialCount);
+
+            _bankedScore = Mathf.Max(0, saved.bankedScore);
+            _bankedBlasts = Mathf.Max(0, saved.bankedBlasts);
+            _bankedPerfects = Mathf.Max(0, saved.bankedPerfects);
+            _bankedSpecials = Mathf.Max(0, saved.bankedSpecials);
+            _runRecorded = saved.runRecorded;
+
+            _axisX = saved.axisX;
+            _nextSize = new Vector2(saved.nextSizeX, saved.nextSizeZ);
+
+            spawner.RestoreState(new BlockSpawner.State
+            {
+                ForceStandard = saved.spawnerForceStandard,
+                SinceSpecial = saved.spawnerSinceSpecial,
+                Gap = saved.spawnerGap,
+                SpawnCount = saved.spawnerSpawnCount,
+                LastNeonIndex = saved.spawnerLastNeon
+            });
+
+            if (saved.neonLayers > 0 && _stack.Count > 1)
+            {
+                _neonLayers = saved.neonLayers;
+                _neonColor = saved.neonColor;
+                _neonFuse = Mathf.Max(0.05f, neonFuseSeconds);
+                MarkNeonLayers(_neonLayers);
+            }
+
+            _running = true;
+            _pendingSpawn = true;
+            _spawnDelay = 0f;
+            _inputLock = Mathf.Max(0f, startInputLock);
+
+            MovingBlock top = TopBlock;
+
+            if (cameraRig != null && top != null)
+            {
+                cameraRig.SnapToHeight(top.CachedTransform.position.y + basePlatformSize.y);
+            }
+
+            GameEvents.RaiseRunStarted();
+            GameEvents.RaiseScoreChanged(_score, TotalMultiplier);
+            GameEvents.RaiseShieldChanged(_shieldCharges);
+            GameEvents.RaiseMultiplierTimer(_electricTimer, electricDuration);
+
+            SetPaused(true);
             return true;
         }
 

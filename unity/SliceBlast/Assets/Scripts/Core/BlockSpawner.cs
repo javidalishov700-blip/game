@@ -23,6 +23,16 @@ namespace SliceBlast.Core
         // component; see PaletteColor.
         [SerializeField] private float hueStep = 0.035f;
 
+        /// <summary>Everything that decides what comes next — enough to resume a saved run.</summary>
+        public struct State
+        {
+            public bool ForceStandard;
+            public int SinceSpecial;
+            public int Gap;
+            public int SpawnCount;
+            public int LastNeonIndex;
+        }
+
         private BlockPool _pool;
         private bool _forceStandard;
         private int _sinceSpecial;
@@ -31,6 +41,27 @@ namespace SliceBlast.Core
         private int _lastNeonIndex = -1;
 
         public float TravelRange => travelRange;
+
+        public State CaptureState()
+        {
+            return new State
+            {
+                ForceStandard = _forceStandard,
+                SinceSpecial = _sinceSpecial,
+                Gap = _gap,
+                SpawnCount = _spawnCount,
+                LastNeonIndex = _lastNeonIndex
+            };
+        }
+
+        public void RestoreState(State state)
+        {
+            _forceStandard = state.ForceStandard;
+            _sinceSpecial = Mathf.Max(0, state.SinceSpecial);
+            _gap = Mathf.Max(0, state.Gap);
+            _spawnCount = Mathf.Max(0, state.SpawnCount);
+            _lastNeonIndex = state.LastNeonIndex;
+        }
 
         public void Bind(BlockPool pool)
         {
@@ -192,25 +223,7 @@ namespace SliceBlast.Core
         /// </summary>
         private Color PaletteColor(int index)
         {
-            ThemeDefinition theme = ThemeCatalogue.Equipped;
-
-            float start = theme.HueStart;
-            float span = theme.HueSpan;
-            float sat = theme.Saturation;
-            float value = theme.Brightness;
-
-            float hue = start + Mathf.PingPong(index * hueStep, span);
-
-            // A themeless build, or a theme that deliberately drops saturation to zero, still
-            // has to produce a readable ladder of blocks rather than one flat colour — so a
-            // greyscale theme walks the value axis instead of the hue axis.
-            if (sat <= 0.001f)
-            {
-                float shade = value * (0.62f + Mathf.PingPong(index * hueStep * 2f, 0.38f));
-                return new Color(shade, shade, shade);
-            }
-
-            return Color.HSVToRGB(Mathf.Repeat(hue, 1f), sat, value);
+            return ThemeCatalogue.BlockColor(ThemeCatalogue.Equipped, index, hueStep);
         }
     }
 }

@@ -125,6 +125,54 @@ namespace SliceBlast.Meta
                 HueSpan = 0.30f,
                 Saturation = 0.58f,
                 Brightness = 1f
+            },
+            // The three premium themes are the long-term coin sink: something still worth
+            // saving for once every upgrade is maxed. Saturation stays in the same range as
+            // the others so an ordinary block can never be mistaken for a neon special.
+            new ThemeDefinition
+            {
+                Id = "abyss",
+                Name = "ABYSS",
+                Price = 12000,
+                SkyTop = new Color(0.02f, 0.13f, 0.26f),
+                SkyBottom = new Color(0f, 0.02f, 0.07f),
+                StarTint = new Color(0.55f, 0.85f, 1f),
+                Platform = new Color(0.14f, 0.30f, 0.44f),
+                Accent = new Color(0.25f, 0.78f, 1f),
+                HueStart = 0.52f,
+                HueSpan = 0.10f,
+                Saturation = 0.62f,
+                Brightness = 0.92f
+            },
+            new ThemeDefinition
+            {
+                Id = "sakura",
+                Name = "SAKURA",
+                Price = 16000,
+                SkyTop = new Color(0.32f, 0.13f, 0.25f),
+                SkyBottom = new Color(0.07f, 0.03f, 0.08f),
+                StarTint = new Color(1f, 0.86f, 0.94f),
+                Platform = new Color(0.56f, 0.36f, 0.46f),
+                Accent = new Color(1f, 0.62f, 0.80f),
+                HueStart = 0.88f,
+                HueSpan = 0.10f,
+                Saturation = 0.42f,
+                Brightness = 1f
+            },
+            new ThemeDefinition
+            {
+                Id = "gilded",
+                Name = "GILDED",
+                Price = 22000,
+                SkyTop = new Color(0.14f, 0.11f, 0.05f),
+                SkyBottom = new Color(0.02f, 0.015f, 0.01f),
+                StarTint = new Color(1f, 0.88f, 0.55f),
+                Platform = new Color(0.42f, 0.33f, 0.14f),
+                Accent = new Color(1f, 0.84f, 0.35f),
+                HueStart = 0.09f,
+                HueSpan = 0.06f,
+                Saturation = 0.62f,
+                Brightness = 0.96f
             }
         };
 
@@ -158,6 +206,27 @@ namespace SliceBlast.Meta
         public static bool IsOwned(string id)
         {
             return id == DefaultId || PlayerProfile.OwnsTheme(id);
+        }
+
+        /// <summary>
+        /// The colour an ordinary block at <paramref name="index"/> wears under a theme. Lives
+        /// here rather than in the spawner so the Workshop's previews are painted by the same
+        /// formula as the real tower. Ordinary blocks ping-pong through a bounded hue band on
+        /// purpose: no plain block should ever drift into a neon hue and pass for a special.
+        /// </summary>
+        public static Color BlockColor(ThemeDefinition theme, int index, float hueStep)
+        {
+            // A theme that deliberately drops saturation to zero still has to produce a
+            // readable ladder of blocks rather than one flat colour, so a greyscale theme walks
+            // the value axis instead of the hue axis.
+            if (theme.Saturation <= 0.001f)
+            {
+                float shade = theme.Brightness * (0.62f + Mathf.PingPong(index * hueStep * 2f, 0.38f));
+                return new Color(shade, shade, shade);
+            }
+
+            float hue = theme.HueStart + Mathf.PingPong(index * hueStep, theme.HueSpan);
+            return Color.HSVToRGB(Mathf.Repeat(hue, 1f), theme.Saturation, theme.Brightness);
         }
 
         public static bool TryPurchase(string id)
