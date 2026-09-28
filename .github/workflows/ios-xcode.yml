@@ -127,7 +127,7 @@ jobs:
           set -eu
           TAG="ios-xcode-${{ github.run_id }}${{ inputs.testAds && '-testads' || '' }}"
           for attempt in 1 2 3; do
-            if gh release create "$TAG" ios-xcode.zip \
+            if gh release create "$TAG" ios-xcode.zip --latest \
                 --title "iOS Xcode project ${{ github.run_id }}${{ inputs.testAds && ' - TEST ADS, TestFlight only' || '' }}" \
                 --notes "Generated from ${{ github.sha }} by the iOS Xcode project workflow. Test ads: ${{ inputs.testAds && 'YES (TestFlight testing only, do not submit)' || 'no (App Store ready)' }}." \
                 --target "${{ github.sha }}"; then

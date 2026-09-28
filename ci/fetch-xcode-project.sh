@@ -12,33 +12,25 @@ DESTINATION="${1:-ios-xcode}"
 TAG="${RELEASE_TAG:-ios-xcode-latest}"
 API="https://api.github.com/repos/${GITHUB_REPO}"
 
-# Every build is now published under its own tag (ios-xcode-<run id>, with "-testads" for a
-# TestFlight-only test-ads build). "ios-xcode-latest" means: the newest of those.
+# Every build is published under its own tag (ios-xcode-<run id>, "-testads" for a
+# TestFlight-only test-ads build) and marked as the repository's "latest" release, so
+# "ios-xcode-latest" means: whatever GitHub currently calls the latest release.
+#
+# This deliberately avoids api.github.com. Codemagic's shared build machines burn through
+# GitHub's unauthenticated API allowance (60 requests an hour per address) and get HTTP 403;
+# github.com/<repo>/releases/latest is an ordinary redirect that has no such limit.
 if [ "$TAG" = "ios-xcode-latest" ]; then
-  AUTH=()
-  if [ -n "${GITHUB_TOKEN:-}" ]; then
-    AUTH=(-H "Authorization: Bearer $GITHUB_TOKEN")
-  fi
+  LATEST_URL="$(curl -fsSL -o /dev/null -w '%{url_effective}' "https://github.com/${GITHUB_REPO}/releases/latest" || true)"
+  RESOLVED="${LATEST_URL##*/releases/tag/}"
 
-  # The repository is public, so the listing needs no token — and a stale token in the
-  # Codemagic environment would only turn it into a 401. Tried with it, then without.
-  LISTING="$(curl -fsS ${AUTH[@]+"${AUTH[@]}"} -H "Accept: application/vnd.github+json" "$API/releases?per_page=30" 2>/dev/null)" \
-    || LISTING="$(curl -fsS -H "Accept: application/vnd.github+json" "$API/releases?per_page=30")" \
-    || LISTING="[]"
-
-  RESOLVED="$(printf '%s' "$LISTING" | python3 -c '
-import json, sys
-
-releases = [r for r in json.load(sys.stdin)
-            if r.get("tag_name", "").startswith("ios-xcode-")
-            and any(a.get("name") == "ios-xcode.zip" for a in r.get("assets", []))]
-releases.sort(key=lambda r: r.get("created_at", ""), reverse=True)
-print(releases[0]["tag_name"] if releases else "")
-')" || RESOLVED=""
-
-  if [ -n "$RESOLVED" ]; then
-    TAG="$RESOLVED"
-  fi
+  case "$RESOLVED" in
+    ios-xcode-*)
+      TAG="$RESOLVED"
+      ;;
+    *)
+      echo "Could not work out the latest release from $LATEST_URL"
+      ;;
+  esac
 
   echo "Newest Xcode project release: $TAG"
 

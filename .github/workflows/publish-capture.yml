@@ -29,7 +29,7 @@ jobs:
         run: |
           set -eu
           ls -la out
-          gh release create "store-capture-${{ inputs.runId }}" out/* \
+          gh release create "store-capture-${{ inputs.runId }}" out/* --latest=false \
             --repo "${{ github.repository }}" \
             --title "Store capture ${{ inputs.runId }}" \
             --notes "Screenshots and footage from Store capture run ${{ inputs.runId }}." \
