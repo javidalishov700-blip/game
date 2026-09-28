@@ -1602,7 +1602,7 @@ namespace SliceBlast.UI
                 return;
             }
 
-            float dt = Time.unscaledDeltaTime;
+            float dt = Clock.UnscaledDelta;
 
             // Unscaled: the shop opens from the run-over screen, where the death slow-motion
             // still owns Time.timeScale, and from a paused run, where it is zero.
@@ -1613,7 +1613,7 @@ namespace SliceBlast.UI
                 return;
             }
 
-            AnimateBackdrop(Time.unscaledTime);
+            AnimateBackdrop(Clock.Unscaled);
             AnimatePunch(dt);
 
             if (IsOpen && _tab == Tab.Missions)

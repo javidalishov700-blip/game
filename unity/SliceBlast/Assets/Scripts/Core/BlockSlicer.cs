@@ -58,18 +58,25 @@ namespace SliceBlast.Core
         }
 
 #if SLICEBLAST_SCREENSHOTS
-        /// <summary>Store-capture autoplay only: resolves a tap without an input device.</summary>
-        public void ScriptedDrop()
+        /// <summary>
+        /// Store-capture autoplay only: puts the swinging block at <paramref name="axisCenter"/>
+        /// and resolves a tap there. The input check has to come first — placing the block
+        /// settles it, and a settled block no longer accepts input.
+        /// </summary>
+        public void ScriptedDrop(float axisCenter)
         {
             if (flow == null)
             {
                 flow = GameFlowManager.Instance;
             }
 
-            if (flow != null && flow.AcceptsInput)
+            if (flow == null || !flow.AcceptsInput || flow.ActiveBlock == null)
             {
-                ResolvePlacement();
+                return;
             }
+
+            flow.ActiveBlock.SnapAxis(axisCenter);
+            ResolvePlacement();
         }
 #endif
 

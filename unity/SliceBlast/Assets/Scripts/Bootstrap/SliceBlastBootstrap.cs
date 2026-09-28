@@ -616,11 +616,11 @@ namespace SliceBlast.Bootstrap
         private void Update()
         {
             TickSky();
-            PlayerProfile.Tick(Time.unscaledDeltaTime);
+            PlayerProfile.Tick(Clock.UnscaledDelta);
 
             if (_starField != null)
             {
-                _starField.Tick(Time.unscaledDeltaTime);
+                _starField.Tick(Clock.UnscaledDelta);
             }
 
             if (_pools != null)
@@ -641,7 +641,7 @@ namespace SliceBlast.Bootstrap
             {
                 PollLeaderboardSignIn();
 
-                if (Time.unscaledTime - _homeTime < homeInputDelay)
+                if (Clock.Unscaled - _homeTime < homeInputDelay)
                 {
                     return;
                 }
@@ -654,7 +654,7 @@ namespace SliceBlast.Bootstrap
                 return;
             }
 
-            if (!_gameOver || Time.unscaledTime - _gameOverTime < restartDelay)
+            if (!_gameOver || Clock.Unscaled - _gameOverTime < restartDelay)
             {
                 return;
             }
@@ -685,7 +685,7 @@ namespace SliceBlast.Bootstrap
         /// </summary>
         private void PollLeaderboardSignIn()
         {
-            _signInPoll -= Time.unscaledDeltaTime;
+            _signInPoll -= Clock.UnscaledDelta;
 
             if (_signInPoll > 0f)
             {
@@ -700,7 +700,7 @@ namespace SliceBlast.Bootstrap
         {
             _home = true;
             _gameOver = false;
-            _homeTime = Time.unscaledTime;
+            _homeTime = Clock.Unscaled;
 
             _hud.HideGameOver();
             _hud.ShowPaused(false);
@@ -961,7 +961,7 @@ namespace SliceBlast.Bootstrap
         private void OnRunEnded(int score, int best)
         {
             _gameOver = true;
-            _gameOverTime = Time.unscaledTime;
+            _gameOverTime = Clock.Unscaled;
 
             _audio.PlayGameOver();
             _hud.ShowHint(false);
@@ -1452,7 +1452,7 @@ namespace SliceBlast.Bootstrap
                 return;
             }
 
-            _skyBlend = Mathf.Min(1f, _skyBlend + Time.unscaledDeltaTime / SkyTransitionSeconds);
+            _skyBlend = Mathf.Min(1f, _skyBlend + Clock.UnscaledDelta / SkyTransitionSeconds);
             ApplySky(Color.Lerp(_skyBottomFrom, _skyBottomTo, _skyBlend), Color.Lerp(_skyTopFrom, _skyTopTo, _skyBlend));
         }
 

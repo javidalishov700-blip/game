@@ -938,7 +938,7 @@ namespace SliceBlast.UI
 
         private void Update()
         {
-            float dt = Time.unscaledDeltaTime;
+            float dt = Clock.UnscaledDelta;
 
             if (_safeArea != null && _appliedSafeArea != Screen.safeArea)
             {
@@ -987,7 +987,7 @@ namespace SliceBlast.UI
             {
                 float target = _hintVisible ? 1f : 0f;
                 _hintAlpha = Mathf.MoveTowards(_hintAlpha, target, dt * 2.5f);
-                float pulse = 0.65f + Mathf.Sin(Time.unscaledTime * 3.4f) * 0.35f;
+                float pulse = 0.65f + Mathf.Sin(Clock.Unscaled * 3.4f) * 0.35f;
                 SetAlpha(_hint, _hintAlpha * pulse);
             }
 
@@ -999,7 +999,7 @@ namespace SliceBlast.UI
 
                 if (_restart != null && _gameOver.alpha > 0.01f)
                 {
-                    float pulse = 0.45f + Mathf.Sin(Time.unscaledTime * 3.1f) * 0.35f;
+                    float pulse = 0.45f + Mathf.Sin(Clock.Unscaled * 3.1f) * 0.35f;
                     SetAlpha(_restart, pulse);
                 }
             }
@@ -1060,7 +1060,7 @@ namespace SliceBlast.UI
 
             if (_homeStart != null)
             {
-                float pulse = 0.55f + Mathf.Sin(Time.unscaledTime * 3.2f) * 0.45f;
+                float pulse = 0.55f + Mathf.Sin(Clock.Unscaled * 3.2f) * 0.45f;
                 SetAlpha(_homeStart, tail * pulse);
             }
 
@@ -1095,7 +1095,7 @@ namespace SliceBlast.UI
 
                 if (alpha > 0.01f)
                 {
-                    float breathe = 1f + Mathf.Sin(Time.unscaledTime * 3f) * 0.07f;
+                    float breathe = 1f + Mathf.Sin(Clock.Unscaled * 3f) * 0.07f;
                     _shieldIcon.rectTransform.localScale = new Vector3(breathe, breathe, 1f);
                 }
             }
@@ -1109,7 +1109,7 @@ namespace SliceBlast.UI
 
                 if (alpha > 0.01f)
                 {
-                    float jolt = 1f + Mathf.Sin(Time.unscaledTime * 14f) * 0.06f;
+                    float jolt = 1f + Mathf.Sin(Clock.Unscaled * 14f) * 0.06f;
                     _electricIcon.rectTransform.localScale = new Vector3(jolt, jolt, 1f);
                 }
             }

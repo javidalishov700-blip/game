@@ -274,7 +274,7 @@ namespace SliceBlast.UI
         {
             _token++;
             _loading = true;
-            _loadStarted = Time.unscaledTime;
+            _loadStarted = Clock.Unscaled;
 
             // The previous answer stays on screen while the next one loads, when there is
             // one; the status line only covers an empty board.
@@ -438,19 +438,19 @@ namespace SliceBlast.UI
                 return;
             }
 
-            _group.alpha = Mathf.MoveTowards(_group.alpha, _targetAlpha, Time.unscaledDeltaTime * 6f);
+            _group.alpha = Mathf.MoveTowards(_group.alpha, _targetAlpha, Clock.UnscaledDelta * 6f);
 
             if (_group.alpha <= 0f)
             {
                 return;
             }
 
-            if (_loading && Time.unscaledTime - _loadStarted > LoadTimeout)
+            if (_loading && Clock.Unscaled - _loadStarted > LoadTimeout)
             {
                 Complete(_token, null);
             }
 
-            AnimateGold(Time.unscaledTime);
+            AnimateGold(Clock.Unscaled);
         }
 
         private void AnimateGold(float time)

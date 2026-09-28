@@ -319,7 +319,7 @@ namespace SliceBlast.UI
 
         private void Update()
         {
-            _group.alpha = Mathf.MoveTowards(_group.alpha, _targetAlpha, Time.unscaledDeltaTime * 6f);
+            _group.alpha = Mathf.MoveTowards(_group.alpha, _targetAlpha, Clock.UnscaledDelta * 6f);
         }
     }
 }

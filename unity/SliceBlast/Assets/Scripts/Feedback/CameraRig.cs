@@ -127,7 +127,7 @@ namespace SliceBlast.Feedback
 
         private void LateUpdate()
         {
-            float dt = Time.unscaledDeltaTime;
+            float dt = Clock.UnscaledDelta;
 
             _basePosition.y = Mathf.LerpUnclamped(_basePosition.y, _targetHeight, 1f - Mathf.Exp(-followSmoothing * dt));
             _rig.position = _basePosition;
@@ -152,7 +152,7 @@ namespace SliceBlast.Feedback
             }
 
             float shake = _trauma * _trauma;
-            float t = (Time.unscaledTime + _seed) * frequency;
+            float t = (Clock.Unscaled + _seed) * frequency;
 
             float x = (Mathf.PerlinNoise(t, 0f) * 2f - 1f) * maxOffset * shake;
             float y = (Mathf.PerlinNoise(0f, t) * 2f - 1f) * maxOffset * shake;

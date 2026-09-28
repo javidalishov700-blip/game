@@ -444,7 +444,7 @@ namespace SliceBlast.Core
 
             if (_inputLock > 0f)
             {
-                _inputLock = Mathf.Max(0f, _inputLock - Time.unscaledDeltaTime);
+                _inputLock = Mathf.Max(0f, _inputLock - Clock.UnscaledDelta);
             }
 
             if (!_running || IsPaused)
@@ -475,7 +475,7 @@ namespace SliceBlast.Core
 
             if (_spawnDelay > 0f)
             {
-                _spawnDelay -= Time.unscaledDeltaTime;
+                _spawnDelay -= Clock.UnscaledDelta;
                 return;
             }
 
@@ -664,11 +664,11 @@ namespace SliceBlast.Core
 
             if (_deathHold > 0f)
             {
-                _deathHold -= Time.unscaledDeltaTime;
+                _deathHold -= Clock.UnscaledDelta;
                 return;
             }
 
-            Time.timeScale = Mathf.MoveTowards(Time.timeScale, 1f, Time.unscaledDeltaTime * 1.4f);
+            Time.timeScale = Mathf.MoveTowards(Time.timeScale, 1f, Clock.UnscaledDelta * 1.4f);
         }
 
         /// <summary>
@@ -684,7 +684,7 @@ namespace SliceBlast.Core
                 return;
             }
 
-            _hitstopHold -= Time.unscaledDeltaTime;
+            _hitstopHold -= Clock.UnscaledDelta;
 
             if (_hitstopHold <= 0f && !IsPaused)
             {

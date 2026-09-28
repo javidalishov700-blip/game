@@ -124,7 +124,7 @@ namespace SliceBlast.Bootstrap
             // ---- 1. Title ----------------------------------------------------------------
             BeginClip("title");
             yield return Frames(84);
-            Still("01_title");
+            yield return Snap("01_title");
             yield return Frames(6);
             EndClip();
 
@@ -148,9 +148,9 @@ namespace SliceBlast.Bootstrap
             }
 
             yield return Frames(45);
-            Still("06_runover_a");
+            yield return Snap("06_runover_a");
             yield return Frames(30);
-            Still("06_runover_b");
+            yield return Snap("06_runover_b");
             yield return Frames(15);
             EndClip();
 
@@ -164,16 +164,16 @@ namespace SliceBlast.Bootstrap
             yield return Frames(24);
             _shop.ShowTabForCapture(0);
             yield return Frames(36);
-            Still("07_upgrades");
+            yield return Snap("07_upgrades");
             _shop.ShowTabForCapture(1);
             yield return Frames(36);
-            Still("08_themes");
+            yield return Snap("08_themes");
             _shop.ShowTabForCapture(3);
             yield return Frames(36);
-            Still("09_daily");
+            yield return Snap("09_daily");
             _shop.ShowTabForCapture(2);
             yield return Frames(36);
-            Still("10_profile");
+            yield return Snap("10_profile");
             yield return Frames(10);
             OnShopClosed();
             yield return Frames(20);
@@ -183,22 +183,22 @@ namespace SliceBlast.Bootstrap
             BeginClip("settings");
             OnSettingsRequested();
             yield return Frames(30);
-            Still("11_settings_en");
+            yield return Snap("11_settings_en");
             Loc.Set(Language.Turkish);
             yield return Frames(24);
-            Still("11_settings_tr");
+            yield return Snap("11_settings_tr");
             Loc.Set(Language.Russian);
             yield return Frames(24);
-            Still("11_settings_ru");
+            yield return Snap("11_settings_ru");
             OnSettingsClosed();
             yield return Frames(30);
-            Still("12_title_ru");
+            yield return Snap("12_title_ru");
             Loc.Set(Language.Turkish);
             yield return Frames(20);
-            Still("12_title_tr");
+            yield return Snap("12_title_tr");
             Loc.Set(Language.English);
             yield return Frames(20);
-            Still("12_title_sakura");
+            yield return Snap("12_title_sakura");
             EndClip();
 
             // ---- 5. A second run in another theme, for variety in the videos ---------------
@@ -267,8 +267,7 @@ namespace SliceBlast.Bootstrap
 
                 if (hasPrevious && frames >= 10 && (target - previous) * (target - position) <= 0f)
                 {
-                    moving.SnapAxis(target);
-                    _slicer.ScriptedDrop();
+                    _slicer.ScriptedDrop(target);
                     drop++;
                     idle = 0;
                     hasPrevious = false;
@@ -319,8 +318,7 @@ namespace SliceBlast.Bootstrap
                 float topSize = axisX ? topScale.x : topScale.z;
                 float side = moving.AxisCenter >= topCenter ? 1f : -1f;
 
-                moving.SnapAxis(topCenter + side * (topSize * 0.5f + moving.AxisSize * 0.5f + 0.05f));
-                _slicer.ScriptedDrop();
+                _slicer.ScriptedDrop(topCenter + side * (topSize * 0.5f + moving.AxisSize * 0.5f + 0.05f));
                 yield return null;
             }
         }
@@ -373,6 +371,13 @@ namespace SliceBlast.Bootstrap
 
                 yield return null;
             }
+        }
+
+        /// <summary>Queues a still and waits for the frame it is taken on to finish.</summary>
+        private IEnumerator Snap(string name)
+        {
+            Still(name);
+            yield return null;
         }
 
         private static IEnumerator Frames(int count)
