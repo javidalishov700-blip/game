@@ -38,6 +38,12 @@ namespace SliceBlast.Ads
         void ShowInterstitial();
 
         /// <summary>
+        /// Drops whatever is loaded and requests fresh ads — used when the test-ads switch
+        /// changes which ad units are asked for. A no-op before Initialize has run.
+        /// </summary>
+        void Reload();
+
+        /// <summary>
         /// onEarned fires only once the player actually finished watching. onUnavailable fires
         /// immediately when nothing is loaded, and also when the player closes the ad early
         /// without earning — exactly one of the two always fires, so the caller can rely on

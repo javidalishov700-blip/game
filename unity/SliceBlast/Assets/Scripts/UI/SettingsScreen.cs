@@ -6,6 +6,7 @@
 // Built the same way as the shop and the leaderboard: a full-bleed dim behind a safe-area-
 // inset content column, faded in and out through one CanvasGroup.
 using System;
+using SliceBlast.Ads;
 using SliceBlast.Meta;
 using UnityEngine;
 using UnityEngine.UI;
@@ -42,6 +43,13 @@ namespace SliceBlast.UI
         }
 
         private readonly LanguageTile[] _languages = new LanguageTile[Loc.LanguageCount];
+
+        // Developer-only: seven quick taps on the title switch AdMob to Google's demo ads so
+        // the rewarded continue can be tried in TestFlight. Nothing on screen invites the taps.
+        private const int TestAdsTaps = 7;
+        private int _titleTaps;
+        private float _lastTitleTap;
+        private Text _testAdsLabel;
 
         public bool IsOpen { get; private set; }
 
@@ -94,6 +102,16 @@ namespace SliceBlast.UI
             Text title = UiKit.CreateText(_font, "SettingsTitle", root, 88, FontStyle.Bold, Color.white, TextAnchor.UpperCenter);
             UiKit.Anchor(title.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0f, -190f), new Vector2(0f, -80f));
             UiKit.Bind(title, "settings.title", 640f);
+
+            title.raycastTarget = true;
+            Button titleButton = title.gameObject.AddComponent<Button>();
+            titleButton.transition = Selectable.Transition.None;
+            titleButton.onClick.AddListener(OnTitleTapped);
+
+            _testAdsLabel = UiKit.CreateText(_font, "TestAds", root, 30, FontStyle.Bold, UiKit.Mint, TextAnchor.UpperCenter);
+            UiKit.Anchor(_testAdsLabel.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0f, -250f), new Vector2(0f, -200f));
+            _testAdsLabel.text = "TEST ADS ON";
+            _testAdsLabel.gameObject.SetActive(AdsManager.TestAds);
 
             MenuControl close = UiKit.CreateButton(_font, "Close", root, string.Empty, 0, new Color(1f, 1f, 1f, 0.14f), Color.white, IconShape.Close);
             RectTransform closeRect = close.Root;
@@ -177,6 +195,29 @@ namespace SliceBlast.UI
 
                 control.Button.onClick.AddListener(() => ChooseLanguage(language));
             }
+        }
+
+        private void OnTitleTapped()
+        {
+            _titleTaps = Time.unscaledTime - _lastTitleTap < 1.2f ? _titleTaps + 1 : 1;
+            _lastTitleTap = Time.unscaledTime;
+
+            if (_titleTaps < TestAdsTaps)
+            {
+                return;
+            }
+
+            _titleTaps = 0;
+            AdsManager ads = AdsManager.Instance;
+
+            if (ads == null)
+            {
+                return;
+            }
+
+            bool on = !AdsManager.TestAds;
+            ads.SetTestAds(on);
+            _testAdsLabel.gameObject.SetActive(on);
         }
 
         private void ChooseLanguage(Language language)

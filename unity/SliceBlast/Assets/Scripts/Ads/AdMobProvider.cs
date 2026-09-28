@@ -29,6 +29,16 @@ namespace SliceBlast.Ads
         private const string RewardedAdUnitId = "unused";
 #endif
 
+        // Google's public demo units for iOS. They always fill, show a "Test Ad" label and
+        // pay nothing — used only while AdsManager.TestAds is switched on from the hidden
+        // developer toggle, so the continue offer and interstitials can be tried out in
+        // TestFlight before the AdMob account serves real ads.
+        private const string TestInterstitialAdUnitId = "ca-app-pub-3940256099942544/4411468910";
+        private const string TestRewardedAdUnitId = "ca-app-pub-3940256099942544/1712485313";
+
+        private static string InterstitialUnit => AdsManager.TestAds ? TestInterstitialAdUnitId : InterstitialAdUnitId;
+        private static string RewardedUnit => AdsManager.TestAds ? TestRewardedAdUnitId : RewardedAdUnitId;
+
         // A failed load is tried again after 2, 4, 8 … seconds, levelling off at 64. Without
         // this a single miss — no fill in a new account's first hours, a dropped connection —
         // left that format empty for the rest of the session.
@@ -110,6 +120,19 @@ namespace SliceBlast.Ads
             }
         }
 
+        public void Reload()
+        {
+            if (!_started)
+            {
+                return;
+            }
+
+            _interstitialFailures = 0;
+            _rewardedFailures = 0;
+            LoadInterstitial();
+            LoadRewarded();
+        }
+
         public void ShowRewarded(Action onEarned, Action onUnavailable)
         {
             if (!IsRewardedReady)
@@ -166,7 +189,7 @@ namespace SliceBlast.Ads
                 _interstitialAd = null;
             }
 
-            GoogleMobileAds.Api.InterstitialAd.Load(InterstitialAdUnitId, new GoogleMobileAds.Api.AdRequest(), (ad, error) =>
+            GoogleMobileAds.Api.InterstitialAd.Load(InterstitialUnit, new GoogleMobileAds.Api.AdRequest(), (ad, error) =>
             {
                 if (error != null || ad == null)
                 {
@@ -189,7 +212,7 @@ namespace SliceBlast.Ads
                 _rewardedAd = null;
             }
 
-            GoogleMobileAds.Api.RewardedAd.Load(RewardedAdUnitId, new GoogleMobileAds.Api.AdRequest(), (ad, error) =>
+            GoogleMobileAds.Api.RewardedAd.Load(RewardedUnit, new GoogleMobileAds.Api.AdRequest(), (ad, error) =>
             {
                 if (error != null || ad == null)
                 {
@@ -231,6 +254,10 @@ namespace SliceBlast.Ads
         }
 
         public void ShowInterstitial()
+        {
+        }
+
+        public void Reload()
         {
         }
 

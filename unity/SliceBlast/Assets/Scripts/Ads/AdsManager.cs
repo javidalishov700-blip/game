@@ -29,6 +29,27 @@ namespace SliceBlast.Ads
 
         public static AdsManager Instance { get; private set; }
 
+        private const string TestAdsKey = "sliceblast.testads";
+
+        /// <summary>
+        /// Developer switch, off for every player: when on, AdMob is asked for Google's demo
+        /// ad units, which always fill. Reached only by tapping the Settings title seven times,
+        /// so the rewarded continue can be tested in TestFlight while the account's real ads
+        /// are not being served yet.
+        /// </summary>
+        public static bool TestAds => PlayerPrefs.GetInt(TestAdsKey, 0) == 1;
+
+        public void SetTestAds(bool on)
+        {
+            PlayerPrefs.SetInt(TestAdsKey, on ? 1 : 0);
+            PlayerPrefs.Save();
+
+            for (int i = 0; i < _providers.Count; i++)
+            {
+                _providers[i].Reload();
+            }
+        }
+
         private readonly List<IAdProvider> _providers = new List<IAdProvider>(2);
 
         private int _runsSinceInterstitial;
