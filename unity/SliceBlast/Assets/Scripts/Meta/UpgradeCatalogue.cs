@@ -122,10 +122,14 @@ namespace SliceBlast.Meta
         /// Extra share of the reference block added to the perfect window. Capped well below
         /// BlockSlicer's own maxThresholdFraction so a fully upgraded magnet still cannot make
         /// a late-game sliver placement automatic.
+        ///
+        /// Nudged up from 0.0025 after the 7-level rebalance read as too tight in play — still
+        /// nowhere near the original flat 0.006 (which nearly doubled the base window at max
+        /// level and felt like cheating), just a little more forgiving at every level.
         /// </summary>
         public static float MagnetBonusFraction()
         {
-            return 0.0025f * PlayerProfile.GetUpgradeLevel(UpgradeId.Magnet);
+            return 0.003f * PlayerProfile.GetUpgradeLevel(UpgradeId.Magnet);
         }
 
         /// <summary>Shields a run opens with.</summary>
