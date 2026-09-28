@@ -2,6 +2,7 @@
 // special blocks — is rasterised here from signed distance fields. No imported textures,
 // no font glyphs to fail on a device, and it stays crisp at any resolution.
 using System.Collections.Generic;
+using SliceBlast.Meta;
 using UnityEngine;
 
 namespace SliceBlast.UI
@@ -36,7 +37,9 @@ namespace SliceBlast.UI
         Magnet,
         Clover,
         Star,
-        Flame
+        Flame,
+        Globe,
+        Document
     }
 
     public static class IconFactory
@@ -344,6 +347,39 @@ namespace SliceBlast.UI
                     // on the origin — otherwise it reads as riding high in a round badge.
                     return Star5(p + new Vector2(0f, 0.08f), 0.82f, 0.46f);
 
+                case IconShape.Globe:
+                {
+                    // An outlined sphere with its equator, one central meridian and a pair of
+                    // squashed rings for the curved lines of longitude either side of it.
+                    float outline = Ring(p, 0.78f, 0.075f);
+                    float lines = Mathf.Min(
+                        Segment(p, new Vector2(-0.76f, 0f), new Vector2(0.76f, 0f), 0.06f),
+                        Segment(p, new Vector2(0f, -0.76f), new Vector2(0f, 0.76f), 0.06f));
+                    lines = Mathf.Min(lines, Ring(new Vector2(p.x * 2.1f, p.y), 0.78f, 0.13f) / 2.1f);
+
+                    float latitude = Mathf.Min(
+                        Segment(p, new Vector2(-0.7f, 0.4f), new Vector2(0.7f, 0.4f), 0.05f),
+                        Segment(p, new Vector2(-0.7f, -0.4f), new Vector2(0.7f, -0.4f), 0.05f));
+                    lines = Mathf.Min(lines, latitude);
+
+                    return Mathf.Min(outline, Mathf.Max(lines, Circle(p, 0.76f)));
+                }
+
+                case IconShape.Document:
+                {
+                    // A page with a folded top-right corner and three lines of text.
+                    float page = Box(p - new Vector2(0f, 0f), new Vector2(0.56f, 0.76f), 0.1f);
+                    float fold = Triangle(p, new Vector2(0.16f, 0.9f), new Vector2(0.7f, 0.9f), new Vector2(0.7f, 0.36f));
+                    page = Mathf.Max(page, -fold);
+
+                    float text = Mathf.Min(
+                        Segment(p, new Vector2(-0.3f, 0.12f), new Vector2(0.3f, 0.12f), 0.055f),
+                        Segment(p, new Vector2(-0.3f, -0.14f), new Vector2(0.3f, -0.14f), 0.055f));
+                    text = Mathf.Min(text, Segment(p, new Vector2(-0.3f, -0.4f), new Vector2(0.12f, -0.4f), 0.055f));
+
+                    return Mathf.Max(page, -text);
+                }
+
                 case IconShape.Flame:
                 {
                     // A teardrop — a round base under a tapering tip that leans a touch — with a
@@ -390,6 +426,142 @@ namespace SliceBlast.UI
             cone = Mathf.Min(cone, Triangle(p, new Vector2(-0.36f, 0.2f), new Vector2(-0.02f, 0.52f), new Vector2(-0.02f, -0.52f)));
             cone = Mathf.Min(cone, Triangle(p, new Vector2(-0.36f, -0.2f), new Vector2(-0.36f, 0.2f), new Vector2(-0.02f, -0.52f)));
             return Mathf.Min(body, cone);
+        }
+
+        // ---- Flags --------------------------------------------------------------------
+
+        private const int FlagWidth = 144;
+        private const int FlagHeight = 96;
+        private const int FlagSamples = 4;
+
+        private static readonly Dictionary<Language, Sprite> Flags = new Dictionary<Language, Sprite>(3);
+
+        /// <summary>
+        /// A small 3:2 flag for the language picker, painted from each flag's own geometry
+        /// with 4x4 supersampling so the diagonals and the crescent stay smooth.
+        /// </summary>
+        public static Sprite GetFlag(Language language)
+        {
+            if (Flags.TryGetValue(language, out Sprite cached) && cached != null)
+            {
+                return cached;
+            }
+
+            Texture2D texture = new Texture2D(FlagWidth, FlagHeight, TextureFormat.RGBA32, false)
+            {
+                name = "Flag_" + language,
+                filterMode = FilterMode.Bilinear,
+                wrapMode = TextureWrapMode.Clamp,
+                hideFlags = HideFlags.HideAndDontSave
+            };
+
+            Color32[] pixels = new Color32[FlagWidth * FlagHeight];
+            float step = 1f / (FlagHeight * FlagSamples);
+            const float Corner = 9f;
+
+            for (int y = 0; y < FlagHeight; y++)
+            {
+                for (int x = 0; x < FlagWidth; x++)
+                {
+                    Color sum = Color.clear;
+
+                    for (int sy = 0; sy < FlagSamples; sy++)
+                    {
+                        for (int sx = 0; sx < FlagSamples; sx++)
+                        {
+                            // Flag space: height 1, width 1.5, origin bottom-left.
+                            float fx = (x * FlagSamples + sx + 0.5f) * step;
+                            float fy = (y * FlagSamples + sy + 0.5f) * step;
+                            sum += FlagColor(language, fx, fy);
+                        }
+                    }
+
+                    Color colour = sum / (FlagSamples * FlagSamples);
+
+                    // Rounded corners, antialiased over one pixel.
+                    Vector2 local = new Vector2(x + 0.5f - FlagWidth * 0.5f, y + 0.5f - FlagHeight * 0.5f);
+                    float edge = Box(local, new Vector2(FlagWidth * 0.5f, FlagHeight * 0.5f), Corner);
+                    colour.a *= Mathf.Clamp01(0.5f - edge);
+
+                    pixels[y * FlagWidth + x] = colour;
+                }
+            }
+
+            texture.SetPixels32(pixels);
+            texture.Apply(false, true);
+
+            Sprite sprite = Sprite.Create(texture, new Rect(0f, 0f, FlagWidth, FlagHeight), new Vector2(0.5f, 0.5f), 100f);
+            sprite.name = "Flag_" + language;
+            sprite.hideFlags = HideFlags.HideAndDontSave;
+
+            Flags[language] = sprite;
+            return sprite;
+        }
+
+        private static Color FlagColor(Language language, float x, float y)
+        {
+            switch (language)
+            {
+                case Language.Turkish:
+                {
+                    Color red = new Color32(227, 10, 23, 255);
+
+                    // The official construction, in units of the flag's height: a crescent cut
+                    // from a 0.5 disc by a 0.4 disc set 0.0625 further out, and a star of
+                    // radius 0.125 whose nearest point sits 1/3 beyond the inner disc.
+                    Vector2 p = new Vector2(x, y);
+                    bool crescent = Circle(p - new Vector2(0.5f, 0.5f), 0.25f) < 0f
+                        && Circle(p - new Vector2(0.5625f, 0.5f), 0.2f) > 0f;
+
+                    Vector2 s = p - new Vector2(1.0208f, 0.5f);
+                    bool star = Star5(new Vector2(s.y, -s.x), 0.125f, 0.45f) < 0f;
+
+                    return crescent || star ? Color.white : red;
+                }
+
+                case Language.Russian:
+                {
+                    if (y > 2f / 3f)
+                    {
+                        return Color.white;
+                    }
+
+                    return y > 1f / 3f ? (Color)new Color32(0, 57, 166, 255) : new Color32(213, 43, 30, 255);
+                }
+
+                default:
+                {
+                    Color blue = new Color32(1, 33, 105, 255);
+                    Color red = new Color32(200, 16, 46, 255);
+
+                    // Union Flag geometry on its own 60x30 grid, stretched to fit 3:2.
+                    float gx = x / 1.5f * 60f;
+                    float gy = y * 30f;
+
+                    float cross = Mathf.Min(Mathf.Abs(gx - 30f), Mathf.Abs(gy - 15f));
+
+                    if (cross < 3f)
+                    {
+                        return red;
+                    }
+
+                    if (cross < 5f)
+                    {
+                        return Color.white;
+                    }
+
+                    float d1 = Mathf.Abs(30f * gx - 60f * gy) / 67.082f;
+                    float d2 = Mathf.Abs(30f * gx - 60f * (30f - gy)) / 67.082f;
+                    float diagonal = Mathf.Min(d1, d2);
+
+                    if (diagonal < 1.2f)
+                    {
+                        return red;
+                    }
+
+                    return diagonal < 3f ? Color.white : blue;
+                }
+            }
         }
 
         private static float Cross(Vector2 p, float reach, float thickness)

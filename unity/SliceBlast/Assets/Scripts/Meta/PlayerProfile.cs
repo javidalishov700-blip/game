@@ -37,6 +37,9 @@ namespace SliceBlast.Meta
         public bool hapticsOn = true;
         public bool adsRemoved;
 
+        /// <summary>The player's chosen Language, or -1 to follow the phone.</summary>
+        public int language = -1;
+
         public int[] upgradeLevels = new int[3];
         public List<string> ownedThemes = new List<string>();
         public string equippedTheme = string.Empty;
@@ -325,6 +328,17 @@ namespace SliceBlast.Meta
         public static void SetHaptics(bool on)
         {
             Data.hapticsOn = on;
+            _dirty = true;
+        }
+
+        public static void SetLanguage(int language)
+        {
+            if (Data.language == language)
+            {
+                return;
+            }
+
+            Data.language = language;
             _dirty = true;
         }
 

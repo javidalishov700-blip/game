@@ -286,7 +286,7 @@ namespace SliceBlast.UI
 
             Text title = UiKit.CreateText(_font, "ShopTitle", root, 84, FontStyle.Bold, Color.white, TextAnchor.UpperCenter);
             UiKit.Anchor(title.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0f, -178f), new Vector2(0f, -76f));
-            title.text = "WORKSHOP";
+            UiKit.Bind(title, "hud.workshop", 640f);
 
             MenuControl close = UiKit.CreateButton(_font, "Close", root, string.Empty, 0, new Color(1f, 1f, 1f, 0.14f), Color.white, IconShape.Close);
             RectTransform closeRect = close.Root;
@@ -336,14 +336,15 @@ namespace SliceBlast.UI
             layout.childForceExpandWidth = true;
             layout.childForceExpandHeight = true;
 
-            string[] labels = { "UPGRADES", "THEMES", "PROFILE", "DAILY" };
+            string[] labels = { "shop.tab.upgrades", "shop.tab.themes", "shop.tab.profile", "shop.tab.daily" };
             _tabs = new MenuControl[labels.Length];
 
             for (int i = 0; i < labels.Length; i++)
             {
                 // No icon: a glyph crowds a 30pt word in a quarter-width button, so tabs have
                 // never shown one.
-                MenuControl tab = UiKit.CreateButton(_font, "Tab" + i, strip, labels[i], 30, UiKit.Panel, Color.white, IconShape.None);
+                MenuControl tab = UiKit.CreateButton(_font, "Tab" + i, strip, "-", 30, UiKit.Panel, Color.white, IconShape.None);
+                UiKit.BindLabel(tab, labels[i], 200f);
 
                 // Equal widths whatever the word: nothing on a tab's root reports a size of its
                 // own, so the strip shares its width out by these weights alone — and the strip
@@ -441,11 +442,11 @@ namespace SliceBlast.UI
 
                 Text name = UiKit.CreateText(_font, "Name", card, 46, FontStyle.Bold, Color.white, TextAnchor.UpperLeft);
                 UiKit.Anchor(name.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(174f, -76f), new Vector2(-290f, -22f));
-                name.text = definition.Name;
+                UiKit.Bind(name, "upgrade." + definition.Key, 560f);
 
                 Text detail = UiKit.CreateText(_font, "Detail", card, 30, FontStyle.Normal, UiKit.Dim, TextAnchor.UpperLeft);
                 UiKit.Anchor(detail.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(174f, -116f), new Vector2(-290f, -80f));
-                detail.text = definition.Description;
+                UiKit.Bind(detail, "upgrade." + definition.Key + ".desc");
                 FitOneLine(detail, 22);
 
                 // What the next level actually buys, in numbers — "+30% → +40%" says more than
@@ -519,22 +520,24 @@ namespace SliceBlast.UI
             {
                 case UpgradeId.Magnet:
                 {
-                    string now = "+" + UpgradeCatalogue.MagnetWindowPercent(level) + "%";
-                    return maxed ? "WINDOW " + now + " · MAX" : "WINDOW " + now + " → +" + UpgradeCatalogue.MagnetWindowPercent(level + 1) + "%";
+                    int now = UpgradeCatalogue.MagnetWindowPercent(level);
+                    return maxed
+                        ? Loc.F("effect.magnet.max", now)
+                        : Loc.F("effect.magnet", now, UpgradeCatalogue.MagnetWindowPercent(level + 1));
                 }
 
                 case UpgradeId.Shield:
                 {
                     int now = UpgradeCatalogue.StartingShieldsAt(level);
                     int next = UpgradeCatalogue.StartingShieldsAt(level + 1);
-                    return maxed ? now + " SHIELDS · MAX" : now + " → " + next + (next == 1 ? " SHIELD" : " SHIELDS");
+                    return maxed ? Loc.F("effect.shield.max", now) : Loc.F(next == 1 ? "effect.shield.one" : "effect.shield", now, next);
                 }
 
                 default:
                 {
                     int now = UpgradeCatalogue.SpecialGapReductionAt(level);
                     int next = UpgradeCatalogue.SpecialGapReductionAt(level + 1);
-                    return maxed ? now + " BLOCKS SOONER · MAX" : now + " → " + next + " BLOCKS SOONER";
+                    return maxed ? Loc.F("effect.luck.max", now) : Loc.F("effect.luck", now, next);
                 }
             }
         }
@@ -584,7 +587,7 @@ namespace SliceBlast.UI
                     new Vector2(1f, 1f),
                     new Vector2(8f, -12f - PreviewHeight - 52f),
                     new Vector2(-8f, -12f - PreviewHeight - 8f));
-                entry.Name.text = theme.Name;
+                UiKit.Bind(entry.Name, "theme." + theme.Id);
                 FitOneLine(entry.Name, 22);
 
                 entry.Button = CreatePriceButton("Action", tile, 30, 32f);
@@ -701,7 +704,8 @@ namespace SliceBlast.UI
 
             Text caption = UiKit.CreateText(_font, "RankCaption", rank, 26, FontStyle.Bold, UiKit.Dim, TextAnchor.UpperLeft);
             UiKit.Anchor(caption.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(222f, -62f), new Vector2(-28f, -28f));
-            caption.text = "BUILDER RANK";
+            UiKit.Bind(caption, "shop.rank_caption");
+            FitOneLine(caption, 18);
 
             _rankTitle = UiKit.CreateText(_font, "RankTitle", rank, 56, FontStyle.Bold, UiKit.Gold, TextAnchor.UpperLeft);
             UiKit.Anchor(_rankTitle.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(222f, -128f), new Vector2(-28f, -62f));
@@ -729,7 +733,7 @@ namespace SliceBlast.UI
 
             top += RankCardHeight + CardGap;
 
-            string[] labels = { "BEST SCORE", "RUNS PLAYED", "BLASTS", "BIGGEST BLAST", "DAY STREAK", "COLLECTION" };
+            string[] labels = { "stat.best", "stat.runs", "stat.blasts", "stat.biggest", "stat.streak", "stat.collection" };
             IconShape[] icons = { IconShape.Target, IconShape.Replay, IconShape.Burst, IconShape.Bolt, IconShape.Flame, IconShape.Bag };
             Color[] colours = { UiKit.Gold, UiKit.Mint, Coral, Sky, Ember, Violet };
 
@@ -756,8 +760,8 @@ namespace SliceBlast.UI
 
                 Text label = UiKit.CreateText(_font, "Label", rect, 24, FontStyle.Bold, UiKit.Dim, TextAnchor.UpperLeft);
                 UiKit.Anchor(label.rectTransform, new Vector2(0f, 0.5f), new Vector2(1f, 0.5f), new Vector2(124f, -44f), new Vector2(-16f, -8f));
-                label.text = labels[i];
                 FitOneLine(label, 18);
+                UiKit.Bind(label, labels[i]);
 
                 _stats[i] = value;
             }
@@ -778,6 +782,7 @@ namespace SliceBlast.UI
 
             _resetLabel = UiKit.CreateText(_font, "Reset", scroll, 30, FontStyle.Bold, UiKit.Dim, TextAnchor.MiddleCenter);
             UiKit.Anchor(_resetLabel.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(PageInset, -top - 48f), new Vector2(-PageInset, -top));
+            FitOneLine(_resetLabel, 22);
             top += 60f;
 
             _missionRows = new MissionRow[MissionSystem.DailyCount];
@@ -865,7 +870,7 @@ namespace SliceBlast.UI
         {
             BuildCoinPacks(root);
 
-            _removeAds = UiKit.CreateButton(_font, "RemoveAds", root, "REMOVE ADS", 46, UiKit.Panel, Color.white, IconShape.Bag);
+            _removeAds = UiKit.CreateButton(_font, "RemoveAds", root, "-", 46, UiKit.Panel, Color.white, IconShape.Bag);
             RectTransform adsRect = _removeAds.Root;
             adsRect.anchorMin = new Vector2(0f, 0f);
             adsRect.anchorMax = new Vector2(1f, 0f);
@@ -874,7 +879,8 @@ namespace SliceBlast.UI
             adsRect.offsetMax = new Vector2(-40f, 226f);
             _removeAds.Button.onClick.AddListener(() => RemoveAdsRequested?.Invoke());
 
-            _restore = UiKit.CreateButton(_font, "Restore", root, "RESTORE PURCHASES", 32, new Color(1f, 1f, 1f, 0.08f), UiKit.Dim, IconShape.None);
+            _restore = UiKit.CreateButton(_font, "Restore", root, "-", 32, new Color(1f, 1f, 1f, 0.08f), UiKit.Dim, IconShape.None);
+            UiKit.BindLabel(_restore, "shop.restore", 860f);
             RectTransform restoreRect = _restore.Root;
             restoreRect.anchorMin = new Vector2(0f, 0f);
             restoreRect.anchorMax = new Vector2(1f, 0f);
@@ -921,7 +927,7 @@ namespace SliceBlast.UI
 
                 Text price = UiKit.CreateText(_font, "PackPrice" + i, rect, 30, FontStyle.Bold, UiKit.Gold, TextAnchor.LowerCenter);
                 UiKit.Anchor(price.rectTransform, new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(0f, 10f), new Vector2(0f, 46f));
-                price.text = "COINS";
+                UiKit.Bind(price, "shop.coins", 200f);
                 _coinPackLabels[i] = price;
 
                 string id = CoinPackIds[i];
@@ -1090,11 +1096,7 @@ namespace SliceBlast.UI
         /// <summary>Shrinks a label to stay on one line rather than wrapping or running under a button.</summary>
         private static void FitOneLine(Text text, int minSize)
         {
-            text.horizontalOverflow = HorizontalWrapMode.Wrap;
-            text.verticalOverflow = VerticalWrapMode.Truncate;
-            text.resizeTextForBestFit = true;
-            text.resizeTextMinSize = minSize;
-            text.resizeTextMaxSize = text.fontSize;
+            UiKit.FitOneLine(text, minSize);
         }
 
         private static void Place(RectTransform rect, Vector2 anchor, Vector2 size, Vector2 offset)
@@ -1326,7 +1328,7 @@ namespace SliceBlast.UI
             int streak = PlayerProfile.Data.dailyStreak;
             bool showStreak = streak > 1;
             SetActive(_streakChip.gameObject, showStreak);
-            _streakLabel.text = "STREAK " + streak.ToString(CultureInfo.InvariantCulture);
+            UiKit.SetText(_streakLabel, Loc.F("shop.streak", streak), 38, 220f);
             _coinChip.anchoredPosition = new Vector2(showStreak ? -ChipOffset : 0f, ChipY);
             _streakChip.anchoredPosition = new Vector2(ChipOffset, ChipY);
 
@@ -1353,7 +1355,7 @@ namespace SliceBlast.UI
 
                 if (_removeAds.Label != null)
                 {
-                    _removeAds.Label.text = removed ? "ADS REMOVED" : "REMOVE ADS";
+                    UiKit.SetText(_removeAds.Label, Loc.T(removed ? "shop.ads_removed" : "shop.remove_ads"), 46, 820f);
                     UiKit.SetLabelColor(_removeAds.Label, removed ? UiKit.Mint : Color.white);
                 }
             }
@@ -1381,7 +1383,7 @@ namespace SliceBlast.UI
                 // foreground as well as background.
                 if (maxed)
                 {
-                    StylePrice(row.Buy, "MAX", false, MutedFill, UiKit.Gold, UiKit.Gold, false);
+                    StylePrice(row.Buy, Loc.T("shop.max"), false, MutedFill, UiKit.Gold, UiKit.Gold, false);
                 }
                 else if (affordable)
                 {
@@ -1414,11 +1416,11 @@ namespace SliceBlast.UI
 
                 if (active)
                 {
-                    StylePrice(tile.Button, "ACTIVE", false, MutedFill, UiKit.Mint, UiKit.Mint, false);
+                    StylePrice(tile.Button, Loc.T("shop.active"), false, MutedFill, UiKit.Mint, UiKit.Mint, false);
                 }
                 else if (owned)
                 {
-                    StylePrice(tile.Button, "EQUIP", false, UiKit.Mint, UiKit.Ink, UiKit.Ink, true);
+                    StylePrice(tile.Button, Loc.T("shop.equip"), false, UiKit.Mint, UiKit.Ink, UiKit.Ink, true);
                 }
                 else if (affordable)
                 {
@@ -1449,16 +1451,16 @@ namespace SliceBlast.UI
             if (PlayerRanks.IsHighest(rank))
             {
                 ratio = 1f;
-                _rankNext.text = "HIGHEST RANK REACHED";
-                _rankProgress.text = Format(lifetime) + " LIFETIME POINTS";
+                _rankNext.text = Loc.T("shop.rank_top");
+                _rankProgress.text = Loc.F("shop.points_total", Format(lifetime));
             }
             else
             {
                 long from = PlayerRanks.Threshold(rank);
                 long to = PlayerRanks.Threshold(rank + 1);
                 ratio = to > from ? Mathf.Clamp01((float)(lifetime - from) / (to - from)) : 1f;
-                _rankNext.text = "NEXT: " + PlayerRanks.Name(rank + 1);
-                _rankProgress.text = Format(lifetime) + " / " + Format(to) + " POINTS";
+                _rankNext.text = Loc.F("shop.rank_next", PlayerRanks.Name(rank + 1));
+                _rankProgress.text = Loc.F("shop.points_of", Format(lifetime), Format(to));
             }
 
             _rankFill.rectTransform.anchorMax = new Vector2(ratio, 1f);
@@ -1523,8 +1525,8 @@ namespace SliceBlast.UI
                 row.Badge.Glow.color = new Color(colour.r, colour.g, colour.b, 0.35f);
                 row.Badge.Glyph.sprite = IconFactory.GetSprite(MissionIcon(definition.Kind));
 
-                row.Label.text = definition.Text;
-                row.Progress.text = claimed ? "CLAIMED" : Format(progress) + " / " + Format(definition.Target);
+                row.Label.text = MissionSystem.Describe(definition);
+                row.Progress.text = claimed ? Loc.T("shop.claimed") : Format(progress) + " / " + Format(definition.Target);
 
                 float ratio = definition.Target > 0
                     ? Mathf.Clamp01(progress / (float)definition.Target)
@@ -1537,7 +1539,7 @@ namespace SliceBlast.UI
 
                 if (claimed)
                 {
-                    StylePrice(row.Claim, "DONE", false, MutedFill, MutedText, MutedText, false);
+                    StylePrice(row.Claim, Loc.T("shop.done"), false, MutedFill, MutedText, MutedText, false);
                 }
                 else if (complete)
                 {
@@ -1563,8 +1565,7 @@ namespace SliceBlast.UI
             int hours = Mathf.Max(0, (int)left.TotalHours);
             int minutes = Mathf.Max(0, left.Minutes);
 
-            _resetLabel.text = "NEW MISSIONS IN " + hours.ToString(CultureInfo.InvariantCulture) + "H "
-                               + minutes.ToString("00", CultureInfo.InvariantCulture) + "M";
+            _resetLabel.text = Loc.F("shop.reset", hours, minutes.ToString("00", CultureInfo.InvariantCulture));
         }
 
         // ---- Animation ---------------------------------------------------------------------

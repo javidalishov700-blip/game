@@ -319,6 +319,30 @@ namespace SliceBlast.Bootstrap
             _settings.Closed += OnSettingsClosed;
             _settings.SoundToggled += OnSoundToggled;
             _settings.HapticsToggled += OnHapticsToggled;
+
+            Loc.Changed += OnLanguageChanged;
+        }
+
+        /// <summary>
+        /// Static labels rewrite themselves (UiKit.Bind); this covers the ones whose words also
+        /// depend on state — toggles, prices, mission progress — by re-running their refreshes.
+        /// </summary>
+        private void OnLanguageChanged()
+        {
+            if (_hud != null)
+            {
+                _hud.RefreshLanguage();
+            }
+
+            if (_shop != null)
+            {
+                _shop.Refresh();
+            }
+
+            if (_settings != null)
+            {
+                _settings.Refresh();
+            }
         }
 
         private void OnStorePurchaseFinished(bool succeeded)
@@ -478,6 +502,8 @@ namespace SliceBlast.Bootstrap
                 _shop.RestoreRequested -= OnRestoreRequested;
                 _shop.CoinPackRequested -= OnCoinPackRequested;
             }
+
+            Loc.Changed -= OnLanguageChanged;
 
             if (_settings != null)
             {
@@ -698,7 +724,7 @@ namespace SliceBlast.Bootstrap
             _hud.ShowRunChrome(true);
             _hud.HideGameOver();
             _hud.ShowPaused(false);
-            _hud.SetHintText("TAP TO DROP");
+            _hud.SetHintText(Loc.T("hud.tap_to_drop"));
             _hud.ShowHint(true);
 
             // Zero on a fresh run; a run resumed after the app was closed goes straight back
@@ -733,7 +759,7 @@ namespace SliceBlast.Bootstrap
                     if (_flow != null && _flow.BlastCount == 0)
                     {
                         int remaining = Mathf.Max(0, _flow.BlastStreakRequirement - placement.Streak);
-                        _hud.SetHintText(remaining > 0 ? remaining + " MORE FOR BLAST" : "BLAST!");
+                        _hud.SetHintText(remaining > 0 ? Loc.F("hud.more_for_blast", remaining) : Loc.T("hud.blast"));
                         _hud.ShowHint(true);
                     }
 
@@ -754,7 +780,7 @@ namespace SliceBlast.Bootstrap
                     // Say what was lost. A special that vanishes without a word reads as a
                     // bug rather than as the player's mistake.
                     PlayLostVoice(placement.Type);
-                    _hud.ShowBanner("MISSED!", definition.Label + " LOST", MissRed);
+                    _hud.ShowBanner(Loc.T("hud.missed"), Loc.F("hud.lost", Loc.T("block." + placement.Type)), MissRed);
                     EmitSparks(placement.Position, placement.Color, 5.5f, 0.11f);
                     EmitShockwave(placement.Position, placement.Color);
                     break;
@@ -818,7 +844,7 @@ namespace SliceBlast.Bootstrap
 
             // Spelled out rather than left as a bare multiplier — a 3/5/7/9 escalation reads
             // as a score bonus until it says "block" somewhere.
-            string headline = blast.FromNeon ? "NEON BLAST" : blast.Layers + " BLOCK BLAST";
+            string headline = blast.FromNeon ? Loc.T("hud.neon_blast") : Loc.F("hud.block_blast", blast.Layers);
             string detail = "+" + blast.Bonus;
 
             _hud.ShowBanner(headline, detail, blast.Color);
@@ -970,7 +996,7 @@ namespace SliceBlast.Bootstrap
                     _gameOver = false;
                     _hud.HideGameOver();
                     _hud.ShowRunChrome(true);
-                    _hud.SetHintText("TAP TO DROP");
+                    _hud.SetHintText(Loc.T("hud.tap_to_drop"));
                     _hud.ShowHint(true);
                 },
                 onUnavailable: () => _hud.SetContinueAvailable(false));

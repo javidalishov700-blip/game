@@ -6,6 +6,8 @@
 // they forward here rather than duplicating the bodies, which is why adding a control style
 // only ever has to happen once.
 using System;
+using System.Collections.Generic;
+using SliceBlast.Meta;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
@@ -250,6 +252,114 @@ namespace SliceBlast.UI
             button.onClick.AddListener(Deselect);
 
             return control;
+        }
+
+        // ---- Words --------------------------------------------------------------------
+
+        private struct Binding
+        {
+            public Text Text;
+            public string Key;
+            public int Size;
+            public float MaxWidth;
+        }
+
+        private static readonly List<Binding> Bindings = new List<Binding>(64);
+        private static bool _listening;
+
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        private static void ResetStatics()
+        {
+            Bindings.Clear();
+            _listening = false;
+        }
+
+        /// <summary>
+        /// Gives a label the word for <paramref name="key"/> and rewrites it whenever the player
+        /// changes language — so a static label is written once, in one place, and never has to
+        /// be remembered again by a Refresh method. A positive <paramref name="maxWidth"/> keeps
+        /// the word inside the space the layout was drawn for: Russian runs half again as long
+        /// as English, and a label that spills past its button reads as broken.
+        /// </summary>
+        public static void Bind(Text text, string key, float maxWidth = 0f)
+        {
+            if (text == null)
+            {
+                return;
+            }
+
+            Binding binding = new Binding { Text = text, Key = key, Size = text.fontSize, MaxWidth = maxWidth };
+            Bindings.Add(binding);
+            SetText(text, Loc.T(key), binding.Size, maxWidth);
+
+            if (!_listening)
+            {
+                _listening = true;
+                Loc.Changed += Relabel;
+            }
+        }
+
+        public static void BindLabel(MenuControl control, string key, float maxWidth = 0f)
+        {
+            if (control != null)
+            {
+                Bind(control.Label, key, maxWidth);
+            }
+        }
+
+        private static void Relabel()
+        {
+            for (int i = Bindings.Count - 1; i >= 0; i--)
+            {
+                Binding binding = Bindings[i];
+
+                if (binding.Text == null)
+                {
+                    Bindings.RemoveAt(i);
+                    continue;
+                }
+
+                SetText(binding.Text, Loc.T(binding.Key), binding.Size, binding.MaxWidth);
+            }
+        }
+
+        /// <summary>Writes a label at its design size, then steps it down until it fits.</summary>
+        public static void SetText(Text text, string value, int size, float maxWidth)
+        {
+            if (text == null)
+            {
+                return;
+            }
+
+            text.text = value;
+            text.fontSize = size;
+
+            if (maxWidth <= 0f || string.IsNullOrEmpty(value))
+            {
+                return;
+            }
+
+            int floor = Mathf.Max(14, Mathf.RoundToInt(size * 0.55f));
+
+            while (text.fontSize > floor && text.preferredWidth > maxWidth)
+            {
+                text.fontSize = Mathf.Max(floor, text.fontSize - 2);
+            }
+        }
+
+        /// <summary>Shrinks a label to stay on one line rather than wrapping or running under a button.</summary>
+        public static void FitOneLine(Text text, int minSize)
+        {
+            if (text == null)
+            {
+                return;
+            }
+
+            text.horizontalOverflow = HorizontalWrapMode.Wrap;
+            text.verticalOverflow = VerticalWrapMode.Truncate;
+            text.resizeTextForBestFit = true;
+            text.resizeTextMinSize = minSize;
+            text.resizeTextMaxSize = text.fontSize;
         }
 
         public static void Anchor(RectTransform rect, Vector2 anchorMin, Vector2 anchorMax, Vector2 offsetMin, Vector2 offsetMax)

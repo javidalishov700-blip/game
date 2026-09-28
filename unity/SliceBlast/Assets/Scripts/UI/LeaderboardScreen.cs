@@ -7,6 +7,7 @@
 // first open, and rewritten in place after that.
 using System;
 using System.Globalization;
+using SliceBlast.Meta;
 using SliceBlast.Platform;
 using UnityEngine;
 using UnityEngine.UI;
@@ -107,11 +108,11 @@ namespace SliceBlast.UI
         {
             Text title = UiKit.CreateText(_font, "BoardTitle", root, 88, FontStyle.Bold, Color.white, TextAnchor.UpperCenter);
             UiKit.Anchor(title.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0f, -190f), new Vector2(0f, -80f));
-            title.text = "TOP 99";
+            UiKit.Bind(title, "board.title", 640f);
 
             Text subtitle = UiKit.CreateText(_font, "BoardSubtitle", root, 36, FontStyle.Bold, UiKit.Gold, TextAnchor.UpperCenter);
             UiKit.Anchor(subtitle.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0f, -250f), new Vector2(0f, -200f));
-            subtitle.text = "ALL-TIME BEST SCORES";
+            UiKit.Bind(subtitle, "board.subtitle", 900f);
 
             MenuControl close = UiKit.CreateButton(_font, "Close", root, string.Empty, 0, new Color(1f, 1f, 1f, 0.14f), Color.white, IconShape.Close);
             RectTransform closeRect = close.Root;
@@ -172,7 +173,7 @@ namespace SliceBlast.UI
         {
             _youCaption = UiKit.CreateText(_font, "YouCaption", root, 32, FontStyle.Bold, UiKit.Mint, TextAnchor.LowerLeft);
             UiKit.Anchor(_youCaption.rectTransform, new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(64f, 214f), new Vector2(-40f, 256f));
-            _youCaption.text = "YOUR RANK";
+            UiKit.Bind(_youCaption, "board.your_rank");
 
             _you = CreateRow(root, "You");
             _you.Root.anchorMin = new Vector2(0f, 0f);
@@ -279,7 +280,7 @@ namespace SliceBlast.UI
             // one; the status line only covers an empty board.
             if (!_rows[0].Root.gameObject.activeSelf)
             {
-                ShowStatus("LOADING…");
+                ShowStatus(Loc.T("board.loading"));
             }
 
             return _token;
@@ -297,7 +298,7 @@ namespace SliceBlast.UI
             if (page == null)
             {
                 ClearRows();
-                ShowStatus("COULDN'T REACH GAME CENTER.\nTRY AGAIN IN A MOMENT.");
+                ShowStatus(Loc.T("board.error"));
                 return;
             }
 
@@ -321,7 +322,7 @@ namespace SliceBlast.UI
 
             if (shown == 0)
             {
-                ShowStatus("NO SCORES YET.\nPLAY A RUN AND TAKE FIRST PLACE.");
+                ShowStatus(Loc.T("board.empty"));
             }
             else
             {
@@ -401,7 +402,7 @@ namespace SliceBlast.UI
         {
             if (string.IsNullOrEmpty(name))
             {
-                return "PLAYER";
+                return Loc.T("board.player");
             }
 
             return name.Length <= MaxNameLength ? name : name.Substring(0, MaxNameLength - 1) + "…";

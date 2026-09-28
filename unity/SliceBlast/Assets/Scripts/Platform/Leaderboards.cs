@@ -8,6 +8,7 @@
 // succeeded: an unauthenticated report is dropped, and a load answers null.
 using System;
 using System.Collections.Generic;
+using SliceBlast.Meta;
 using UnityEngine;
 using UnityEngine.SocialPlatforms;
 
@@ -161,7 +162,7 @@ namespace SliceBlast.Platform
 
             ILocalUser local = UnityEngine.Social.localUser;
             string localId = local != null ? local.id : null;
-            string localName = local != null && !string.IsNullOrEmpty(local.userName) ? local.userName : "YOU";
+            string localName = local != null && !string.IsNullOrEmpty(local.userName) ? local.userName : Loc.T("board.you");
 
             LeaderboardEntry[] top = new LeaderboardEntry[scores.Length];
 
@@ -173,7 +174,7 @@ namespace SliceBlast.Platform
                 top[i] = new LeaderboardEntry
                 {
                     Rank = score.rank > 0 ? score.rank : i + 1,
-                    Name = isLocal ? localName : names.TryGetValue(score.userID ?? string.Empty, out string name) ? name : "PLAYER",
+                    Name = isLocal ? localName : names.TryGetValue(score.userID ?? string.Empty, out string name) ? name : Loc.T("board.player"),
                     Score = score.value,
                     IsLocalPlayer = isLocal
                 };

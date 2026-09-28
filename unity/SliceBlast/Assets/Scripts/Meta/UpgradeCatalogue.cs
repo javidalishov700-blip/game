@@ -12,8 +12,9 @@ namespace SliceBlast.Meta
     public struct UpgradeDefinition
     {
         public UpgradeId Id;
-        public string Name;
-        public string Description;
+
+        /// <summary>Stem of the Loc keys for this track's name ("upgrade.KEY") and blurb ("upgrade.KEY.desc").</summary>
+        public string Key;
         public int MaxLevel;
     }
 
@@ -24,22 +25,19 @@ namespace SliceBlast.Meta
             new UpgradeDefinition
             {
                 Id = UpgradeId.Magnet,
-                Name = "MAGNET",
-                Description = "Wider perfect window",
+                Key = "magnet",
                 MaxLevel = 7
             },
             new UpgradeDefinition
             {
                 Id = UpgradeId.Shield,
-                Name = "ARMOUR",
-                Description = "Start every run shielded",
+                Key = "shield",
                 MaxLevel = 3
             },
             new UpgradeDefinition
             {
                 Id = UpgradeId.Luck,
-                Name = "FORTUNE",
-                Description = "Specials arrive sooner",
+                Key = "luck",
                 MaxLevel = 4
             }
         };

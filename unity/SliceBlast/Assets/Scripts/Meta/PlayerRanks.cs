@@ -39,7 +39,7 @@ namespace SliceBlast.Meta
 
         public static string Name(int index)
         {
-            return Names[Mathf.Clamp(index, 0, Names.Length - 1)];
+            return Loc.T("rank." + Mathf.Clamp(index, 0, Names.Length - 1));
         }
 
         public static long Threshold(int index)

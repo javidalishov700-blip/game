@@ -4,6 +4,7 @@
 #if UNITY_IOS
 using System;
 using System.IO;
+using System.Text;
 using UnityEditor;
 using UnityEditor.Callbacks;
 using UnityEditor.iOS.Xcode;
@@ -52,6 +53,7 @@ namespace SliceBlast.EditorTools
 
             StampInfoPlist(builtPath);
             WriteAppIcon(builtPath);
+            WriteLocalizations(builtPath);
         }
 
         private static void StampInfoPlist(string builtPath)
@@ -84,12 +86,88 @@ namespace SliceBlast.EditorTools
                 string build = ((int)(DateTime.UtcNow - new DateTime(2024, 1, 1)).TotalMinutes).ToString();
                 plist.root.SetString("CFBundleVersion", build);
 
+                // The languages the game itself speaks (Meta/Loc.cs). Without this the App
+                // Store lists the app as English-only and iOS treats it as such.
+                PlistElementArray languages = plist.root.CreateArray("CFBundleLocalizations");
+
+                foreach (Localization localization in Localizations)
+                {
+                    languages.AddString(localization.Code);
+                }
+
                 plist.WriteToFile(plistPath);
                 Debug.Log("[SliceBlast] CFBundleVersion set to " + build);
             }
             catch (Exception exception)
             {
                 Debug.LogWarning($"[SliceBlast] Info.plist stamp skipped: {exception.Message}");
+            }
+        }
+
+        private struct Localization
+        {
+            public string Code;
+            public string Tracking;
+        }
+
+        // The App Tracking Transparency prompt is a system alert, so it is the one piece of
+        // text the game cannot translate itself — iOS reads it from each language's
+        // InfoPlist.strings. English matches GoogleMobileAdsSettings.asset.
+        private static readonly Localization[] Localizations =
+        {
+            new Localization
+            {
+                Code = "en",
+                Tracking = "Slice Blast uses this to show ads that are more relevant to you. Ads still show if you decline."
+            },
+            new Localization
+            {
+                Code = "tr",
+                Tracking = "Slice Blast bunu sana daha uygun reklamlar göstermek için kullanır. Reddetsen de reklamlar gösterilir."
+            },
+            new Localization
+            {
+                Code = "ru",
+                Tracking = "Slice Blast использует это, чтобы показывать более подходящую вам рекламу. Реклама будет показываться, даже если вы откажетесь."
+            }
+        };
+
+        /// <summary>
+        /// Writes an InfoPlist.strings per language and adds each .lproj folder to the app's
+        /// resources, so the tracking prompt appears in the player's own language.
+        /// </summary>
+        private static void WriteLocalizations(string builtPath)
+        {
+            try
+            {
+                string pbxPath = PBXProject.GetPBXProjectPath(builtPath);
+                PBXProject project = new PBXProject();
+                project.ReadFromFile(pbxPath);
+                string targetGuid = project.GetUnityMainTargetGuid();
+
+                foreach (Localization localization in Localizations)
+                {
+                    string relative = "Unity-iPhone/" + localization.Code + ".lproj";
+                    string folder = Path.Combine(builtPath, relative);
+                    Directory.CreateDirectory(folder);
+
+                    string tracking = localization.Tracking.Replace("\\", "\\\\").Replace("\"", "\\\"");
+                    string strings = "\"NSUserTrackingUsageDescription\" = \"" + tracking + "\";\n";
+                    File.WriteAllText(Path.Combine(folder, "InfoPlist.strings"), strings, new UTF8Encoding(false));
+
+                    if (!project.ContainsFileByProjectPath(relative))
+                    {
+                        string guid = project.AddFolderReference(relative, relative);
+                        project.AddFileToBuild(targetGuid, guid);
+                    }
+                }
+
+                project.WriteToFile(pbxPath);
+                Debug.Log("[SliceBlast] Localizations written: en, tr, ru");
+            }
+            catch (Exception exception)
+            {
+                Debug.LogWarning($"[SliceBlast] Localization injection skipped: {exception.Message}");
             }
         }
 

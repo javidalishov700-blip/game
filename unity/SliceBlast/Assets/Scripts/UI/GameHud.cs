@@ -1,4 +1,5 @@
 using System;
+using SliceBlast.Meta;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -164,7 +165,7 @@ namespace SliceBlast.UI
 
             _hint = CreateText("Hint", _safeArea, 52, FontStyle.Bold, new Color(1f, 1f, 1f, 0.85f), TextAnchor.LowerCenter);
             Anchor(_hint.rectTransform, new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(0f, 150f), new Vector2(0f, 250f));
-            _hint.text = "TAP TO DROP";
+            _hint.text = Loc.T("hud.tap_to_drop");
             SetAlpha(_hint, 0f);
 
             BuildStatusBadges();
@@ -279,21 +280,24 @@ namespace SliceBlast.UI
 
             Text title = CreateText("Title", content, 96, FontStyle.Bold, Color.white, TextAnchor.MiddleCenter);
             Anchor(title.rectTransform, new Vector2(0f, 0.5f), new Vector2(1f, 0.5f), new Vector2(0f, 420f), new Vector2(0f, 560f));
-            title.text = "PAUSED";
+            UiKit.Bind(title, "hud.paused", 980f);
 
-            MenuControl resume = CreateButton("Resume", content, "RESUME", 58, Mint, Ink, IconShape.Play);
+            MenuControl resume = CreateButton("Resume", content, "-", 58, Mint, Ink, IconShape.Play);
             PlaceMenuButton(resume, 240f);
+            UiKit.BindLabel(resume, "hud.resume", MenuLabelWidth);
             resume.Button.onClick.AddListener(() => PauseToggled?.Invoke());
 
-            MenuControl restart = CreateButton("Restart", content, "REPLAY", 58, Panel, Color.white, IconShape.Replay);
+            MenuControl restart = CreateButton("Restart", content, "-", 58, Panel, Color.white, IconShape.Replay);
             PlaceMenuButton(restart, 80f);
+            UiKit.BindLabel(restart, "hud.replay", MenuLabelWidth);
             restart.Button.onClick.AddListener(() => RestartRequested?.Invoke());
 
-            MenuControl home = CreateButton("Home", content, "HOME", 58, Panel, Color.white, IconShape.Home);
+            MenuControl home = CreateButton("Home", content, "-", 58, Panel, Color.white, IconShape.Home);
             PlaceMenuButton(home, -80f);
+            UiKit.BindLabel(home, "hud.home", MenuLabelWidth);
             home.Button.onClick.AddListener(() => HomeRequested?.Invoke());
 
-            MenuControl sound = CreateButton("Sound", content, "SOUND", 52, Panel, Color.white, IconShape.SoundOn);
+            MenuControl sound = CreateButton("Sound", content, "-", ToggleLabelSize, Panel, Color.white, IconShape.SoundOn);
             PlaceMenuButton(sound, -240f);
             _soundLabel = sound.Label;
             _soundIcon = sound.Icon;
@@ -303,7 +307,7 @@ namespace SliceBlast.UI
                 SoundToggled?.Invoke(_soundOn);
             });
 
-            MenuControl haptics = CreateButton("Haptics", content, "VIBRATION", 52, Panel, Color.white, IconShape.VibrateOn);
+            MenuControl haptics = CreateButton("Haptics", content, "-", ToggleLabelSize, Panel, Color.white, IconShape.VibrateOn);
             PlaceMenuButton(haptics, -400f);
             _hapticsLabel = haptics.Label;
             _hapticsIcon = haptics.Icon;
@@ -322,7 +326,7 @@ namespace SliceBlast.UI
             // change their ad-privacy decision; everywhere else there is nothing behind it.
             Text privacy = CreateText("Privacy", content, 36, FontStyle.Bold, new Color(1f, 1f, 1f, 0.7f), TextAnchor.MiddleCenter);
             Anchor(privacy.rectTransform, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(-280f, 50f), new Vector2(280f, 140f));
-            privacy.text = "PRIVACY CHOICES";
+            UiKit.Bind(privacy, "hud.privacy_choices", 540f);
             privacy.raycastTarget = true;
             Button privacyButton = privacy.gameObject.AddComponent<Button>();
             privacyButton.targetGraphic = privacy;
@@ -372,7 +376,7 @@ namespace SliceBlast.UI
 
             _homeStart = CreateText("TapToStart", content, 66, FontStyle.Bold, Color.white, TextAnchor.MiddleCenter);
             Anchor(_homeStart.rectTransform, new Vector2(0f, 0.5f), new Vector2(1f, 0.5f), new Vector2(0f, -330f), new Vector2(0f, -230f));
-            _homeStart.text = "TAP TO START";
+            UiKit.Bind(_homeStart, "hud.tap_to_start", 980f);
 
             Image crown = CreateImage("HomeCrown", content, Gold);
             crown.sprite = IconFactory.GetSprite(IconShape.Target);
@@ -406,7 +410,8 @@ namespace SliceBlast.UI
 
             // Widened from a 3-word-tight 420 and dropped a size: at 50pt "WORKSHOP" ran past
             // its own label region and looked cramped against the icon.
-            MenuControl shop = CreateButton("HomeShop", content, "WORKSHOP", 42, Panel, Color.white, IconShape.Bag);
+            MenuControl shop = CreateButton("HomeShop", content, "-", 42, Panel, Color.white, IconShape.Bag);
+            UiKit.BindLabel(shop, "hud.workshop", 330f);
             RectTransform shopRect = shop.Root;
             shopRect.anchorMin = new Vector2(0.5f, 0f);
             shopRect.anchorMax = new Vector2(0.5f, 0f);
@@ -473,8 +478,8 @@ namespace SliceBlast.UI
             // and an empty gold dot on the first frames reads as a rendering fault.
             _homeShopBadgeDot.gameObject.SetActive(false);
 
-            CreateLink("Privacy", content, "PRIVACY POLICY", -175f, PrivacyUrl);
-            CreateLink("Terms", content, "TERMS OF USE", 175f, TermsUrl);
+            CreateLink("Privacy", content, "legal.privacy", -175f, PrivacyUrl);
+            CreateLink("Terms", content, "legal.terms", 175f, TermsUrl);
 
             _titleSliceRest = _titleSlice.anchoredPosition;
             _titleBlastRest = _titleBlast.anchoredPosition;
@@ -485,7 +490,7 @@ namespace SliceBlast.UI
         /// transparent image sized well past the words, so it is comfortable on a phone
         /// without the link itself shouting.
         /// </summary>
-        private void CreateLink(string name, Transform parent, string label, float x, string url)
+        private void CreateLink(string name, Transform parent, string key, float x, string url)
         {
             RectTransform rect = CreateChild(name, parent);
             rect.anchorMin = new Vector2(0.5f, 0f);
@@ -513,7 +518,7 @@ namespace SliceBlast.UI
             text.rectTransform.pivot = rect.pivot;
             text.rectTransform.sizeDelta = rect.sizeDelta;
             text.rectTransform.anchoredPosition = rect.anchoredPosition;
-            text.text = label;
+            UiKit.Bind(text, key, 320f);
         }
 
         private static void PlaceHomeToggle(MenuControl control, float x)
@@ -555,7 +560,7 @@ namespace SliceBlast.UI
 
             Text title = CreateText("Title", content, 80, FontStyle.Bold, new Color(1f, 1f, 1f, 0.75f), TextAnchor.UpperCenter);
             Anchor(title.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0f, -360f), new Vector2(0f, -260f));
-            title.text = "RUN OVER";
+            UiKit.Bind(title, "hud.run_over", 900f);
 
             _finalScore = CreateText("FinalScore", content, 210, FontStyle.Bold, Color.white, TextAnchor.UpperCenter);
             Anchor(_finalScore.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0f, -620f), new Vector2(0f, -370f));
@@ -572,7 +577,8 @@ namespace SliceBlast.UI
             _bestScore = CreateText("BestScore", content, 54, FontStyle.Bold, Gold, TextAnchor.MiddleCenter);
             Anchor(_bestScore.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(40f, -700f), new Vector2(0f, -630f));
 
-            MenuControl again = CreateButton("PlayAgain", content, "PLAY AGAIN", 60, Mint, Ink, IconShape.Replay);
+            MenuControl again = CreateButton("PlayAgain", content, "-", 60, Mint, Ink, IconShape.Replay);
+            UiKit.BindLabel(again, "hud.play_again", MenuLabelWidth);
             RectTransform againRect = again.Root;
             againRect.anchorMin = new Vector2(0.5f, 0f);
             againRect.anchorMax = new Vector2(0.5f, 0f);
@@ -583,7 +589,8 @@ namespace SliceBlast.UI
 
             // Hidden until an ad is actually loaded and ready — never a button that promises
             // a reward it cannot deliver.
-            _continueButton = CreateButton("Continue", content, "CONTINUE", 50, new Color(1f, 1f, 1f, 0.1f), Gold, IconShape.Bolt);
+            _continueButton = CreateButton("Continue", content, "-", 50, new Color(1f, 1f, 1f, 0.1f), Gold, IconShape.Bolt);
+            UiKit.BindLabel(_continueButton, "hud.continue", 390f);
             RectTransform continueRect = _continueButton.Root;
             continueRect.anchorMin = new Vector2(0.5f, 0f);
             continueRect.anchorMax = new Vector2(0.5f, 0f);
@@ -593,7 +600,8 @@ namespace SliceBlast.UI
             _continueButton.Button.onClick.AddListener(() => ContinueRequested?.Invoke());
             _continueButton.Root.gameObject.SetActive(false);
 
-            MenuControl shop = CreateButton("GameOverShop", content, "WORKSHOP", 44, new Color(1f, 1f, 1f, 0.12f), Color.white, IconShape.Bag);
+            MenuControl shop = CreateButton("GameOverShop", content, "-", 44, new Color(1f, 1f, 1f, 0.12f), Color.white, IconShape.Bag);
+            UiKit.BindLabel(shop, "hud.workshop", 310f);
             RectTransform shopRect = shop.Root;
             shopRect.anchorMin = new Vector2(0.5f, 0f);
             shopRect.anchorMax = new Vector2(0.5f, 0f);
@@ -604,7 +612,7 @@ namespace SliceBlast.UI
 
             _restart = CreateText("RestartHint", content, 40, FontStyle.Bold, new Color(1f, 1f, 1f, 0.7f), TextAnchor.MiddleCenter);
             Anchor(_restart.rectTransform, new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(0f, 84f), new Vector2(0f, 146f));
-            _restart.text = "OR TAP ANYWHERE";
+            UiKit.Bind(_restart, "hud.tap_anywhere", 960f);
 
             // Just clear of the header panel's bottom edge rather than inside it: the panel
             // already carries the score and the record, and a third line crammed against its
@@ -626,6 +634,10 @@ namespace SliceBlast.UI
                 _continueButton.Root.gameObject.SetActive(available);
             }
         }
+
+        // A 700-wide menu button, less its icon, the gap and a margin either side.
+        private const float MenuLabelWidth = 520f;
+        private const int ToggleLabelSize = 52;
 
         private static void PlaceMenuButton(MenuControl control, float y)
         {
@@ -701,7 +713,7 @@ namespace SliceBlast.UI
         {
             if (_multiplier != null)
             {
-                _multiplier.text = multiplier > 1 ? "COMBO x" + multiplier : string.Empty;
+                _multiplier.text = multiplier > 1 ? Loc.F("hud.combo", multiplier) : string.Empty;
             }
         }
 
@@ -712,7 +724,7 @@ namespace SliceBlast.UI
                 return;
             }
 
-            _streak.text = "PERFECT x" + streak;
+            UiKit.SetText(_streak, Loc.F("hud.perfect", streak), 56, 980f);
             _streakLife = 1f;
         }
 
@@ -723,13 +735,13 @@ namespace SliceBlast.UI
                 return;
             }
 
-            _banner.text = text;
+            UiKit.SetText(_banner, text, 130, 1000f);
             _banner.color = new Color(color.r, color.g, color.b, 1f);
             _bannerLife = 1f;
 
             if (_bannerBonus != null)
             {
-                _bannerBonus.text = subtitle;
+                UiKit.SetText(_bannerBonus, subtitle, 78, 1000f);
                 _bannerBonus.color = new Color(color.r, color.g, color.b, 1f);
             }
         }
@@ -748,7 +760,7 @@ namespace SliceBlast.UI
         {
             if (_hint != null)
             {
-                _hint.text = text;
+                UiKit.SetText(_hint, text, 52, 980f);
             }
         }
 
@@ -839,12 +851,12 @@ namespace SliceBlast.UI
 
             if (_runCoins != null)
             {
-                _runCoins.text = coins > 0 ? "+" + coins + " COINS" : string.Empty;
+                _runCoins.text = coins > 0 ? Loc.F("hud.run_coins", coins) : string.Empty;
             }
 
             if (_bestScore != null)
             {
-                _bestScore.text = score >= best ? "NEW BEST!" : best.ToString();
+                _bestScore.text = score >= best ? Loc.T("hud.new_best") : best.ToString();
                 _bestScore.color = score >= best ? Gold : new Color(1f, 1f, 1f, 0.6f);
             }
 
@@ -886,7 +898,7 @@ namespace SliceBlast.UI
 
             if (_soundLabel != null)
             {
-                _soundLabel.text = on ? "SOUND" : "MUTED";
+                UiKit.SetText(_soundLabel, Loc.T(on ? "hud.sound" : "hud.muted"), ToggleLabelSize, MenuLabelWidth);
             }
 
             ApplyToggleIcon(_soundIcon, on, IconShape.SoundOn, IconShape.SoundOff);
@@ -899,11 +911,18 @@ namespace SliceBlast.UI
 
             if (_hapticsLabel != null)
             {
-                _hapticsLabel.text = on ? "VIBRATION" : "NO VIBRATION";
+                UiKit.SetText(_hapticsLabel, Loc.T(on ? "hud.vibration" : "hud.no_vibration"), ToggleLabelSize, MenuLabelWidth);
             }
 
             ApplyToggleIcon(_hapticsIcon, on, IconShape.VibrateOn, IconShape.VibrateOff);
             ApplyToggleIcon(_homeHapticsIcon, on, IconShape.VibrateOn, IconShape.VibrateOff);
+        }
+
+        /// <summary>Rewrites the labels whose words depend on state as well as language.</summary>
+        public void RefreshLanguage()
+        {
+            SetSoundLabel(_soundOn);
+            SetHapticsLabel(_hapticsOn);
         }
 
         private static void ApplyToggleIcon(Image target, bool on, IconShape onShape, IconShape offShape)
