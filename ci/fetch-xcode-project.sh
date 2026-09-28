@@ -11,6 +11,40 @@ set -eu
 DESTINATION="${1:-ios-xcode}"
 TAG="${RELEASE_TAG:-ios-xcode-latest}"
 API="https://api.github.com/repos/${GITHUB_REPO}"
+
+# Every build is now published under its own tag (ios-xcode-<run id>, with "-testads" for a
+# TestFlight-only test-ads build). "ios-xcode-latest" means: the newest of those.
+if [ "$TAG" = "ios-xcode-latest" ]; then
+  AUTH=()
+  if [ -n "${GITHUB_TOKEN:-}" ]; then
+    AUTH=(-H "Authorization: Bearer $GITHUB_TOKEN")
+  fi
+
+  RESOLVED="$(curl -fsS ${AUTH[@]+"${AUTH[@]}"} \
+      -H "Accept: application/vnd.github+json" "$API/releases?per_page=30" | python3 -c '
+import json, sys
+
+releases = [r for r in json.load(sys.stdin)
+            if r.get("tag_name", "").startswith("ios-xcode-")
+            and any(a.get("name") == "ios-xcode.zip" for a in r.get("assets", []))]
+releases.sort(key=lambda r: r.get("created_at", ""), reverse=True)
+print(releases[0]["tag_name"] if releases else "")
+')" || RESOLVED=""
+
+  if [ -n "$RESOLVED" ]; then
+    TAG="$RESOLVED"
+  fi
+
+  echo "Newest Xcode project release: $TAG"
+
+  case "$TAG" in
+    *-testads)
+      echo "NOTE: this build contains the hidden test-ads switch. TestFlight testing only —"
+      echo "      do not submit it to App Review."
+      ;;
+  esac
+fi
+
 PUBLIC_URL="https://github.com/${GITHUB_REPO}/releases/download/${TAG}/ios-xcode.zip"
 
 download_through_api() {

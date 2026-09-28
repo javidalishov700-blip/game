@@ -117,15 +117,23 @@ jobs:
           path: ios-xcode.zip
           retention-days: 7
 
-      # A release asset is what the Mac side can fetch with a plain token, without needing
-      # the Actions artifact API.
-      - name: Publish as the rolling ios-xcode-latest release
+      # A release asset is what the Mac side can fetch without credentials. Each build gets
+      # its own tag: re-creating a just-deleted tag (the old rolling "ios-xcode-latest")
+      # started failing with HTTP 403. ci/fetch-xcode-project.sh picks the newest one.
+      - name: Publish as an ios-xcode release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -eu
-          gh release delete ios-xcode-latest --cleanup-tag --yes || true
-          gh release create ios-xcode-latest ios-xcode.zip \
-            --title "iOS Xcode project (latest)" \
-            --notes "Generated from ${{ github.sha }} by the iOS Xcode project workflow. Test ads: ${{ inputs.testAds && 'YES (TestFlight testing only, do not submit)' || 'no (App Store ready)' }}." \
-            --target "${{ github.sha }}"
+          TAG="ios-xcode-${{ github.run_id }}${{ inputs.testAds && '-testads' || '' }}"
+          for attempt in 1 2 3; do
+            if gh release create "$TAG" ios-xcode.zip \
+                --title "iOS Xcode project ${{ github.run_id }}${{ inputs.testAds && ' - TEST ADS, TestFlight only' || '' }}" \
+                --notes "Generated from ${{ github.sha }} by the iOS Xcode project workflow. Test ads: ${{ inputs.testAds && 'YES (TestFlight testing only, do not submit)' || 'no (App Store ready)' }}." \
+                --target "${{ github.sha }}"; then
+              echo "published $TAG"
+              exit 0
+            fi
+            sleep $((attempt * 20))
+          done
+          exit 1
