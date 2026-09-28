@@ -40,6 +40,7 @@ namespace SliceBlast.UI
         public event Action ContinueRequested;
         public event Action ShopRequested;
         public event Action LeaderboardRequested;
+        public event Action SettingsRequested;
         public event Action PrivacyRequested;
 
         private RectTransform _safeArea;
@@ -432,6 +433,18 @@ namespace SliceBlast.UI
             // once there is something behind it.
             _leaderboardButton = boardRect;
             boardRect.gameObject.SetActive(false);
+
+            // Mirrors the leaderboard button on the opposite top corner. Settings used to be a
+            // tab buried inside the Workshop, which meant a player looking for the sound toggle
+            // or the policy links had no reason to think to open the shop first.
+            MenuControl settings = CreateButton("HomeSettings", content, string.Empty, 0, Panel, Color.white, IconShape.Gear);
+            RectTransform settingsRect = settings.Root;
+            settingsRect.anchorMin = new Vector2(0f, 1f);
+            settingsRect.anchorMax = new Vector2(0f, 1f);
+            settingsRect.pivot = new Vector2(0f, 1f);
+            settingsRect.sizeDelta = new Vector2(112f, 112f);
+            settingsRect.anchoredPosition = new Vector2(40f, -40f);
+            settings.Button.onClick.AddListener(() => SettingsRequested?.Invoke());
 
             // Sits on the workshop button and counts finished, unclaimed missions — the one
             // thing on the title screen that should pull the eye when there is something to
