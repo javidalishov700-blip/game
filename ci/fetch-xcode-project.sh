@@ -20,8 +20,13 @@ if [ "$TAG" = "ios-xcode-latest" ]; then
     AUTH=(-H "Authorization: Bearer $GITHUB_TOKEN")
   fi
 
-  RESOLVED="$(curl -fsS ${AUTH[@]+"${AUTH[@]}"} \
-      -H "Accept: application/vnd.github+json" "$API/releases?per_page=30" | python3 -c '
+  # The repository is public, so the listing needs no token — and a stale token in the
+  # Codemagic environment would only turn it into a 401. Tried with it, then without.
+  LISTING="$(curl -fsS ${AUTH[@]+"${AUTH[@]}"} -H "Accept: application/vnd.github+json" "$API/releases?per_page=30" 2>/dev/null)" \
+    || LISTING="$(curl -fsS -H "Accept: application/vnd.github+json" "$API/releases?per_page=30")" \
+    || LISTING="[]"
+
+  RESOLVED="$(printf '%s' "$LISTING" | python3 -c '
 import json, sys
 
 releases = [r for r in json.load(sys.stdin)
