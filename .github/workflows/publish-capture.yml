@@ -1,0 +1,36 @@
+# Re-publishes a store-capture run's artifact as a release, for when the capture itself
+# recorded fine but its own publish step was refused.
+name: Publish store capture
+
+on:
+  workflow_dispatch:
+    inputs:
+      runId:
+        description: "Run id of the Store capture workflow"
+        required: true
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: store-capture
+          path: out
+          run-id: ${{ inputs.runId }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -eu
+          ls -la out
+          gh release create "store-capture-${{ inputs.runId }}" out/* \
+            --repo "${{ github.repository }}" \
+            --title "Store capture ${{ inputs.runId }}" \
+            --notes "Screenshots and footage from Store capture run ${{ inputs.runId }}." \
+            --target "${{ github.sha }}"

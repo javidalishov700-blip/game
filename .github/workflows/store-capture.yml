@@ -119,7 +119,7 @@ jobs:
           TAG="store-capture-${{ github.run_id }}"
           for attempt in 1 2 3; do
             if gh release create "$TAG" out/* \
-                --prerelease \
+
                 --title "Store capture ${{ github.run_id }}" \
                 --notes "Screenshots and footage recorded from ${{ github.sha }}." \
                 --target "${{ github.sha }}"; then
