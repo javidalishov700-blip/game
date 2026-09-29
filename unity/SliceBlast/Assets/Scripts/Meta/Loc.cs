@@ -1,4 +1,4 @@
-// Every word the game shows, in English, Turkish and Russian. One table in code rather than
+// Every word the game shows, in English, Turkish, Russian and Azerbaijani. One table in code rather than
 // asset files, for the same reason the whole interface is built in code: nothing to import,
 // nothing for the build to lose.
 //
@@ -15,12 +15,13 @@ namespace SliceBlast.Meta
     {
         English = 0,
         Turkish = 1,
-        Russian = 2
+        Russian = 2,
+        Azerbaijani = 3
     }
 
     public static class Loc
     {
-        public const int LanguageCount = 3;
+        public const int LanguageCount = 4;
 
         private static readonly Dictionary<string, string[]> Table = new Dictionary<string, string[]>(160);
 
@@ -60,6 +61,19 @@ namespace SliceBlast.Meta
             {
                 _current = (Language)saved;
                 return;
+            }
+
+            // Unity's SystemLanguage has no Azerbaijani, so the phone's culture is asked instead.
+            try
+            {
+                if (CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "az")
+                {
+                    _current = Language.Azerbaijani;
+                    return;
+                }
+            }
+            catch (Exception)
+            {
             }
 
             switch (Application.systemLanguage)
@@ -105,6 +119,9 @@ namespace SliceBlast.Meta
                 case Language.Russian:
                     return "РУССКИЙ";
 
+                case Language.Azerbaijani:
+                    return "AZƏRBAYCAN";
+
                 default:
                     return "ENGLISH";
             }
@@ -134,7 +151,121 @@ namespace SliceBlast.Meta
 
         private static void Add(string key, string english, string turkish, string russian)
         {
-            Table[key] = new[] { english, turkish, russian };
+            Table[key] = new[] { english, turkish, russian, string.Empty };
+        }
+
+        // Azerbaijani rides beside the other three in the same row, so a key can never have
+        // three languages and lack the fourth without falling back to English.
+        private static void Set(string key, string azerbaijani)
+        {
+            Table[key][3] = azerbaijani;
+        }
+
+        private static void AddAzerbaijani()
+        {
+            Set("hud.tap_to_drop", "BURAXMAQ ÜÇÜN TOXUN");
+            Set("hud.more_for_blast", "PARTLAYIŞA {0} QALDI");
+            Set("hud.blast", "PARTLAYIŞ!");
+            Set("hud.missed", "QAÇIRDIN!");
+            Set("hud.lost", "{0} İTİRİLDİ");
+            Set("hud.neon_blast", "NEON PARTLAYIŞ");
+            Set("hud.block_blast", "{0} BLOK PARTLAYIŞ");
+            Set("hud.combo", "KOMBO x{0}");
+            Set("hud.perfect", "MÜKƏMMƏL x{0}");
+            Set("hud.paused", "DAYANDIRILDI");
+            Set("hud.resume", "DAVAM ET");
+            Set("hud.replay", "YENİDƏN");
+            Set("hud.home", "ANA MENYU");
+            Set("hud.sound", "SƏS");
+            Set("hud.muted", "SƏSSİZ");
+            Set("hud.vibration", "TİTRƏYİŞ");
+            Set("hud.no_vibration", "TİTRƏYİŞ SÖNÜLÜ");
+            Set("hud.privacy_choices", "MƏXFİLİK SEÇİMLƏRİ");
+            Set("hud.tap_to_start", "BAŞLAMAQ ÜÇÜN TOXUN");
+            Set("hud.workshop", "ATELYE");
+            Set("hud.run_over", "OYUN BİTDİ");
+            Set("hud.play_again", "YENİDƏN OYNA");
+            Set("hud.continue", "REKLAMA BAX, DAVAM ET");
+            Set("hud.tap_anywhere", "VƏ YA İSTƏNİLƏN YERƏ TOXUN");
+            Set("hud.new_best", "YENİ REKORD!");
+            Set("hud.run_coins", "+{0} SİKKƏ");
+            Set("legal.privacy", "MƏXFİLİK SİYASƏTİ");
+            Set("legal.terms", "İSTİFADƏ ŞƏRTLƏRİ");
+            Set("settings.title", "PARAMETRLƏR");
+            Set("settings.language", "DİL");
+            Set("board.title", "İLK 99");
+            Set("board.subtitle", "BÜTÜN ZAMANLARIN ƏN YAXŞILARI");
+            Set("board.your_rank", "SƏNİN YERİN");
+            Set("board.loading", "YÜKLƏNİR…");
+            Set("board.error", "GAME CENTER-Ə QOŞULMAQ MÜMKÜN OLMADI.\nBİRAZDAN YENİDƏN CƏHD ET.");
+            Set("board.empty", "HƏLƏ NƏTİCƏ YOXDUR.\nOYNA VƏ BİRİNCİ YERİ TUT.");
+            Set("board.player", "OYUNÇU");
+            Set("board.you", "SƏN");
+            Set("shop.tab.upgrades", "GÜCLƏNDİR");
+            Set("shop.tab.themes", "MÖVZULAR");
+            Set("shop.tab.profile", "PROFİL");
+            Set("shop.tab.daily", "GÜNLÜK");
+            Set("shop.streak", "SERİYA {0}");
+            Set("shop.max", "MAKS");
+            Set("shop.active", "AKTİV");
+            Set("shop.equip", "SEÇ");
+            Set("shop.claimed", "ALINDI");
+            Set("shop.done", "HAZIR");
+            Set("shop.reset", "YENİ TAPŞIRIQLAR: {0} S {1} DƏQ");
+            Set("shop.remove_ads", "REKLAMLARI SİL");
+            Set("shop.ads_removed", "REKLAMLAR SİLİNDİ");
+            Set("shop.restore", "ALIŞLARI BƏRPA ET");
+            Set("shop.coins", "SİKKƏ");
+            Set("shop.rank_caption", "USTA RÜTBƏSİ");
+            Set("shop.rank_top", "ƏN YÜKSƏK RÜTBƏDƏSƏN");
+            Set("shop.rank_next", "NÖVBƏTİ: {0}");
+            Set("shop.points_of", "{0} / {1} XAL");
+            Set("shop.points_total", "CƏMİ {0} XAL");
+            Set("stat.best", "ƏN YAXŞI NƏTİCƏ");
+            Set("stat.runs", "OYNANILAN OYUN");
+            Set("stat.blasts", "PARTLAYIŞLAR");
+            Set("stat.biggest", "ƏN BÖYÜK PARTLAYIŞ");
+            Set("stat.streak", "GÜN SERİYASI");
+            Set("stat.collection", "KOLLEKSİYA");
+            Set("effect.magnet", "SAHƏ +{0}% → +{1}%");
+            Set("effect.magnet.max", "SAHƏ +{0}% · MAKS");
+            Set("effect.shield", "{0} → {1} QALXAN");
+            Set("effect.shield.one", "{0} → {1} QALXAN");
+            Set("effect.shield.max", "{0} QALXAN · MAKS");
+            Set("effect.luck", "{0} → {1} BLOK ƏVVƏL");
+            Set("effect.luck.max", "{0} BLOK ƏVVƏL · MAKS");
+            Set("upgrade.magnet", "MAQNİT");
+            Set("upgrade.magnet.desc", "Daha geniş mükəmməl sahə");
+            Set("upgrade.shield", "ZIRH");
+            Set("upgrade.shield.desc", "Hər oyuna qalxanla başla");
+            Set("upgrade.luck", "ŞANS");
+            Set("upgrade.luck.desc", "Xüsusi bloklar daha tez gəlir");
+            Set("theme.midnight", "GECƏ YARISI");
+            Set("theme.ember", "KÖZ");
+            Set("theme.vapor", "BUXAR");
+            Set("theme.signal", "SİQNAL");
+            Set("theme.mono", "MONOLİT");
+            Set("theme.aurora", "ŞİMAL ŞÖLƏSİ");
+            Set("theme.abyss", "DƏRİNLİK");
+            Set("theme.sakura", "SAKURA");
+            Set("theme.gilded", "ZƏRLİ");
+            Set("rank.0", "YENİ BAŞLAYAN");
+            Set("rank.1", "YIĞICI");
+            Set("rank.2", "İNŞAATÇI");
+            Set("rank.3", "MÜHƏNDİS");
+            Set("rank.4", "MEMAR");
+            Set("rank.5", "GÖY USTASI");
+            Set("rank.6", "QULLƏ DEVİ");
+            Set("rank.7", "ƏFSANƏ");
+            Set("mission.RunScore", "BİR OYUNDA {0} XAL TOPLA");
+            Set("mission.Perfects", "{0} MÜKƏMMƏL ATIŞ ET");
+            Set("mission.Blasts", "{0} PARTLAYIŞ ET");
+            Set("mission.Specials", "{0} XÜSUSİ BLOK YERLƏŞDİR");
+            Set("block.Standard", "BLOK");
+            Set("block.Neon", "NEON");
+            Set("block.Electric", "ELEKTRİK");
+            Set("block.Glass", "ŞÜŞƏ");
+            Set("block.Steel", "FOLAD");
         }
 
         static Loc()
@@ -263,6 +394,8 @@ namespace SliceBlast.Meta
             Add("block.Electric", "ELECTRIC", "ELEKTRİK", "ЭЛЕКТРО");
             Add("block.Glass", "GLASS", "CAM", "СТЕКЛО");
             Add("block.Steel", "STEEL", "ÇELİK", "СТАЛЬ");
+
+            AddAzerbaijani();
         }
     }
 }

@@ -519,6 +519,37 @@ namespace SliceBlast.UI
                     return crescent || star ? Color.white : red;
                 }
 
+                case Language.Azerbaijani:
+                {
+                    Color blue = new Color32(0, 181, 226, 255);
+                    Color red = new Color32(239, 51, 64, 255);
+                    Color green = new Color32(80, 158, 47, 255);
+
+                    // Three equal bands with a white crescent and eight-pointed star on the red.
+                    Vector2 p = new Vector2(x, y);
+                    bool crescent = Circle(p - new Vector2(0.69f, 0.5f), 0.115f) < 0f
+                        && Circle(p - new Vector2(0.725f, 0.5f), 0.092f) > 0f;
+
+                    Vector2 s = p - new Vector2(0.83f, 0.5f);
+                    float radius = s.magnitude;
+                    float sector = Mathf.PI / 4f;
+                    float angle = Mathf.Repeat(Mathf.Atan2(s.y, s.x), sector);
+                    float toPoint = Mathf.Abs(angle - sector * 0.5f) / (sector * 0.5f);
+                    bool star = radius < Mathf.Lerp(0.085f, 0.036f, toPoint);
+
+                    if (y > 2f / 3f)
+                    {
+                        return blue;
+                    }
+
+                    if (y < 1f / 3f)
+                    {
+                        return green;
+                    }
+
+                    return crescent || star ? Color.white : red;
+                }
+
                 case Language.Russian:
                 {
                     if (y > 2f / 3f)

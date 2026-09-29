@@ -177,12 +177,12 @@ namespace SliceBlast.UI
                 flagRect.anchorMin = new Vector2(0.5f, 1f);
                 flagRect.anchorMax = new Vector2(0.5f, 1f);
                 flagRect.pivot = new Vector2(0.5f, 1f);
-                flagRect.sizeDelta = new Vector2(144f, 96f);
+                flagRect.sizeDelta = new Vector2(132f, 88f);
                 flagRect.anchoredPosition = new Vector2(0f, -34f);
 
-                Text name = UiKit.CreateText(_font, "Name", rect, 38, FontStyle.Bold, Color.white, TextAnchor.MiddleCenter, true);
+                Text name = UiKit.CreateText(_font, "Name", rect, 34, FontStyle.Bold, Color.white, TextAnchor.MiddleCenter, true);
                 UiKit.Anchor(name.rectTransform, new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(10f, 24f), new Vector2(-10f, 90f));
-                UiKit.SetText(name, Loc.NativeName(language), 38, 250f);
+                UiKit.SetText(name, Loc.NativeName(language), 34, 190f);
 
                 Image check = UiKit.CreateImage("Check", rect, UiKit.Ink);
                 check.sprite = IconFactory.GetSprite(IconShape.Check);

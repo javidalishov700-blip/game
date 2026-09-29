@@ -127,6 +127,11 @@ namespace SliceBlast.EditorTools
             },
             new Localization
             {
+                Code = "az",
+                Tracking = "Slice Blast bunu sizə daha uyğun reklamlar göstərmək üçün istifadə edir. İmtina etsəniz də reklamlar göstəriləcək."
+            },
+            new Localization
+            {
                 Code = "ru",
                 Tracking = "Slice Blast использует это, чтобы показывать более подходящую вам рекламу. Реклама будет показываться, даже если вы откажетесь."
             }
@@ -163,7 +168,7 @@ namespace SliceBlast.EditorTools
                 }
 
                 project.WriteToFile(pbxPath);
-                Debug.Log("[SliceBlast] Localizations written: en, tr, ru");
+                Debug.Log("[SliceBlast] Localizations written: en, tr, az, ru");
             }
             catch (Exception exception)
             {
