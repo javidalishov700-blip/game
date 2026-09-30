@@ -318,10 +318,10 @@ namespace SliceBlast.EditorTools
             PlayerSettings.productName = ProductName;
             PlayerSettings.SetApplicationIdentifier(named, bundleId);
             // 1.2 is live on the App Store, so a new upload must carry a higher version or it
-            // is rejected outright (90062). 1.2.1 is the Game Center leaderboard release: App
+            // is rejected outright (90062). 1.2.2 is the Game Center leaderboard release: App
             // Store Connect lists a build only under the version string it was stamped with,
-            // so the 1.2.1 page cannot pick up a 1.2.0 build.
-            PlayerSettings.bundleVersion = EnvOr("APP_VERSION", "1.2.1");
+            // so a version page can only pick up a build stamped with exactly its own number.
+            PlayerSettings.bundleVersion = EnvOr("APP_VERSION", "1.2.2");
 
             PlayerSettings.defaultInterfaceOrientation = UIOrientation.Portrait;
             PlayerSettings.allowedAutorotateToPortrait = true;
