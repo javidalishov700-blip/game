@@ -116,10 +116,11 @@ namespace SliceBlast.Meta
 
         // ---- Live effect queries, read by gameplay ------------------------------------
 
-        // A maxed Magnet makes the perfect window 30% wider, at every block size. It was 70%,
+        // A maxed Magnet makes the perfect window 45% wider, at every block size. It was 70%,
         // which players read as a hack — and because it was added on top of a fixed floor, it
-        // did nothing at all for small blocks while handing big ones a +56% window.
-        private const float MagnetMaxWindowBonus = 0.30f;
+        // did nothing at all for small blocks while handing big ones a +56% window. 30% was
+        // tried and read as too little; 45% is felt on every level without deciding the game.
+        private const float MagnetMaxWindowBonus = 0.45f;
 
         // Mirrors BlockSlicer.magnetFraction, the base perfect window as a share of the block.
         // Only used to turn the bonus into a share of the block for BlockSlicer's ceiling.
