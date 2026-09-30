@@ -186,7 +186,15 @@ namespace SliceBlast.UI
                 {
                     // Two overlapping discs make the curved flanks; a half-plane flattens the top.
                     float lens = Mathf.Max(Circle(p - new Vector2(1f, 0.37f), 1.5f), Circle(p - new Vector2(-1f, 0.37f), 1.5f));
-                    return Mathf.Max(lens, p.y - 0.6f);
+                    float outer = Mathf.Max(lens, p.y - 0.6f);
+
+                    // The same outline again, smaller, cut through as a thin groove.
+                    Vector2 q = (p - new Vector2(0f, -0.04f)) / 0.7f;
+                    float inner = Mathf.Max(
+                        Mathf.Max(Circle(q - new Vector2(1f, 0.37f), 1.5f), Circle(q - new Vector2(-1f, 0.37f), 1.5f)),
+                        q.y - 0.6f) * 0.7f;
+
+                    return Mathf.Max(outer, 0.05f - Mathf.Abs(inner));
                 }
 
                 case IconShape.Bolt:
@@ -246,16 +254,26 @@ namespace SliceBlast.UI
                     // A filled centre inside a separate rim. A plain disc reads as a dot at
                     // badge size; the gap between the two is what makes it a coin.
                     float rim = Ring(p, 0.7f, 0.13f);
-                    float core = Circle(p, 0.4f);
+                    float core = Circle(p, 0.44f);
+
+                    // The star struck into the face is what makes it a coin rather than a target.
+                    core = Mathf.Max(core, -Star5(p + new Vector2(0f, 0.03f), 0.3f, 0.46f));
                     return Mathf.Min(rim, core);
                 }
 
                 case IconShape.Bag:
                 {
-                    float body = Box(p - new Vector2(0f, -0.22f), new Vector2(0.58f, 0.44f), 0.16f);
-                    // Top half of a ring: the handle.
-                    float handle = Mathf.Max(Ring(p - new Vector2(0f, 0.28f), 0.29f, 0.09f), 0.28f - p.y);
-                    return Mathf.Min(body, handle);
+                    // A shopping bag: wider at the foot than at the mouth, two handle loops
+                    // above it and a star struck into the front. The old rounded box with one
+                    // arch on top was a padlock.
+                    float body = Polygon(p, BagBody);
+                    float handles = Mathf.Min(
+                        Ring(p - new Vector2(-0.17f, 0.3f), 0.2f, 0.06f),
+                        Ring(p - new Vector2(0.17f, 0.3f), 0.2f, 0.06f));
+                    handles = Mathf.Max(handles, 0.3f - p.y);
+
+                    float bag = Mathf.Min(body, handles);
+                    return Mathf.Max(bag, -Star5(p - new Vector2(0f, -0.26f), 0.27f, 0.46f));
                 }
 
                 case IconShape.Target:
@@ -269,7 +287,13 @@ namespace SliceBlast.UI
                 {
                     float body = Box(p - new Vector2(0f, -0.26f), new Vector2(0.5f, 0.38f), 0.12f);
                     float shackle = Mathf.Max(Ring(p - new Vector2(0f, 0.18f), 0.3f, 0.1f), 0.18f - p.y);
-                    return Mathf.Min(body, shackle);
+
+                    // A keyhole: a round head and a tapering slot.
+                    float keyhole = Mathf.Min(
+                        Circle(p - new Vector2(0f, -0.2f), 0.1f),
+                        Triangle(p, new Vector2(-0.07f, -0.5f), new Vector2(0.07f, -0.5f), new Vector2(0f, -0.2f)));
+
+                    return Mathf.Max(Mathf.Min(body, shackle), -keyhole);
                 }
 
                 case IconShape.Check:
@@ -286,7 +310,7 @@ namespace SliceBlast.UI
                 {
                     float roof = Triangle(p, new Vector2(-0.78f, 0.06f), new Vector2(0.78f, 0.06f), new Vector2(0f, 0.8f));
                     float body = Box(p - new Vector2(0f, -0.35f), new Vector2(0.5f, 0.42f), 0.06f);
-                    float door = Box(p - new Vector2(0f, -0.5f), new Vector2(0.16f, 0.27f), 0.03f);
+                    float door = Box(p - new Vector2(0f, -0.56f), new Vector2(0.16f, 0.27f), 0.03f);
                     return Mathf.Max(Mathf.Min(roof, body), -door);
                 }
 
@@ -317,7 +341,11 @@ namespace SliceBlast.UI
                     // A horseshoe opening upward: the lower half of a thick ring, two straight
                     // arms rising from its ends, and a notch across both arms marking the poles.
                     Vector2 centre = new Vector2(0f, -0.08f);
-                    float bend = Mathf.Max(Ring(p - centre, 0.42f, 0.17f), p.y - centre.y);
+
+                    // The bend runs a little past its widest point, up into the arms, so the two
+                    // overlap. Edge to edge, the union left a hairline where both fields were
+                    // half covered; arms that reach down instead stuck out past the curve.
+                    float bend = Mathf.Max(Ring(p - centre, 0.42f, 0.17f), p.y - (centre.y + 0.08f));
                     float arms = Mathf.Min(
                         Box(p - new Vector2(-0.42f, 0.28f), new Vector2(0.17f, 0.36f), 0.03f),
                         Box(p - new Vector2(0.42f, 0.28f), new Vector2(0.17f, 0.36f), 0.03f));
@@ -447,11 +475,20 @@ namespace SliceBlast.UI
                     // origin. Centring it is what made the crown read as off-balance in its
                     // round badge — the RectTransform holding it was centred correctly all
                     // along; the artwork inside it was not.
-                    float band = Box(p - new Vector2(0f, -0.49f), new Vector2(0.62f, 0.16f), 0.06f);
-                    float body = Triangle(p, new Vector2(-0.72f, 0.53f), new Vector2(-0.62f, -0.41f), new Vector2(0.62f, -0.41f));
-                    body = Mathf.Min(body, Triangle(p, new Vector2(0.72f, 0.53f), new Vector2(-0.62f, -0.41f), new Vector2(0.62f, -0.41f)));
-                    body = Mathf.Min(body, Triangle(p, new Vector2(0f, 0.65f), new Vector2(-0.62f, -0.41f), new Vector2(0.62f, -0.41f)));
-                    return Mathf.Min(band, body);
+                    // One outline for the whole crown — three peaks, a flat foot — with a ball
+                    // on each tip and a band across the bottom. The old shape was three
+                    // overlapping triangles, which left a notch where they met.
+                    float body = Polygon(p, CrownBody);
+                    float tips = Mathf.Min(
+                        Circle(p - new Vector2(-0.68f, 0.5f), 0.1f),
+                        Mathf.Min(
+                            Circle(p - new Vector2(0f, 0.6f), 0.1f),
+                            Circle(p - new Vector2(0.68f, 0.5f), 0.1f)));
+                    float band = Box(p - new Vector2(0f, -0.52f), new Vector2(0.66f, 0.13f), 0.05f);
+
+                    // The band is cut from the body by a hairline so the two read as separate.
+                    body = Mathf.Max(body, 0.035f - Mathf.Abs(p.y + 0.36f));
+                    return Mathf.Min(Mathf.Min(body, tips), band);
                 }
 
                 default:
@@ -469,9 +506,10 @@ namespace SliceBlast.UI
         private static float Speaker(Vector2 p)
         {
             float body = Box(p - new Vector2(-0.52f, 0f), new Vector2(0.16f, 0.2f), 0.03f);
-            float cone = Triangle(p, new Vector2(-0.36f, 0.05f), new Vector2(-0.36f, -0.05f), new Vector2(-0.02f, 0f));
-            cone = Mathf.Min(cone, Triangle(p, new Vector2(-0.36f, 0.2f), new Vector2(-0.02f, 0.52f), new Vector2(-0.02f, -0.52f)));
-            cone = Mathf.Min(cone, Triangle(p, new Vector2(-0.36f, -0.2f), new Vector2(-0.36f, 0.2f), new Vector2(-0.02f, -0.52f)));
+
+            // A single outline for the cone. Built from triangles that shared edges, it drew a
+            // faint diagonal line through the speaker wherever two of them met.
+            float cone = Polygon(p, SpeakerCone);
             return Mathf.Min(body, cone);
         }
 
@@ -647,6 +685,54 @@ namespace SliceBlast.UI
             return Mathf.Min(
                 Segment(p, new Vector2(-reach, -reach), new Vector2(reach, reach), thickness),
                 Segment(p, new Vector2(-reach, reach), new Vector2(reach, -reach), thickness));
+        }
+
+        // Outlines for the shapes that are a single polygon (see Polygon).
+        private static readonly Vector2[] BagBody =
+        {
+            new Vector2(-0.5f, 0.3f), new Vector2(0.5f, 0.3f),
+            new Vector2(0.64f, -0.66f), new Vector2(0.58f, -0.78f),
+            new Vector2(-0.58f, -0.78f), new Vector2(-0.64f, -0.66f)
+        };
+
+        private static readonly Vector2[] CrownBody =
+        {
+            new Vector2(-0.72f, -0.42f), new Vector2(-0.68f, 0.5f), new Vector2(-0.34f, 0.04f),
+            new Vector2(0f, 0.6f), new Vector2(0.34f, 0.04f), new Vector2(0.68f, 0.5f),
+            new Vector2(0.72f, -0.42f)
+        };
+
+        private static readonly Vector2[] SpeakerCone =
+        {
+            new Vector2(-0.4f, 0.2f), new Vector2(-0.02f, 0.54f),
+            new Vector2(-0.02f, -0.54f), new Vector2(-0.4f, -0.2f)
+        };
+
+        /// <summary>A signed distance to any simple polygon (negative inside), for shapes that are one outline.</summary>
+        private static float Polygon(Vector2 p, Vector2[] v)
+        {
+            int n = v.Length;
+            float d = Vector2.Dot(p - v[0], p - v[0]);
+            float sign = 1f;
+
+            for (int i = 0, j = n - 1; i < n; j = i, i++)
+            {
+                Vector2 e = v[j] - v[i];
+                Vector2 w = p - v[i];
+                Vector2 b = w - e * Mathf.Clamp01(Vector2.Dot(w, e) / Mathf.Max(0.0001f, Vector2.Dot(e, e)));
+                d = Mathf.Min(d, Vector2.Dot(b, b));
+
+                bool c1 = p.y >= v[i].y;
+                bool c2 = p.y < v[j].y;
+                bool c3 = e.x * w.y > e.y * w.x;
+
+                if ((c1 && c2 && c3) || (!c1 && !c2 && !c3))
+                {
+                    sign = -sign;
+                }
+            }
+
+            return sign * Mathf.Sqrt(d);
         }
 
         private static float Circle(Vector2 p, float radius)
