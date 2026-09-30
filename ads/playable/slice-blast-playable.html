@@ -71,10 +71,11 @@ function rgb(c, f, a) {
 function layerColor(i) { return hsv(0.45 + pingpong(i * 0.035, 0.40), 0.55, 0.95); }
 
 /* ---------- projection ----------------------------------------------------------------- */
-var camY = 0, shakeX = 0, shakeY = 0;
+var camY = 0, shakeX = 0, shakeY = 0, zp = 0;
+function kk() { return K * (1 + zp * 0.05); }
 function anchorY() { return H * 0.6; }
-function px(x, y, z) { return W / 2 + shakeX + (x - z) * R2 * K; }
-function py(x, y, z) { return anchorY() + shakeY + ((x + z) * R2 * S26 - (y - camY) * C26) * K; }
+function px(x, y, z) { return W / 2 + shakeX + (x - z) * R2 * kk(); }
+function py(x, y, z) { return anchorY() + shakeY + ((x + z) * R2 * S26 - (y - camY) * C26) * kk(); }
 
 function poly(pts, fill) {
   g.beginPath(); g.moveTo(pts[0][0], pts[0][1]);
@@ -96,6 +97,7 @@ function box(cx, cz, w, d, y0, h, col, alpha, glow) {
 var stack, block, debris, parts, waves, banners, stars;
 var state, time, drops, streak, need, blasts, score, perfects, flash, endT, failT, blastEndT, lastTap;
 var nextW, nextD, skyA, skyB, skyTarget, skyBlend, popScore, hintOn;
+var attempt = 1, demoEnd = 0, prevDelta = null, retryT = 0, tapRing = 0;
 
 var SKY = [
   [[26, 28, 56], [8, 8, 15]],
@@ -103,11 +105,12 @@ var SKY = [
   [[77, 15, 87], [26, 5, 36]]
 ];
 
-function init() {
+function init(keepScore, demo) {
+  var keep = keepScore ? score : 0;
   stack = [{ cx: 0, cz: 0, w: BASE, d: BASE, col: [89, 107, 140] }];
   debris = []; parts = []; waves = []; banners = [];
-  state = 'PLAY'; time = 0; drops = 0; streak = 0; need = 3; blasts = 0; score = 0; perfects = 0;
-  flash = 0; endT = 0; failT = 0; blastEndT = 0; lastTap = 0; popScore = 0; hintOn = true;
+  state = demo ? 'DEMO' : 'PLAY'; time = 0; drops = 0; streak = 0; need = 3; blasts = 0; score = keep; perfects = 0;
+  flash = 0; endT = 0; failT = 0; blastEndT = 0; lastTap = 0; popScore = 0; hintOn = !demo; demoEnd = 0; prevDelta = null;
   // A tower already under way, so the first blast has something tall to knock down.
   for (var n = 1; n <= 5; n++) {
     var sh = n % 2 === 0 ? 0.16 : -0.16;
@@ -163,14 +166,57 @@ function noise(d, vol) {
     s.buffer = buf; gn.gain.value = vol; s.connect(gn); gn.connect(ac.destination); s.start();
   } catch (e) {}
 }
+var master = null, musicOn = false, nextT = 0, stepN = 0, seq = null;
+var NOTES = [57, 60, 64, 67, 64, 60, 62, 65];
+function mtof(n) { return 440 * Math.pow(2, (n - 69) / 12); }
+function voice(type, f, t, d, vol, slide, cut) {
+  try {
+    var o = ac.createOscillator(), gn = ac.createGain(), out = master || ac.destination;
+    o.type = type; o.frequency.setValueAtTime(f, t);
+    if (slide) o.frequency.exponentialRampToValueAtTime(slide, t + d);
+    gn.gain.setValueAtTime(vol, t); gn.gain.exponentialRampToValueAtTime(0.0001, t + d);
+    if (cut) { var fl = ac.createBiquadFilter(); fl.type = 'lowpass'; fl.frequency.value = cut; o.connect(fl); fl.connect(gn); }
+    else o.connect(gn);
+    gn.connect(out); o.start(t); o.stop(t + d + 0.03);
+  } catch (e) {}
+}
+function hat(t) {
+  try {
+    var n = Math.floor(ac.sampleRate * 0.04), buf = ac.createBuffer(1, n, ac.sampleRate), ch = buf.getChannelData(0);
+    for (var i = 0; i < n; i++) ch[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / n, 3);
+    var s = ac.createBufferSource(), gn = ac.createGain(), hp = ac.createBiquadFilter();
+    hp.type = 'highpass'; hp.frequency.value = 7000; gn.gain.value = 0.09;
+    s.buffer = buf; s.connect(hp); hp.connect(gn); gn.connect(master || ac.destination); s.start(t);
+  } catch (e) {}
+}
+function playStep(n, t) {
+  if (n % 4 === 0) voice('sine', 130, t, 0.16, 0.5, 42);
+  if (n % 2 === 1) hat(t);
+  if (n % 8 === 0 || n % 8 === 3 || n % 8 === 6) voice('sawtooth', mtof(n % 16 < 8 ? 33 : 29), t, 0.2, 0.16, null, 260);
+  voice('triangle', mtof(NOTES[n % 8] + (n % 16 < 8 ? 12 : 12)), t, 0.14, 0.05);
+}
+function startMusic() {
+  if (!ac || musicOn) return; musicOn = true;
+  try {
+    master = ac.createGain(); master.gain.value = 0.6; master.connect(ac.destination);
+    nextT = ac.currentTime + 0.05; stepN = 0;
+    seq = setInterval(function () {
+      while (nextT < ac.currentTime + 0.25) { playStep(stepN, nextT); nextT += 60 / 124 / 2; stepN++; }
+    }, 60);
+  } catch (e) { musicOn = false; }
+}
 var PENT = [0, 2, 4, 7, 9, 12, 14, 16];
-function sfxPerfect(n) { tone(660 * Math.pow(2, PENT[Math.min(n, 7)] / 12), 0.22, 'triangle', 0.16); tone(90, 0.08, 'sine', 0.2, 50); }
+function sfxPerfect(n) { tone(660 * Math.pow(2, PENT[Math.min(n, 7)] / 12), 0.3, 'triangle', 0.22); tone(1320 * Math.pow(2, PENT[Math.min(n, 7)] / 12), 0.2, 'sine', 0.06); tone(90, 0.1, 'sine', 0.26, 50); }
 function sfxSlice() { noise(0.16, 0.18); tone(140, 0.12, 'sine', 0.22, 70); }
 function sfxBlast() { tone(70, 0.6, 'sine', 0.45, 28); noise(0.7, 0.32); tone(1320, 0.3, 'triangle', 0.1, 1980); }
 function sfxEnd() { tone(440, 0.5, 'sine', 0.2, 180); }
 
 /* ---------- effects -------------------------------------------------------------------- */
-function banner(text, sub, col, dur) { banners.push({ text: text, sub: sub, col: col, t: 0, dur: dur || 1.5 }); }
+function banner(text, sub, col, dur) {
+  // one line of each size at a time, so a new PERFECT replaces the last instead of stacking on it
+  for (var i = banners.length - 1; i >= 0; i--) if ((banners[i].sub !== '') === (sub !== '')) banners.splice(i, 1);
+  banners.push({ text: text, sub: sub, col: col, t: 0, dur: dur || 1.5 });
+}
 function burst(x, y, n, cols, speed) {
   for (var i = 0; i < n; i++) {
     var a = Math.random() * Math.PI * 2, s = (0.35 + Math.random()) * speed;
@@ -179,7 +225,11 @@ function burst(x, y, n, cols, speed) {
       col: cols[Math.floor(Math.random() * cols.length)] });
   }
 }
-function shockwave(x, y, col) { waves.push({ x: x, y: y, t: 0, dur: 0.75, col: col }); }
+function shockwave(x, y, col, size, dur) { waves.push({ x: x, y: y, t: 0, dur: dur || 0.75, col: col, size: size || 4.2 }); }
+function coinRain(n) {
+  for (var i = 0; i < n; i++) parts.push({ x: Math.random() * W, y: -20 - Math.random() * H * 0.5, vx: (Math.random() - 0.5) * 40,
+    vy: 200 + Math.random() * 300, life: 0, max: 2.2 + Math.random(), size: 7 + Math.random() * 5, col: [255, 202, 74], coin: true });
+}
 function shakeNow(a) { shakeAmp = Math.max(shakeAmp, a); }
 var shakeAmp = 0;
 
@@ -189,13 +239,15 @@ function addDebris(cx, cz, w, d, y, col, vx, vz, vy) {
 
 /* ---------- gameplay ------------------------------------------------------------------- */
 function drop() {
-  if (state !== 'PLAY' || !block) return;
-  lastTap = time; hintOn = false;
+  if ((state !== 'PLAY' && state !== 'DEMO') || !block) return;
+  if (state === 'PLAY') { lastTap = time; hintOn = false; }
+  tapRing = 1;
   var t = top(), axis = block.axis;
   var tc = axis === 'x' ? t.cx : t.cz;
   var size = axis === 'x' ? t.w : t.d;
   var delta = block.pos - tc;
-  var thr = 0.12 + size * 0.075 + (drops < 3 ? size * 0.16 : 0) + streak * 0.012;
+  var thr = 0.12 + size * 0.075 + (drops < 3 ? size * 0.16 : 0) + streak * 0.012 + (attempt > 1 ? 0.12 : 0);
+  if (state === 'DEMO') thr = 9;
   var y0 = stack.length * BH;
   var col = block.col;
   drops++;
@@ -205,8 +257,9 @@ function drop() {
     var L = { cx: axis === 'x' ? tc : t.cx, cz: axis === 'z' ? tc : t.cz, w: block.w, d: block.d, col: col, pop: 0 };
     stack.push(L); streak++; perfects++;
     score += 10 * (1 + blasts); popScore = 1;
-    sfxPerfect(streak - 1); shakeNow(3);
-    if (streak >= 2) banner('PERFECT x' + streak, '', [140, 255, 225], 0.9);
+    sfxPerfect(streak - 1); shakeNow(4); zp = Math.max(zp, 1);
+    banner(streak >= 2 ? 'PERFECT x' + streak : 'PERFECT!', '', [140, 255, 225], 0.8);
+    shockwave(px(L.cx, y0 + BH, L.cz), py(L.cx, y0 + BH, L.cz), [140, 255, 225], 2.4, 0.45);
     burst(px(L.cx, y0 + BH, L.cz), py(L.cx, y0 + BH, L.cz), 10, [[255, 255, 255], [140, 255, 225]], 160);
     nextW = L.w; nextD = L.d;
     if (streak >= need) { blast(); return; }
@@ -242,21 +295,23 @@ function blast() {
   var bonus = 15 * removable * (1 + blasts);
   score += bonus;
   banner(removable + ' BLOCK BLAST', '+' + bonus, [255, 202, 74], 1.7);
-  flash = 0.85; shakeNow(16); sfxBlast();
+  flash = 0.85; shakeNow(18); sfxBlast(); zp = 2.4; coinRain(blasts === 1 ? 26 : 46);
   shockwave(bxp, byp, [255, 220, 130]);
   burst(bxp, byp, 60, [[255, 202, 74], [255, 255, 255], [120, 230, 255], [255, 120, 200]], 520);
   streak = 0; need = 2;
   nextW = Math.min(BASE, nextW * 1.22); nextD = Math.min(BASE, nextD * 1.22);
   skyA = SKY[Math.min(blasts - 1, 2)]; skyB = SKY[Math.min(blasts, 2)]; skyBlend = 0;
-  if (blasts >= 2 && blastEndT === 0) blastEndT = 0.01;
+  if (state === 'DEMO') { if (!demoEnd) demoEnd = time + 2.3; }
+  else if (blasts >= 2 && blastEndT === 0) blastEndT = 0.01;
+  else if (blasts === 1) banner('NEXT BLAST: 5 BLOCKS!', '', [255, 150, 200], 1.6);
   spawn();
 }
 
 function fail(y0) {
-  state = 'FAIL'; failT = 0;
+  state = 'FAIL'; failT = 0; retryT = 0;
   addDebris(bx(), bz(), block.w, block.d, y0, block.col, 0, 0, 0.5);
   block = null; sfxEnd(); shakeNow(8);
-  banner('SO CLOSE!', '', [255, 108, 96], 1.0);
+  banner(attempt === 1 ? 'OH NO! TRY AGAIN' : 'SO CLOSE!', '', [255, 108, 96], 1.1);
 }
 
 function endGame() { if (state === 'END') return; state = 'END'; endT = 0; block = null; sfxEnd(); }
@@ -283,11 +338,28 @@ function onDown(e) {
   if (e.preventDefault) e.preventDefault();
   audio();
   var x = e.clientX, y = e.clientY;
+  startMusic();
   if (state === 'END') { cta(); return; }
   if (hitCta(x, y)) { cta(); return; }
+  if (state === 'DEMO') { startPlay(); return; }
   drop();
 }
 cv.addEventListener('pointerdown', onDown, { passive: false });
+
+/* ---------- the opening demo: the game plays itself once, so the payoff is seen first ------- */
+function demoStep(dt) {
+  if (block) {
+    var cur = block.pos - block.pivot;
+    if (prevDelta !== null && prevDelta * cur <= 0 && time > 0.5) { block.pos = block.pivot; drop(); prevDelta = null; return; }
+    prevDelta = cur;
+  }
+  if (demoEnd && time > demoEnd) startPlay();
+}
+function startPlay() {
+  if (state !== 'DEMO') return;
+  init(false, false); attempt = 1;
+  banner('YOUR TURN!', '', [255, 232, 140], 1.3);
+}
 
 /* ---------- update --------------------------------------------------------------------- */
 function update(dt) {
@@ -299,15 +371,26 @@ function update(dt) {
   shakeX = (Math.random() - 0.5) * shakeAmp; shakeY = (Math.random() - 0.5) * shakeAmp;
   popScore = Math.max(0, popScore - dt * 4);
 
-  if (state === 'PLAY' && block) {
-    var speed = 2.9 + drops * 0.06;
+  zp = Math.max(0, zp - dt * 2.2);
+  tapRing = Math.max(0, tapRing - dt * 3);
+  if ((state === 'PLAY' || state === 'DEMO') && block) {
+    var speed = state === 'DEMO' ? 4.6 : 2.9 + drops * 0.06;
     block.pos += block.dir * speed * dt;
     if (block.pos > block.pivot + RANGE) { block.pos = 2 * (block.pivot + RANGE) - block.pos; block.dir = -1; }
     if (block.pos < block.pivot - RANGE) { block.pos = 2 * (block.pivot - RANGE) - block.pos; block.dir = 1; }
-    if (blastEndT > 0) { blastEndT += dt; if (blastEndT > 2.0) endGame(); }
-    if (drops >= 18 || time > 50) { if (blastEndT === 0) blastEndT = 0.01; }
+    if (state === 'PLAY') {
+      if (blastEndT > 0) { blastEndT += dt; if (blastEndT > 2.0) endGame(); }
+      if (drops >= 20 || time > 55) { if (blastEndT === 0) blastEndT = 0.01; }
+    }
   }
-  if (state === 'FAIL') { failT += dt; if (failT > 1.1) endGame(); }
+  if (state === 'FAIL') {
+    failT += dt;
+    if (failT > 1.2) {
+      if (attempt === 1) { attempt = 2; init(true, false); hintOn = true; banner('ONE MORE TRY', '', [140, 255, 225], 1.2); }
+      else endGame();
+    }
+  }
+  if (state === 'DEMO') demoStep(dt);
   if (state === 'END') endT += dt;
 
   for (var i = debris.length - 1; i >= 0; i--) {
@@ -316,7 +399,7 @@ function update(dt) {
     if (d.life > 1.8) debris.splice(i, 1);
   }
   for (var j = parts.length - 1; j >= 0; j--) {
-    var p = parts[j]; p.life += dt; p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 900 * dt; p.vx *= 0.985;
+    var p = parts[j]; p.life += dt; p.x += p.vx * dt; p.y += p.vy * dt; p.vy += (p.coin ? 300 : 900) * dt; p.vx *= 0.985;
     if (p.life > p.max) parts.splice(j, 1);
   }
   for (var w = waves.length - 1; w >= 0; w--) { waves[w].t += dt; if (waves[w].t > waves[w].dur) waves.splice(w, 1); }
@@ -352,7 +435,12 @@ function draw() {
     box(L.cx, L.cz, L.w, L.d, i * BH, BH, L.col, 1, false);
   }
   if (block) {
-    var bob = 1 + 0.04 * Math.sin((time - block.born) * 8);
+    // where the block has to land: the outline of the layer underneath
+    var tl = top(), ty = stack.length * BH, x0 = tl.cx - tl.w / 2, x1 = tl.cx + tl.w / 2, z0 = tl.cz - tl.d / 2, z1 = tl.cz + tl.d / 2;
+    g.beginPath(); g.moveTo(px(x0, ty, z0), py(x0, ty, z0)); g.lineTo(px(x1, ty, z0), py(x1, ty, z0));
+    g.lineTo(px(x1, ty, z1), py(x1, ty, z1)); g.lineTo(px(x0, ty, z1), py(x0, ty, z1)); g.closePath();
+    g.setLineDash([8, 6]); g.lineWidth = 2.5; g.strokeStyle = 'rgba(255,255,255,' + (0.35 + 0.25 * Math.sin(time * 6)) + ')'; g.stroke();
+    g.setLineDash([]);
     box(bx(), bz(), block.w, block.d, stack.length * BH, BH, block.col, 1, true);
   }
   for (var d = 0; d < debris.length; d++) {
@@ -361,13 +449,15 @@ function draw() {
   }
   // shockwaves
   for (var w = 0; w < waves.length; w++) {
-    var Wv = waves[w], k = Wv.t / Wv.dur, r = easeOutCubic(k) * K * 4.2;
+    var Wv = waves[w], k = Wv.t / Wv.dur, r = easeOutCubic(k) * K * Wv.size;
     g.beginPath(); g.ellipse(Wv.x, Wv.y, r, r * 0.5, 0, 0, Math.PI * 2);
     g.lineWidth = 8 * (1 - k) + 1; g.strokeStyle = rgb(Wv.col, 1, 1 - k); g.stroke();
   }
   for (var p = 0; p < parts.length; p++) {
     var P = parts[p], a = 1 - P.life / P.max;
-    g.fillStyle = rgb(P.col, 1, a); g.fillRect(P.x, P.y, P.size, P.size);
+    g.fillStyle = rgb(P.col, 1, a);
+    if (P.coin) { g.beginPath(); g.arc(P.x, P.y, P.size * (0.4 + 0.6 * Math.abs(Math.cos(P.life * 6))), 0, 6.283); g.fill(); }
+    else g.fillRect(P.x, P.y, P.size, P.size);
   }
   if (flash > 0) { g.fillStyle = 'rgba(255,255,255,' + flash * 0.75 + ')'; g.fillRect(0, 0, W, H); }
 
@@ -378,11 +468,23 @@ function draw() {
 }
 
 function drawHud() {
+  if (state === 'DEMO') {
+    text('WATCH THIS...', W / 2, H * 0.12, Math.min(W * 0.09, 40), '#ffe8a0');
+    text('TAP TO SKIP', W / 2, H * 0.12 + Math.min(W * 0.075, 34), Math.min(W * 0.038, 16), 'rgba(255,255,255,0.7)', 'rgba(0,0,0,0)');
+    return;
+  }
   var s = 1 + popScore * 0.18;
   g.save(); g.translate(W / 2, H * 0.1); g.scale(s, s);
   text(String(score), 0, 0, Math.min(W * 0.16, 76), '#ffffff'); g.restore();
-  if (blasts === 0 && streak > 0 && state === 'PLAY') {
-    text(streak + ' / ' + need, W / 2, H * 0.1 + Math.min(W * 0.1, 46), Math.min(W * 0.05, 22), 'rgba(140,255,225,0.9)');
+  if (state === 'PLAY') {
+    // the goal, always on screen: this many perfect drops in a row set off a blast
+    var pr = Math.min(W * 0.022, 10), gap = pr * 3.2, py0 = H * 0.1 + Math.min(W * 0.11, 50);
+    for (var q = 0; q < need; q++) {
+      var qx = W / 2 + (q - (need - 1) / 2) * gap;
+      g.beginPath(); g.arc(qx, py0, pr, 0, 6.283);
+      if (q < streak) { g.fillStyle = 'rgb(140,255,225)'; g.fill(); } else { g.lineWidth = 2.5; g.strokeStyle = 'rgba(255,255,255,0.5)'; g.stroke(); }
+    }
+    text(need + ' PERFECT = BLAST', W / 2, py0 + pr * 3, Math.min(W * 0.036, 15), 'rgba(255,255,255,0.75)', 'rgba(0,0,0,0)');
   }
   // tutorial hand
   if (hintOn && state === 'PLAY' && time > 0.4 || (state === 'PLAY' && drops < 3 && time - lastTap > 3)) {
@@ -390,7 +492,7 @@ function drawHud() {
     g.beginPath(); g.arc(cxh, cyh, 26 + pulse * 16, 0, Math.PI * 2);
     g.strokeStyle = 'rgba(255,255,255,' + (0.7 - pulse * 0.5) + ')'; g.lineWidth = 4; g.stroke();
     g.beginPath(); g.arc(cxh, cyh, 20 - pulse * 4, 0, Math.PI * 2); g.fillStyle = 'rgba(255,255,255,0.85)'; g.fill();
-    text('TAP TO DROP', W / 2, H * 0.86 - 92, Math.min(W * 0.075, 32), 'rgba(255,255,255,0.92)');
+    text('TAP WHEN THEY LINE UP', W / 2, H * 0.86 - 92, Math.min(W * 0.062, 27), 'rgba(255,255,255,0.92)');
   }
 }
 function drawBanners() {
@@ -398,7 +500,7 @@ function drawBanners() {
     var b = banners[i], k = b.t / b.dur, s = easeOutBack(b.t / 0.25);
     var a = k > 0.75 ? 1 - (k - 0.75) / 0.25 : 1, big = b.sub !== '';
     var size = Math.min(W * (big ? 0.115 : 0.075), big ? 56 : 30);
-    var y = big ? H * 0.3 : H * 0.19 + i * 0;
+    var y = big ? H * 0.34 : H * 0.245;
     g.save(); g.globalAlpha = clamp(a, 0, 1); g.translate(W / 2, y); g.scale(Math.max(0.01, s), Math.max(0.01, s));
     text(b.text, 0, 0, size, rgb(b.col));
     if (big) text(b.sub, 0, size * 1.05, size * 0.78, rgb(b.col));
@@ -419,7 +521,7 @@ var iconImg = new Image(); iconImg.src = CFG.ICON;
 function drawEnd() {
   var k = easeOutCubic(endT / 0.5);
   g.fillStyle = 'rgba(10,8,26,' + 0.9 * k + ')'; g.fillRect(0, 0, W, H);
-  var isz = Math.min(W * 0.36, 190), iy = H * 0.27, s = easeOutBack((endT - 0.1) / 0.5);
+  var isz = Math.min(W * 0.3, 150), iy = H * 0.2, s = easeOutBack((endT - 0.1) / 0.5);
   g.save(); g.globalAlpha = k; g.translate(W / 2, iy); g.scale(Math.max(0.01, s), Math.max(0.01, s));
   g.shadowColor = 'rgba(0,0,0,0.5)'; g.shadowBlur = 30; g.shadowOffsetY = 12;
   g.beginPath(); g.save();
@@ -433,13 +535,20 @@ function drawEnd() {
   var ta = easeOutCubic((endT - 0.3) / 0.4);
   g.save(); g.globalAlpha = ta;
   var ts = Math.min(W * 0.115, 58);
-  text(CFG.TITLE, W / 2, H * 0.27 + isz / 2 + ts * 1.1 + (1 - ta) * 30, ts, '#ffe8a0');
-  text(CFG.TAGLINE, W / 2, H * 0.27 + isz / 2 + ts * 2.2, Math.min(W * 0.045, 20), 'rgba(190,240,225,0.95)', 'rgba(0,0,0,0)');
-  text('SCORE  ' + score, W / 2, H * 0.27 + isz / 2 + ts * 3.5, Math.min(W * 0.07, 30), '#ffffff');
+  text(CFG.TITLE, W / 2, H * 0.2 + isz / 2 + ts * 1.0 + (1 - ta) * 30, ts, '#ffe8a0');
+  text(CFG.TAGLINE, W / 2, H * 0.2 + isz / 2 + ts * 2.0, Math.min(W * 0.045, 20), 'rgba(190,240,225,0.95)', 'rgba(0,0,0,0)');
+  text('BLASTS GET BIGGER', W / 2, H * 0.2 + isz / 2 + ts * 3.2, Math.min(W * 0.05, 22), '#ffffff');
+  var ladder = [3, 5, 7, 9, 11], lx = W / 2, ly = H * 0.2 + isz / 2 + ts * 4.7, lw = Math.min(W * 0.14, 62);
+  for (var li = 0; li < 5; li++) {
+    var bxl = lx + (li - 2) * lw * 1.12, hgt = lw * (0.62 + li * 0.14), c = layerColor(li * 3 + 2);
+    roundRect(bxl - lw * 0.42, ly - hgt / 2, lw * 0.84, hgt, 8, rgb(c, 1, 0.95));
+    text(String(ladder[li]), bxl, ly, Math.min(lw * 0.5, 28), '#ffffff', 'rgba(10,8,26,0.7)');
+  }
+  text('CAN YOU REACH 11?', W / 2, ly + lw * 1.15, Math.min(W * 0.055, 24), '#ffe8a0');
   g.restore();
 
   var ca = easeOutBack((endT - 0.7) / 0.5), pulse = 1 + 0.045 * Math.sin(Math.max(0, endT - 1.1) * 5);
-  var bw = Math.min(W * 0.78, 360), bh = Math.min(W * 0.17, 76), by = H * 0.78;
+  var bw = Math.min(W * 0.78, 360), bh = Math.min(W * 0.17, 76), by = H * 0.85;
   g.save(); g.translate(W / 2, by); g.scale(Math.max(0.01, ca) * pulse, Math.max(0.01, ca) * pulse);
   g.shadowColor = 'rgba(92,232,196,0.55)'; g.shadowBlur = 28;
   roundRect(-bw / 2, -bh / 2, bw, bh, bh / 2, '#5ce8c4'); g.shadowColor = 'transparent';
@@ -457,7 +566,7 @@ function frame(ts) {
 }
 function start() {
   if (running) return; running = true;
-  init(); requestAnimationFrame(function (ts) { last = ts; frame(ts); });
+  init(false, true); requestAnimationFrame(function (ts) { last = ts; frame(ts); });
 }
 if (window.mraid && mraid.getState && mraid.getState() === 'loading') mraid.addEventListener('ready', start);
 else start();
@@ -466,7 +575,7 @@ else start();
 window.__pg = {
   info: function () { return { state: state, drops: drops, score: score, blasts: blasts, streak: streak,
     delta: block ? block.pos - block.pivot : null, layers: stack.length }; },
-  drop: function () { drop(); }, end: function () { endGame(); }
+  drop: function () { drop(); }, end: function () { endGame(); }, play: function () { startPlay(); }
 };
 })();
 </script>

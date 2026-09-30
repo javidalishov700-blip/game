@@ -1,8 +1,13 @@
 # Slice & Blast playable ad
 
-`slice-blast-playable.html` is the whole ad: one file, about 28 KB, no dependencies. It plays a
-short version of the game (about 15–25 seconds), then shows a PLAY FREE end card that opens the
-App Store page.
+`slice-blast-playable.html` is the whole ad: one file, about 40 KB, no dependencies.
+
+How it plays: the first four seconds show the game playing itself, ending in a big blast, so the
+payoff is seen before the player has done anything ("WATCH THIS..."). Then the player takes over
+("YOUR TURN!") with a visible goal (three perfect drops in a row set off a blast) and a dashed
+outline of where the block has to land. A bad drop gets one retry. The end card shows the blast
+ladder (3, 5, 7, 9, 11) with "CAN YOU REACH 11?" and the PLAY FREE button, which opens the
+App Store page. A tap during the opening demo skips it.
 
 Open it in any phone browser to try it. To change the store link, title or button text, edit the
 `CFG` block near the top of the script.
