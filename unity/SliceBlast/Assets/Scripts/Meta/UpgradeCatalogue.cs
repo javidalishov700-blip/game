@@ -32,7 +32,7 @@ namespace SliceBlast.Meta
             {
                 Id = UpgradeId.Shield,
                 Key = "shield",
-                MaxLevel = 2
+                MaxLevel = 3
             },
             new UpgradeDefinition
             {
@@ -49,14 +49,8 @@ namespace SliceBlast.Meta
         // an upgrade. Two more levels spread the same ceiling thinner, and the price of
         // reaching it now runs several times the cost of maxing Shield or Fortune outright.
         private static readonly int[] MagnetCosts = { 300, 900, 2200, 4500, 8500, 15000, 26000 };
-        private static readonly int[] ShieldCosts = { 1000, 2500 };
+        private static readonly int[] ShieldCosts = { 1000, 2500, 5000 };
         private static readonly int[] LuckCosts = { 400, 1100, 2400, 4500 };
-
-        // Armour used to go to three shields, which is three free misses in every run. It now
-        // stops at two. What the old third level cost is listed here so anyone who had already
-        // bought it is paid back (see RefundForRemovedLevels) rather than left with a level
-        // that no longer exists.
-        private static readonly int[] ShieldRemovedCosts = { 5000 };
 
         public static int Count => Definitions.Length;
 
@@ -122,83 +116,65 @@ namespace SliceBlast.Meta
 
         // ---- Live effect queries, read by gameplay ------------------------------------
 
-        // A maxed Magnet makes the perfect window 30% wider. It was 70% (0.003 a level), which
-        // players read as a hack: near-misses that should have sliced were landing perfect.
-        // Thirty percent is still felt on every level, and no longer decides the game.
-        private const float MagnetPerLevel = 0.0013f;
+        // A maxed Magnet makes the perfect window 30% wider, at every block size. It was 70%,
+        // which players read as a hack — and because it was added on top of a fixed floor, it
+        // did nothing at all for small blocks while handing big ones a +56% window.
+        private const float MagnetMaxWindowBonus = 0.30f;
 
         // Mirrors BlockSlicer.magnetFraction, the base perfect window as a share of the block.
-        // Only used to put Magnet's bonus into words the Workshop can show ("+30% wider").
+        // Only used to turn the bonus into a share of the block for BlockSlicer's ceiling.
         private const float BaseMagnetWindow = 0.03f;
 
         /// <summary>
-        /// Extra share of the reference block added to the perfect window. Capped well below
-        /// BlockSlicer's own maxThresholdFraction so a fully upgraded magnet still cannot make
-        /// a late-game sliver placement automatic.
+        /// How much wider the perfect window is, as a fraction of the base window (0.3 is 30%
+        /// wider). Read live by BlockSlicer, at the level the player has chosen to run with.
+        /// </summary>
+        public static float MagnetWindowBonus()
+        {
+            return MagnetWindowBonusAt(PlayerProfile.GetActiveUpgradeLevel(UpgradeId.Magnet));
+        }
+
+        public static float MagnetWindowBonusAt(int level)
+        {
+            return MagnetMaxWindowBonus * Mathf.Clamp01(level / (float)MaxLevel(UpgradeId.Magnet));
+        }
+
+        /// <summary>
+        /// The same bonus as a share of the reference block. Only lifts BlockSlicer's ceiling,
+        /// which stays well below maxThresholdFraction so a fully upgraded magnet still cannot
+        /// make a late-game sliver placement automatic.
         /// </summary>
         public static float MagnetBonusFraction()
         {
-            return MagnetBonusAt(PlayerProfile.GetUpgradeLevel(UpgradeId.Magnet));
-        }
-
-        public static float MagnetBonusAt(int level)
-        {
-            return MagnetPerLevel * Mathf.Max(0, level);
+            return BaseMagnetWindow * MagnetWindowBonus();
         }
 
         /// <summary>How much wider than the base window Magnet makes it at a level, in percent.</summary>
         public static int MagnetWindowPercent(int level)
         {
-            return Mathf.RoundToInt(MagnetBonusAt(level) / BaseMagnetWindow * 100f);
+            return Mathf.RoundToInt(MagnetWindowBonusAt(level) * 100f);
         }
 
         /// <summary>Shields a run opens with.</summary>
         public static int StartingShields()
         {
-            return StartingShieldsAt(PlayerProfile.GetUpgradeLevel(UpgradeId.Shield));
+            return StartingShieldsAt(PlayerProfile.GetActiveUpgradeLevel(UpgradeId.Shield));
         }
 
         public static int StartingShieldsAt(int level)
         {
-            // Capped: a profile saved while Armour still had a third level can hold a 3 here.
-            return Mathf.Clamp(level, 0, MaxLevel(UpgradeId.Shield));
+            return Mathf.Max(0, level);
         }
 
-        /// <summary>
-        /// Coins owed to a profile that holds more levels of a track than it now has — the
-        /// listed price of each level that was taken away.
-        /// </summary>
-        public static int RefundForRemovedLevels(UpgradeId id, int ownedLevel)
-        {
-            if (id != UpgradeId.Shield)
-            {
-                return 0;
-            }
-
-            int refund = 0;
-
-            for (int level = MaxLevel(id); level < ownedLevel; level++)
-            {
-                int index = level - MaxLevel(id);
-
-                if (index >= 0 && index < ShieldRemovedCosts.Length)
-                {
-                    refund += ShieldRemovedCosts[index];
-                }
-            }
-
-            return refund;
-        }
-
-        /// <summary>Blocks shaved off the random gap between specials: one a level (it was two).</summary>
+        /// <summary>Blocks shaved off the random gap between specials.</summary>
         public static int SpecialGapReduction()
         {
-            return SpecialGapReductionAt(PlayerProfile.GetUpgradeLevel(UpgradeId.Luck));
+            return SpecialGapReductionAt(PlayerProfile.GetActiveUpgradeLevel(UpgradeId.Luck));
         }
 
         public static int SpecialGapReductionAt(int level)
         {
-            return Mathf.Max(0, level);
+            return 2 * Mathf.Max(0, level);
         }
     }
 }

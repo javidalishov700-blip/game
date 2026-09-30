@@ -109,9 +109,14 @@ namespace SliceBlast.Core
             // that window and lifts its ceiling by half as much again — without the second
             // term the purchase would be invisible in exactly the situation it was bought
             // for, since a fast run at a long streak is already pinned against the cap.
+            //
+            // The bonus is a share of the base window — 30% wider means 30% wider, for a wide
+            // block and for a sliver alike. (Added to the block's width instead, it vanished
+            // under the fixed floor on small blocks and only ever helped the big ones.)
             float magnetBonus = UpgradeCatalogue.MagnetBonusFraction();
+            float baseWindow = Mathf.Max(perfectThreshold, reference * magnetFraction);
 
-            float threshold = Mathf.Max(perfectThreshold, reference * (magnetFraction + magnetBonus))
+            float threshold = baseWindow * (1f + UpgradeCatalogue.MagnetWindowBonus())
                               + thresholdPerStreak * flow.PerfectStreak
                               + snapSpeedScale * flow.CurrentSpeed
                               + flow.TutorialAssist;

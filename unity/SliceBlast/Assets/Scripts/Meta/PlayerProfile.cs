@@ -41,6 +41,13 @@ namespace SliceBlast.Meta
         public int language = -1;
 
         public int[] upgradeLevels = new int[3];
+
+        /// <summary>
+        /// How many levels of each upgrade the player has chosen to run without. The levels stay
+        /// owned (nothing is refunded and nothing has to be bought twice); the game just plays
+        /// at owned minus this. Zero everywhere means full strength.
+        /// </summary>
+        public int[] upgradeDialDown = new int[3];
         public List<string> ownedThemes = new List<string>();
         public string equippedTheme = string.Empty;
 
@@ -162,18 +169,23 @@ namespace SliceBlast.Meta
                 data.upgradeLevels = resized;
             }
 
-            // A track that has since lost its top level (Armour went from three to two): put
-            // the profile back at the new top and pay out what the removed level cost.
-            for (int i = 0; i < data.upgradeLevels.Length; i++)
+            // Absent in a profile saved before the setting existed; never more than is owned.
+            if (data.upgradeDialDown == null || data.upgradeDialDown.Length < upgradeCount)
             {
-                UpgradeId id = (UpgradeId)i;
-                int max = UpgradeCatalogue.MaxLevel(id);
+                int[] resized = new int[upgradeCount];
 
-                if (data.upgradeLevels[i] > max)
+                if (data.upgradeDialDown != null)
                 {
-                    data.coins += UpgradeCatalogue.RefundForRemovedLevels(id, data.upgradeLevels[i]);
-                    data.upgradeLevels[i] = max;
+                    Array.Copy(data.upgradeDialDown, resized, data.upgradeDialDown.Length);
                 }
+
+                data.upgradeDialDown = resized;
+            }
+
+            for (int i = 0; i < data.upgradeDialDown.Length; i++)
+            {
+                int owned = i < data.upgradeLevels.Length ? data.upgradeLevels[i] : 0;
+                data.upgradeDialDown[i] = Mathf.Clamp(data.upgradeDialDown[i], 0, Mathf.Max(0, owned));
             }
 
             if (data.ownedThemes == null)
@@ -281,6 +293,45 @@ namespace SliceBlast.Meta
             int index = (int)id;
             int[] levels = Data.upgradeLevels;
             return index >= 0 && index < levels.Length ? levels[index] : 0;
+        }
+
+        /// <summary>The level an upgrade actually plays at: what is owned, less what the player has dialled down.</summary>
+        public static int GetActiveUpgradeLevel(UpgradeId id)
+        {
+            int index = (int)id;
+            int[] dial = Data.upgradeDialDown;
+            int down = dial != null && index >= 0 && index < dial.Length ? dial[index] : 0;
+
+            return Mathf.Max(0, GetUpgradeLevel(id) - Mathf.Max(0, down));
+        }
+
+        /// <summary>
+        /// Steps an upgrade down (direction -1) or back up towards what is owned (+1). Costs
+        /// and returns nothing: it only changes how strong the upgrade plays. False when there
+        /// is nowhere left to go.
+        /// </summary>
+        public static bool TryDialUpgrade(UpgradeId id, int direction)
+        {
+            int index = (int)id;
+            int[] dial = Data.upgradeDialDown;
+
+            if (dial == null || index < 0 || index >= dial.Length)
+            {
+                return false;
+            }
+
+            int owned = GetUpgradeLevel(id);
+            int next = Mathf.Clamp(dial[index] - direction, 0, Mathf.Max(0, owned));
+
+            if (next == dial[index])
+            {
+                return false;
+            }
+
+            dial[index] = next;
+            _dirty = true;
+            InventoryChanged?.Invoke();
+            return true;
         }
 
         public static void SetUpgradeLevel(UpgradeId id, int level)

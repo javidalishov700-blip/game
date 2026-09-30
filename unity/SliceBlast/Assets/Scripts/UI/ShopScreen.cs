@@ -42,6 +42,8 @@ namespace SliceBlast.UI
             public Image[] Pips;
             public GameObject MaxStar;
             public MenuControl Buy;
+            public MenuControl Less;
+            public MenuControl More;
         }
 
         private sealed class ThemeTile
@@ -473,8 +475,21 @@ namespace SliceBlast.UI
                 row.Buy = CreatePriceButton("Buy", card, 40, 40f);
                 PlaceRight(row.Buy.Root, new Vector2(250f, 100f), 24f);
 
+                // Nudged up to make room for the - / + pair under it.
+                row.Buy.Root.anchoredPosition = new Vector2(-24f, 22f);
+
                 UpgradeId id = definition.Id;
                 row.Buy.Button.onClick.AddListener(() => BuyUpgrade(id));
+
+                // Run with less of it, if a level feels like too much. Nothing is refunded and
+                // nothing is lost: + brings back anything that was owned.
+                row.Less = UiKit.CreateButton(_font, "Less", card, "-", 60, MutedFill, Color.white, IconShape.None);
+                PlaceBottomRight(row.Less.Root, new Vector2(112f, 56f), new Vector2(-148f, 12f));
+                row.Less.Button.onClick.AddListener(() => DialUpgrade(id, -1));
+
+                row.More = UiKit.CreateButton(_font, "More", card, "+", 60, MutedFill, Color.white, IconShape.None);
+                PlaceBottomRight(row.More.Root, new Vector2(112f, 56f), new Vector2(-24f, 12f));
+                row.More.Button.onClick.AddListener(() => DialUpgrade(id, 1));
 
                 _upgradeRows[i] = row;
                 top += UpgradeCardHeight + CardGap;
@@ -1127,6 +1142,15 @@ namespace SliceBlast.UI
             rect.anchoredPosition = new Vector2(-inset, 0f);
         }
 
+        private static void PlaceBottomRight(RectTransform rect, Vector2 size, Vector2 offset)
+        {
+            rect.anchorMin = new Vector2(1f, 0f);
+            rect.anchorMax = new Vector2(1f, 0f);
+            rect.pivot = new Vector2(1f, 0f);
+            rect.sizeDelta = size;
+            rect.anchoredPosition = offset;
+        }
+
         private static void PlaceBottom(RectTransform rect, Vector2 size, Vector2 offset)
         {
             rect.anchorMin = new Vector2(0.5f, 0f);
@@ -1265,6 +1289,25 @@ namespace SliceBlast.UI
             Refresh();
         }
 
+        private void DialUpgrade(UpgradeId id, int direction)
+        {
+            if (!PlayerProfile.TryDialUpgrade(id, direction))
+            {
+                return;
+            }
+
+            for (int i = 0; i < _upgradeRows.Length; i++)
+            {
+                if (_upgradeRows[i].Id == id)
+                {
+                    Punch(_upgradeRows[i].Badge.Disc.rectTransform, 0.16f);
+                    break;
+                }
+            }
+
+            Refresh();
+        }
+
         private void ChooseTheme(string id)
         {
             bool changed;
@@ -1374,18 +1417,29 @@ namespace SliceBlast.UI
             for (int i = 0; i < _upgradeRows.Length; i++)
             {
                 UpgradeRow row = _upgradeRows[i];
-                int level = PlayerProfile.GetUpgradeLevel(row.Id);
+                int owned = PlayerProfile.GetUpgradeLevel(row.Id);
+                int active = PlayerProfile.GetActiveUpgradeLevel(row.Id);
                 bool maxed = UpgradeCatalogue.IsMaxed(row.Id);
                 int cost = UpgradeCatalogue.CostOfNext(row.Id);
                 bool affordable = !maxed && coins >= cost;
 
+                // Lit pips are the levels in force; dim ones are owned but dialled down.
+                Color resting = Color.Lerp(EmptyPip, row.Accent, 0.35f);
+
                 for (int p = 0; p < row.Pips.Length; p++)
                 {
-                    row.Pips[p].color = p < level ? row.Accent : EmptyPip;
+                    row.Pips[p].color = p < active ? row.Accent : (p < owned ? resting : EmptyPip);
                 }
 
-                row.Effect.text = UpgradeEffect(row.Id, level, maxed);
+                row.Effect.text = UpgradeEffect(row.Id, active, active >= UpgradeCatalogue.MaxLevel(row.Id));
                 SetActive(row.MaxStar, maxed);
+
+                bool canLower = active > 0;
+                bool canRaise = active < owned;
+                row.Less.Button.interactable = canLower;
+                row.More.Button.interactable = canRaise;
+                UiKit.SetLabelColor(row.Less.Label, canLower ? Color.white : MutedText);
+                UiKit.SetLabelColor(row.More.Label, canRaise ? Color.white : MutedText);
 
                 // On a dark disabled panel the ink label would be unreadable, so the states swap
                 // foreground as well as background.
