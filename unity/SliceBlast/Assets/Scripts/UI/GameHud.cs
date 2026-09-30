@@ -91,6 +91,7 @@ namespace SliceBlast.UI
         private RectTransform _titleCut;
         private Image _homeCrown;
         private Text _homeBest;
+        private Text _homeGift;
         private Text _homeStart;
         private Vector2 _titleSliceRest;
         private Vector2 _titleBlastRest;
@@ -390,6 +391,13 @@ namespace SliceBlast.UI
 
             _homeBest = CreateText("HomeBest", content, 54, FontStyle.Bold, Gold, TextAnchor.MiddleCenter);
             Anchor(_homeBest.rectTransform, new Vector2(0f, 0.5f), new Vector2(1f, 0.5f), new Vector2(60f, -490f), new Vector2(0f, -410f));
+
+            // The daily gift, above the wordmark: there is room there, and it is the first thing
+            // the eye lands on when the title comes in. Empty on every launch after the first
+            // of the day.
+            _homeGift = CreateText("HomeGift", content, 50, FontStyle.Bold, Mint, TextAnchor.MiddleCenter);
+            Anchor(_homeGift.rectTransform, new Vector2(0f, 0.5f), new Vector2(1f, 0.5f), new Vector2(0f, 450f), new Vector2(0f, 530f));
+            _homeGift.text = string.Empty;
 
             MenuControl sound = CreateButton("HomeSound", content, string.Empty, 0, new Color(1f, 1f, 1f, 0.16f), Color.white, IconShape.SoundOn);
             PlaceHomeToggle(sound, -110f);
@@ -800,9 +808,25 @@ namespace SliceBlast.UI
             }
         }
 
+        /// <summary>The line above the title when today's gift has just been paid; empty clears it.</summary>
+        public void SetDailyGift(string text)
+        {
+            if (_homeGift != null)
+            {
+                UiKit.SetText(_homeGift, text, 50, 980f);
+            }
+        }
+
         public void HideHome()
         {
             _homeAlpha = 0f;
+
+            // Said once, at the title screen it arrived on — coming back to the title after a
+            // run it would be stale.
+            if (_homeGift != null)
+            {
+                _homeGift.text = string.Empty;
+            }
 
             if (_home != null)
             {
@@ -1078,6 +1102,11 @@ namespace SliceBlast.UI
             if (_homeBest != null)
             {
                 SetAlpha(_homeBest, tail);
+            }
+
+            if (_homeGift != null)
+            {
+                SetAlpha(_homeGift, tail * (0.75f + Mathf.Sin(Clock.Unscaled * 3.2f) * 0.25f));
             }
 
             if (_homeCrown != null)

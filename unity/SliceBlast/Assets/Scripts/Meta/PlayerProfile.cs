@@ -525,6 +525,16 @@ namespace SliceBlast.Meta
         }
 
         /// <summary>
+        /// Coins in the gift for the first launch of a day: 20, and 10 more for every day of the
+        /// streak up to ten. Small enough not to touch the economy, big enough to be worth
+        /// coming back for.
+        /// </summary>
+        public static int DailyGift(int streak)
+        {
+            return 20 + 10 * Mathf.Clamp(streak, 1, 10);
+        }
+
+        /// <summary>
         /// The daily streak. Counted in UTC days so a timezone hop cannot mint a free day,
         /// and returns the streak length only on the day it actually advances.
         /// </summary>

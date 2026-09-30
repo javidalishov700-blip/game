@@ -182,6 +182,7 @@ namespace SliceBlast.Meta
             Set("hud.no_vibration", "TİTRƏYİŞ SÖNÜLÜ");
             Set("hud.privacy_choices", "MƏXFİLİK SEÇİMLƏRİ");
             Set("hud.tap_to_start", "BAŞLAMAQ ÜÇÜN TOXUN");
+            Set("hud.gift", "GÜNLÜK HƏDİYYƏ +{0}  ·  GÜN {1}");
             Set("hud.workshop", "ATELYE");
             Set("hud.run_over", "OYUN BİTDİ");
             Set("hud.play_again", "YENİDƏN OYNA");
@@ -297,6 +298,7 @@ namespace SliceBlast.Meta
 
             // ---- Title and run-over screens ---------------------------------------------------
             Add("hud.tap_to_start", "TAP TO START", "BAŞLAMAK İÇİN DOKUN", "НАЖМИ, ЧТОБЫ ИГРАТЬ");
+            Add("hud.gift", "DAILY GIFT +{0}  ·  DAY {1}", "GÜNLÜK HEDİYE +{0}  ·  {1}. GÜN", "ПОДАРОК ДНЯ +{0}  ·  ДЕНЬ {1}");
             Add("hud.workshop", "WORKSHOP", "ATÖLYE", "МАСТЕРСКАЯ");
             Add("hud.run_over", "RUN OVER", "OYUN BİTTİ", "ИГРА ОКОНЧЕНА");
             Add("hud.play_again", "PLAY AGAIN", "TEKRAR OYNA", "ИГРАТЬ СНОВА");

@@ -170,7 +170,17 @@ namespace SliceBlast.Bootstrap
             // Rolled here rather than lazily on first open of the shop, so the badge on the
             // title screen is already correct the first time the player looks at it.
             MissionSystem.EnsureToday();
-            PlayerProfile.TouchDailyStreak();
+
+            // One small gift a day, a little bigger for every day in a row.
+            int streak = PlayerProfile.TouchDailyStreak();
+
+            if (streak > 0)
+            {
+                int gift = PlayerProfile.DailyGift(streak);
+                PlayerProfile.AddCoins(gift);
+                _hud.SetCoins(PlayerProfile.Coins);
+                _hud.SetDailyGift(Loc.F("hud.gift", gift, streak));
+            }
 
             _hud.PauseToggled += OnPauseToggled;
             _hud.RestartRequested += OnRestartRequested;
