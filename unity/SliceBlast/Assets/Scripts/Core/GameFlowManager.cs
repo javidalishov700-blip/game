@@ -23,9 +23,9 @@ namespace SliceBlast.Core
         [SerializeField] private Vector3 basePlatformSize = new Vector3(3f, 0.4f, 3f);
         [SerializeField] private Vector3 baseOrigin = Vector3.zero;
 
-        // The rewarded-ad "keep going": a real second chance, not a free one — the next block
-        // comes in noticeably smaller than whatever was standing at death, and never wider
-        // than the tower's own opening platform no matter how wide that last layer was.
+        // The rewarded-ad "keep going": the next block comes in at this fraction of the very
+        // first block (the opening platform), whatever the tower looked like at death, and the
+        // swing speed goes back to where a fresh run starts.
         [SerializeField, Range(0.1f, 1f)] private float reviveSizeFraction = 0.7f;
 
         [Header("Invisible Tutorial")]
@@ -134,6 +134,10 @@ namespace SliceBlast.Core
         private int _bestScore;
         private int _perfectStreak;
         private int _spawnCount;
+        // The spawn count at the last revive (0 for a run that never revived). The speed ramp
+        // and the opening slow-down count layers from here, so a continued run starts again
+        // from the opening pace instead of the speed it died at.
+        private int _rampOrigin;
         private int _comboMultiplier = 1;
         private int _blastLevel;
         private int _blastCount;
@@ -325,6 +329,7 @@ namespace SliceBlast.Core
             _score = 0;
             _perfectStreak = 0;
             _spawnCount = 0;
+            _rampOrigin = 0;
             _comboMultiplier = 1;
             _blastLevel = 0;
             _blastCount = 0;
@@ -694,7 +699,9 @@ namespace SliceBlast.Core
 
         private void UpdateDynamicSpeed(float dt)
         {
-            if (_spawnCount > tutorialBlocks)
+            int layers = _spawnCount - _rampOrigin;
+
+            if (layers > tutorialBlocks)
             {
                 _tutorialProgress = Mathf.MoveTowards(_tutorialProgress, 1f, dt / Mathf.Max(0.01f, tutorialBlendSeconds));
             }
@@ -710,7 +717,7 @@ namespace SliceBlast.Core
             // curve only ever approaches maxSpeed, so the back half of a run keeps smoothly
             // slowing its own acceleration instead of snapping onto a ceiling.
             float combo = comboSpeedBonus * (_comboMultiplier - 1);
-            float raw = speedPerLayer * _spawnCount + combo;
+            float raw = speedPerLayer * layers + combo;
             float span = Mathf.Max(0.01f, maxSpeed - baseSpeed);
             float eased = maxSpeed - span * Mathf.Exp(-raw / span);
             float target = eased * tutorialFactor * (1f - _slowdown);
@@ -1231,10 +1238,10 @@ namespace SliceBlast.Core
         }
 
         /// <summary>
-        /// The rewarded-ad "keep going": a real second chance, not a free one. The next block
-        /// lands noticeably smaller than whatever was standing at death — capped so it is
-        /// never wider than the tower's own opening platform, however wide that layer was —
-        /// and play resumes exactly where it stopped rather than restarting the tower.
+        /// The rewarded-ad "keep going": play resumes exactly where it stopped rather than
+        /// restarting the tower, but as a fresh start for the swing — the next block is 70% of
+        /// the very first block's size, and the speed goes back to the opening pace and climbs
+        /// again from there.
         /// </summary>
         public bool TryRevive()
         {
@@ -1246,8 +1253,15 @@ namespace SliceBlast.Core
             }
 
             _nextSize = new Vector2(
-                Mathf.Min(_nextSize.x * reviveSizeFraction, basePlatformSize.x),
-                Mathf.Min(_nextSize.y * reviveSizeFraction, basePlatformSize.z));
+                basePlatformSize.x * reviveSizeFraction,
+                basePlatformSize.z * reviveSizeFraction);
+
+            // The speed ramp counts layers from here, and starts over at the opening slow pace
+            // (see ResetBoard): the speed the player died at was the reason they died.
+            _rampOrigin = _spawnCount;
+            _tutorialProgress = 0f;
+            _slowdown = 0f;
+            _speed = baseSpeed * tutorialSpeedScale;
 
             // A continued run is a fresh mini-run for streak purposes — carrying a pre-death
             // streak or blast level across the revive would hand out blasts and bonuses (an
@@ -1327,6 +1341,7 @@ namespace SliceBlast.Core
                 score = _score,
                 perfectStreak = _perfectStreak,
                 spawnCount = inFlight ? Mathf.Max(0, _spawnCount - 1) : _spawnCount,
+                rampOrigin = _rampOrigin,
                 comboMultiplier = Mathf.Max(1, _comboMultiplier),
                 blastLevel = _blastLevel,
                 blastCount = _blastCount,
@@ -1426,6 +1441,7 @@ namespace SliceBlast.Core
             _score = saved.score;
             _perfectStreak = saved.perfectStreak;
             _spawnCount = saved.spawnCount;
+            _rampOrigin = Mathf.Clamp(saved.rampOrigin, 0, _spawnCount);
             _comboMultiplier = Mathf.Max(1, saved.comboMultiplier);
             _blastLevel = Mathf.Clamp(saved.blastLevel, 0, maxBlastLevel);
             _blastCount = saved.blastCount;

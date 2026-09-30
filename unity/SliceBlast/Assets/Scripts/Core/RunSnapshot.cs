@@ -26,6 +26,9 @@ namespace SliceBlast.Core
         public int score;
         public int perfectStreak;
         public int spawnCount;
+        // Where the speed ramp counts from — set by a rewarded continue, 0 otherwise. Absent
+        // from an older save, which reads as 0 and means exactly that.
+        public int rampOrigin;
         public int comboMultiplier = 1;
         public int blastLevel;
         public int blastCount;
