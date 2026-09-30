@@ -134,6 +134,13 @@ namespace SliceBlast.Meta
 
             if (_data == null)
             {
+                // The next save would overwrite the unreadable profile with a fresh one. Keep
+                // it where it can be recovered by hand rather than erase it.
+                if (!string.IsNullOrEmpty(json))
+                {
+                    PlayerPrefs.SetString(ProfileKey + ".unreadable", json);
+                }
+
                 _data = new ProfileData();
                 MigrateLegacyKeys(_data);
                 _dirty = true;
@@ -206,6 +213,17 @@ namespace SliceBlast.Meta
             if (data.missionClaimed == null)
             {
                 data.missionClaimed = new List<int>();
+            }
+
+            // The three lists are read by index together. A save where they disagree (truncated,
+            // edited) would throw on the first run end and leave the run stuck; today's missions
+            // are simply rolled again instead.
+            if (data.missionProgress.Count != data.missionIds.Count || data.missionClaimed.Count != data.missionIds.Count)
+            {
+                data.missionIds.Clear();
+                data.missionProgress.Clear();
+                data.missionClaimed.Clear();
+                data.missionDay = string.Empty;
             }
 
             // A legacy best score that survived in the old key but not in the blob (a profile
@@ -345,6 +363,15 @@ namespace SliceBlast.Meta
             }
 
             levels[index] = Mathf.Max(0, level);
+
+            // The dial can never be further down than what is owned.
+            int[] dial = Data.upgradeDialDown;
+
+            if (dial != null && index < dial.Length)
+            {
+                dial[index] = Mathf.Clamp(dial[index], 0, levels[index]);
+            }
+
             _dirty = true;
             InventoryChanged?.Invoke();
         }

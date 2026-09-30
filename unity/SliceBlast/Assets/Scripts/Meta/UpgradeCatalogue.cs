@@ -122,10 +122,6 @@ namespace SliceBlast.Meta
         // tried and read as too little; 45% is felt on every level without deciding the game.
         private const float MagnetMaxWindowBonus = 0.45f;
 
-        // Mirrors BlockSlicer.magnetFraction, the base perfect window as a share of the block.
-        // Only used to turn the bonus into a share of the block for BlockSlicer's ceiling.
-        private const float BaseMagnetWindow = 0.03f;
-
         /// <summary>
         /// How much wider the perfect window is, as a fraction of the base window (0.3 is 30%
         /// wider). Read live by BlockSlicer, at the level the player has chosen to run with.
@@ -138,16 +134,6 @@ namespace SliceBlast.Meta
         public static float MagnetWindowBonusAt(int level)
         {
             return MagnetMaxWindowBonus * Mathf.Clamp01(level / (float)MaxLevel(UpgradeId.Magnet));
-        }
-
-        /// <summary>
-        /// The same bonus as a share of the reference block. Only lifts BlockSlicer's ceiling,
-        /// which stays well below maxThresholdFraction so a fully upgraded magnet still cannot
-        /// make a late-game sliver placement automatic.
-        /// </summary>
-        public static float MagnetBonusFraction()
-        {
-            return BaseMagnetWindow * MagnetWindowBonus();
         }
 
         /// <summary>How much wider than the base window Magnet makes it at a level, in percent.</summary>

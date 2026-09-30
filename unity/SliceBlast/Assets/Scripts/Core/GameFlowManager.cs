@@ -996,6 +996,15 @@ namespace SliceBlast.Core
                 _comboMultiplier = requestedLayers;
                 _blastLevel = Mathf.Min(_blastLevel + 1, maxBlastLevel);
             }
+            else if (_perfectStreak >= BlastStreakRequirement)
+            {
+                // The Neon perfect that lit this fuse also completed a perfect streak, and the
+                // combo blast that streak earned was held back for the Neon one (see
+                // CommitPlacement). Pay the combo it earned — the multiplier and the next
+                // blast level — rather than reset the streak to zero and drop it on the floor.
+                _comboMultiplier = Mathf.Max(_comboMultiplier, NextBlastLayers);
+                _blastLevel = Mathf.Min(_blastLevel + 1, maxBlastLevel);
+            }
 
             _perfectStreak = 0;
             _slowdown = 0f;

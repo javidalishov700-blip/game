@@ -193,7 +193,10 @@ namespace SliceBlast.Ads
 
         private IEnumerator RequestAttThenInitProviders()
         {
-            yield return new WaitForSeconds(AttDelaySeconds);
+            // Real time: a saved run that resumes paused sets timeScale to 0 inside the first
+            // second, and scaled time would never reach the end of this wait — consent and ads
+            // would sit there until the player tapped Resume.
+            yield return new WaitForSecondsRealtime(AttDelaySeconds);
 
             // Once, for the whole app, before any network asks for the advertising identifier.
             // Doing this per provider would show the player the same system prompt twice.

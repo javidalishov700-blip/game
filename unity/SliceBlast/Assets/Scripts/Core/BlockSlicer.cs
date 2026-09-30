@@ -106,22 +106,23 @@ namespace SliceBlast.Core
 
             // Ego Boost: the window widens invisibly with the streak and with block speed,
             // so a run that *feels* clean stays clean. The Magnet upgrade widens the base of
-            // that window and lifts its ceiling by half as much again — without the second
-            // term the purchase would be invisible in exactly the situation it was bought
-            // for, since a fast run at a long streak is already pinned against the cap.
+            // that window and lifts its ceiling by the same share — without the second term
+            // the purchase would be invisible in exactly the situation it was bought for,
+            // since a fast run at a long streak is already pinned against the cap, and on a
+            // small block the cap (a share of the block) is what binds.
             //
-            // The bonus is a share of the base window — 30% wider means 30% wider, for a wide
+            // The bonus is a share of the window — 45% wider means 45% wider, for a wide
             // block and for a sliver alike. (Added to the block's width instead, it vanished
             // under the fixed floor on small blocks and only ever helped the big ones.)
-            float magnetBonus = UpgradeCatalogue.MagnetBonusFraction();
+            float windowBonus = UpgradeCatalogue.MagnetWindowBonus();
             float baseWindow = Mathf.Max(perfectThreshold, reference * magnetFraction);
 
-            float threshold = baseWindow * (1f + UpgradeCatalogue.MagnetWindowBonus())
+            float threshold = baseWindow * (1f + windowBonus)
                               + thresholdPerStreak * flow.PerfectStreak
                               + snapSpeedScale * flow.CurrentSpeed
                               + flow.TutorialAssist;
 
-            threshold = Mathf.Min(threshold, reference * (maxThresholdFraction + magnetBonus * 0.5f));
+            threshold = Mathf.Min(threshold, reference * maxThresholdFraction * (1f + windowBonus));
 
             if (Mathf.Abs(delta) <= threshold)
             {

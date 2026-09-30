@@ -61,6 +61,7 @@ namespace SliceBlast.Bootstrap
 
         private bool _gameOver;
         private bool _continueOffered;
+        private bool _runRevived;
         private float _gameOverTime;
         private bool _home;
         private float _homeTime;
@@ -734,6 +735,7 @@ namespace SliceBlast.Bootstrap
 
         private void OnRunStarted()
         {
+            _runRevived = false;
             _gameOver = false;
             _home = false;
             _hud.HideHome();
@@ -1002,7 +1004,10 @@ namespace SliceBlast.Bootstrap
             // A player who paid to remove ads is never shown one, interstitial or otherwise;
             // the rewarded continue stays available because that one is opt-in and is the
             // thing they would actually miss.
-            if (!PlayerProfile.AdsRemoved)
+            // A tower that was continued with a rewarded ad ends a second time; counting that
+            // ending would bring an interstitial forward and put it right after an ad the
+            // player had just chosen to watch.
+            if (!PlayerProfile.AdsRemoved && !_runRevived)
             {
                 AdsManager.Instance.NotifyRunEnded();
             }
@@ -1028,6 +1033,7 @@ namespace SliceBlast.Bootstrap
                         return;
                     }
 
+                    _runRevived = true;
                     _gameOver = false;
                     _hud.HideGameOver();
                     _hud.ShowRunChrome(true);

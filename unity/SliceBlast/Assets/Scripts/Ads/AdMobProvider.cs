@@ -239,12 +239,19 @@ namespace SliceBlast.Ads
                 if (error != null || ad == null)
                 {
                     _interstitialStatus = "interstitial: failed " + (error != null ? error.GetCode() + " " + error.GetMessage() : "no ad");
-                    RetryAfterBackoff(++_interstitialFailures, LoadInterstitial);
+                    RetryAfterBackoff(++_interstitialFailures, LoadInterstitial, () => !IsInterstitialReady);
                     return;
                 }
 
                 _interstitialFailures = 0;
                 _interstitialStatus = "interstitial: ready";
+
+                // Two loads can be in flight (a reload while one was pending); keep the newer one.
+                if (_interstitialAd != null)
+                {
+                    _interstitialAd.Destroy();
+                }
+
                 _interstitialAd = ad;
                 _interstitialAd.OnAdFullScreenContentClosed += () => AdsManager.Post(LoadInterstitial);
                 _interstitialAd.OnAdFullScreenContentFailed += _ => AdsManager.Post(LoadInterstitial);
@@ -266,25 +273,33 @@ namespace SliceBlast.Ads
                 if (error != null || ad == null)
                 {
                     _rewardedStatus = "rewarded: failed " + (error != null ? error.GetCode() + " " + error.GetMessage() : "no ad");
-                    RetryAfterBackoff(++_rewardedFailures, LoadRewarded);
+                    RetryAfterBackoff(++_rewardedFailures, LoadRewarded, () => !IsRewardedReady);
                     return;
                 }
 
                 _rewardedFailures = 0;
                 _rewardedStatus = "rewarded: loaded";
+
+                if (_rewardedAd != null)
+                {
+                    _rewardedAd.Destroy();
+                }
+
                 _rewardedAd = ad;
             }));
         }
 
         // Started from a load callback that AdsManager.Post already moved to the main thread,
         // so the await resumes there too, through Unity's synchronisation context.
-        private static async void RetryAfterBackoff(int failures, Action load)
+        private static async void RetryAfterBackoff(int failures, Action load, Func<bool> stillNeeded)
         {
             int seconds = 1 << Math.Min(failures, MaxBackoffExponent);
             await Task.Delay(seconds * 1000);
 
-            // Leaving play mode in the editor does not cancel a pending delay.
-            if (UnityEngine.Application.isPlaying)
+            // Leaving play mode in the editor does not cancel a pending delay. And a load that
+            // succeeded in the meantime (Reload while this timer was pending) leaves nothing
+            // to retry: loading again would destroy the ready ad.
+            if (UnityEngine.Application.isPlaying && stillNeeded())
             {
                 load();
             }
