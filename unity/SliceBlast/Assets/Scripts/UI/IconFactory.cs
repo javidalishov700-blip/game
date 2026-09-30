@@ -39,7 +39,8 @@ namespace SliceBlast.UI
         Star,
         Flame,
         Globe,
-        Document
+        Document,
+        AdClip
     }
 
     public static class IconFactory
@@ -378,6 +379,52 @@ namespace SliceBlast.UI
                     text = Mathf.Min(text, Segment(p, new Vector2(-0.3f, -0.4f), new Vector2(0.12f, -0.4f), 0.055f));
 
                     return Mathf.Max(page, -text);
+                }
+
+                case IconShape.AdClip:
+                {
+                    // A clapperboard with AD cut out of its slate — the universal "this is a
+                    // video" mark, and the two letters leave no doubt that an ad is the price.
+                    // The letters are strokes, not a font glyph, like everything else here.
+                    Vector2 s = p + new Vector2(0f, 0.06f);
+                    const float stroke = 0.065f;
+
+                    float slate = Box(s - new Vector2(0f, -0.26f), new Vector2(0.84f, 0.5f), 0.09f);
+
+                    // A: two legs meeting at the apex and a crossbar.
+                    float letterA = Mathf.Min(
+                        Mathf.Min(
+                            Segment(s, new Vector2(-0.25f, -0.045f), new Vector2(-0.46f, -0.475f), stroke),
+                            Segment(s, new Vector2(-0.25f, -0.045f), new Vector2(-0.04f, -0.475f), stroke)),
+                        Segment(s, new Vector2(-0.36f, -0.33f), new Vector2(-0.14f, -0.33f), stroke));
+
+                    // D: a stem, a flat top and bottom, and the right half of a ring for the bowl.
+                    Vector2 bowl = new Vector2(0.27f, -0.26f);
+                    float letterD = Mathf.Min(
+                        Mathf.Min(
+                            Segment(s, new Vector2(0.15f, -0.475f), new Vector2(0.15f, -0.045f), stroke),
+                            Segment(s, new Vector2(0.15f, -0.045f), new Vector2(0.27f, -0.045f), stroke)),
+                        Mathf.Min(
+                            Segment(s, new Vector2(0.15f, -0.475f), new Vector2(0.27f, -0.475f), stroke),
+                            Mathf.Max(Ring(s - bowl, 0.215f, stroke), bowl.x - s.x)));
+
+                    slate = Mathf.Max(slate, -Mathf.Min(letterA, letterD));
+
+                    // The clapper: hinged at the slate's top-left corner and lifted a few
+                    // degrees, with slanted cuts for the stripes.
+                    Vector2 q = Rotate(s - new Vector2(-0.84f, 0.3f), 0.16f);
+                    float clapper = Box(q - new Vector2(0.84f, 0.15f), new Vector2(0.84f, 0.15f), 0.07f);
+
+                    float stripes = 1f;
+
+                    for (int i = 0; i < 4; i++)
+                    {
+                        float x = 0.34f + i * 0.34f;
+                        stripes = Mathf.Min(stripes, Segment(q, new Vector2(x - 0.1f, 0f), new Vector2(x + 0.1f, 0.3f), 0.055f));
+                    }
+
+                    clapper = Mathf.Max(clapper, -stripes);
+                    return Mathf.Min(slate, clapper);
                 }
 
                 case IconShape.Flame:

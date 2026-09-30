@@ -17,6 +17,7 @@ namespace SliceBlast.UI
         private static readonly Color Gold = new Color(1f, 0.79f, 0.29f);
         private static readonly Color Mint = new Color(0.36f, 0.91f, 0.77f);
         private static readonly Color Ink = new Color(0.04f, 0.05f, 0.09f);
+        private static readonly Color AdGreen = new Color(0.27f, 0.74f, 0.22f);
         private static readonly Color Panel = new Color(0.16f, 0.18f, 0.3f);
         private static readonly Color ShieldBlue = new Color(0.72f, 0.95f, 1f);
         private static readonly Color BoltBlue = new Color(0.45f, 0.85f, 1f);
@@ -584,20 +585,29 @@ namespace SliceBlast.UI
             againRect.anchorMax = new Vector2(0.5f, 0f);
             againRect.pivot = new Vector2(0.5f, 0.5f);
             againRect.sizeDelta = new Vector2(700f, 132f);
-            againRect.anchoredPosition = new Vector2(0f, 320f);
+            againRect.anchoredPosition = new Vector2(0f, 380f);
             again.Button.onClick.AddListener(() => RestartRequested?.Invoke());
 
             // Hidden until an ad is actually loaded and ready — never a button that promises
-            // a reward it cannot deliver. A play triangle and the words "WATCH AD" say what it
-            // costs: the old lightning bolt gave nobody a reason to think an ad was involved.
-            _continueButton = CreateButton("Continue", content, "-", 44, new Color(1f, 1f, 1f, 0.1f), Gold, IconShape.Play);
-            UiKit.BindLabel(_continueButton, "hud.continue", 590f);
+            // a reward it cannot deliver. It is the one thing on this screen worth a player's
+            // attention, so it is big, green and sits above everything else, and it says what
+            // it costs twice over: the AD clapperboard mark and the words WATCH AD. (The old
+            // lightning bolt gave nobody a reason to think an ad was involved, and the faint
+            // ghost button before this one was easy to miss.)
+            _continueButton = CreateButton("Continue", content, "-", 50, AdGreen, Color.white, IconShape.AdClip);
+            UiKit.BindLabel(_continueButton, "hud.continue", 580f);
+
+            // The clapperboard is wider than the 74 px every other button glyph gets.
+            LayoutElement adGlyph = _continueButton.Icon.GetComponent<LayoutElement>();
+            adGlyph.preferredWidth = 104f;
+            adGlyph.preferredHeight = 104f;
+
             RectTransform continueRect = _continueButton.Root;
             continueRect.anchorMin = new Vector2(0.5f, 0f);
             continueRect.anchorMax = new Vector2(0.5f, 0f);
             continueRect.pivot = new Vector2(0.5f, 0.5f);
-            continueRect.sizeDelta = new Vector2(780f, 112f);
-            continueRect.anchoredPosition = new Vector2(0f, 478f);
+            continueRect.sizeDelta = new Vector2(840f, 150f);
+            continueRect.anchoredPosition = new Vector2(0f, 600f);
             _continueButton.Button.onClick.AddListener(() => ContinueRequested?.Invoke());
             _continueButton.Root.gameObject.SetActive(false);
 
@@ -608,7 +618,7 @@ namespace SliceBlast.UI
             shopRect.anchorMax = new Vector2(0.5f, 0f);
             shopRect.pivot = new Vector2(0.5f, 0.5f);
             shopRect.sizeDelta = new Vector2(460f, 100f);
-            shopRect.anchoredPosition = new Vector2(0f, 200f);
+            shopRect.anchoredPosition = new Vector2(0f, 250f);
             shop.Button.onClick.AddListener(() => ShopRequested?.Invoke());
 
             _restart = CreateText("RestartHint", content, 40, FontStyle.Bold, new Color(1f, 1f, 1f, 0.7f), TextAnchor.MiddleCenter);
