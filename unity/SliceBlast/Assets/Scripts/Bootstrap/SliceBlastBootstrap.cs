@@ -556,6 +556,7 @@ namespace SliceBlast.Bootstrap
             GameEvents.PauseChanged += OnPauseChanged;
             GameEvents.NeonCharged += OnNeonCharged;
             GameEvents.CurrentPulsed += OnCurrentPulsed;
+            GameEvents.ReviveStage += OnReviveStage;
             GameEvents.CoinsAwarded += OnCoinsAwarded;
             PlayerProfile.CoinsChanged += OnCoinsChanged;
             PlayerProfile.InventoryChanged += OnInventoryChanged;
@@ -580,6 +581,7 @@ namespace SliceBlast.Bootstrap
             GameEvents.PauseChanged -= OnPauseChanged;
             GameEvents.NeonCharged -= OnNeonCharged;
             GameEvents.CurrentPulsed -= OnCurrentPulsed;
+            GameEvents.ReviveStage -= OnReviveStage;
             GameEvents.CoinsAwarded -= OnCoinsAwarded;
             Leaderboards.AuthenticationResolved -= OnLeaderboardAuthResolved;
             PlayerProfile.CoinsChanged -= OnCoinsChanged;
@@ -911,6 +913,24 @@ namespace SliceBlast.Bootstrap
             _hud.SetShield(charges);
         }
 
+        /// <summary>A rewarded continue: a low swell as the top block starts to tremble, a boom when it pops.</summary>
+        private void OnReviveStage(Vector3 position, bool grown)
+        {
+            if (!grown)
+            {
+                _audio.PlayIntro();
+                return;
+            }
+
+            _audio.PlayBlast();
+            EmitSparks(position, Mint, 7f, 0.14f);
+            EmitShockwave(position, Mint);
+            _hud.Flash(0.3f);
+
+            _hud.SetHintText(Loc.T("hud.tap_to_drop"));
+            _hud.ShowHint(true);
+        }
+
         /// <summary>
         /// Reads the equipped theme into the fields the backdrop and star field are built
         /// from. Called once before anything is constructed, and again whenever the player
@@ -992,10 +1012,10 @@ namespace SliceBlast.Bootstrap
         }
 
         /// <summary>
-        /// The run-over screen's optional rewarded-ad offer: one more, smaller block rather
-        /// than a free pass. TryRevive can still say no (e.g. the stack somehow emptied under
-        /// it), in which case the offer just goes away instead of leaving the run stuck
-        /// between the game-over screen and a game that never resumes.
+        /// The run-over screen's optional rewarded-ad offer: the top of the tower trembles
+        /// and grows back rather than a free pass. TryRevive can still say no (e.g. the stack
+        /// somehow emptied under it), in which case the offer just goes away instead of
+        /// leaving the run stuck between the game-over screen and a game that never resumes.
         /// </summary>
         private void OnContinueRequested()
         {
@@ -1011,8 +1031,9 @@ namespace SliceBlast.Bootstrap
                     _gameOver = false;
                     _hud.HideGameOver();
                     _hud.ShowRunChrome(true);
-                    _hud.SetHintText(Loc.T("hud.tap_to_drop"));
-                    _hud.ShowHint(true);
+
+                    // The hint waits for the block: there is nothing to tap during the tremble.
+                    _hud.ShowHint(false);
                 },
                 onUnavailable: () =>
                 {

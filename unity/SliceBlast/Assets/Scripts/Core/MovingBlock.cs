@@ -596,6 +596,25 @@ namespace SliceBlast.Core
             FitDecal();
         }
 
+        /// <summary>
+        /// Sets the block's footprint in place, keeping its centre — the rewarded continue
+        /// grows the top of the tower this way.
+        /// </summary>
+        public void Resize(float sizeX, float sizeZ)
+        {
+            Vector3 scale = CachedTransform.localScale;
+            scale.x = sizeX;
+            scale.z = sizeZ;
+            CachedTransform.localScale = scale;
+
+            if (_impact > 0f)
+            {
+                _restScale = scale;
+            }
+
+            FitDecal();
+        }
+
         public void Freeze()
         {
             Settle();

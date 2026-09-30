@@ -23,10 +23,13 @@ namespace SliceBlast.Core
         [SerializeField] private Vector3 basePlatformSize = new Vector3(3f, 0.4f, 3f);
         [SerializeField] private Vector3 baseOrigin = Vector3.zero;
 
-        // The rewarded-ad "keep going": the next block comes in at this fraction of the very
-        // first block (the opening platform), whatever the tower looked like at death, and the
-        // swing speed goes back to where a fresh run starts.
+        // The rewarded-ad "keep going" gives no new block: the top of the tower trembles for
+        // reviveShakeSeconds, then snaps up to this fraction of the very first block (the
+        // opening platform) if it is smaller than that, and play carries on from it at that
+        // size. The swing speed goes back to where a fresh run starts.
         [SerializeField, Range(0.1f, 1f)] private float reviveSizeFraction = 0.7f;
+        [SerializeField, Range(0.5f, 4f)] private float reviveShakeSeconds = 2.5f;
+        private const float RevivePopSeconds = 0.45f;
 
         [Header("Invisible Tutorial")]
         [SerializeField] private int tutorialBlocks = 3;
@@ -138,6 +141,14 @@ namespace SliceBlast.Core
         // and the opening slow-down count layers from here, so a continued run starts again
         // from the opening pace instead of the speed it died at.
         private int _rampOrigin;
+
+        // The top block while a continue is trembling it up to size, and what to put back.
+        private MovingBlock _reviveBlock;
+        private float _reviveElapsed;
+        private float _reviveBeat;
+        private Vector3 _reviveRestPosition;
+        private Vector3 _reviveRestScale;
+        private Vector2 _reviveGrownSize;
         private int _comboMultiplier = 1;
         private int _blastLevel;
         private int _blastCount;
@@ -426,6 +437,7 @@ namespace SliceBlast.Core
 
             _stack.Clear();
             _animating.Clear();
+            _reviveBlock = null;
 
             if (_active != null)
             {
@@ -455,6 +467,11 @@ namespace SliceBlast.Core
             if (!_running || IsPaused)
             {
                 return;
+            }
+
+            if (_reviveBlock != null)
+            {
+                TickRevive(dt);
             }
 
             TickElectric(dt);
@@ -1239,9 +1256,10 @@ namespace SliceBlast.Core
 
         /// <summary>
         /// The rewarded-ad "keep going": play resumes exactly where it stopped rather than
-        /// restarting the tower, but as a fresh start for the swing — the next block is 70% of
-        /// the very first block's size, and the speed goes back to the opening pace and climbs
-        /// again from there.
+        /// restarting the tower, and no new block is handed out. The top of the tower
+        /// trembles for a couple of seconds, then suddenly grows to 70% of the very first
+        /// block's size (it is never shrunk), and everything that follows is that size. The
+        /// swing speed goes back to the opening pace and climbs again from there.
         /// </summary>
         public bool TryRevive()
         {
@@ -1252,9 +1270,17 @@ namespace SliceBlast.Core
                 return false;
             }
 
-            _nextSize = new Vector2(
-                basePlatformSize.x * reviveSizeFraction,
-                basePlatformSize.z * reviveSizeFraction);
+            _reviveBlock = top;
+            _reviveElapsed = 0f;
+            _reviveBeat = 0f;
+            _reviveRestPosition = top.CachedTransform.position;
+            _reviveRestScale = top.RestScale;
+            _reviveGrownSize = new Vector2(
+                Mathf.Max(_reviveRestScale.x, basePlatformSize.x * reviveSizeFraction),
+                Mathf.Max(_reviveRestScale.z, basePlatformSize.z * reviveSizeFraction));
+
+            // The next block is the size the top block is about to become.
+            _nextSize = _reviveGrownSize;
 
             // The speed ramp counts layers from here, and starts over at the opening slow pace
             // (see ResetBoard): the speed the player died at was the reason they died.
@@ -1269,11 +1295,14 @@ namespace SliceBlast.Core
             _perfectStreak = 0;
             _blastLevel = 0;
 
+            // Nothing spawns until the tremble and the pop are over.
             _running = true;
             _pendingSpawn = true;
-            _spawnDelay = 0f;
+            _spawnDelay = reviveShakeSeconds + RevivePopSeconds;
             Time.timeScale = 1f;
             _deathHold = 0f;
+
+            GameEvents.RaiseReviveStage(_reviveRestPosition, false);
 
             if (cameraRig != null)
             {
@@ -1288,6 +1317,77 @@ namespace SliceBlast.Core
             }
 
             return true;
+        }
+
+        /// <summary>
+        /// The continue's tremble: the top block shakes harder and harder in place, throbbing
+        /// a little, and at the end of it pops up to its new size.
+        /// </summary>
+        private void TickRevive(float deltaTime)
+        {
+            MovingBlock block = _reviveBlock;
+
+            if (block == null)
+            {
+                _reviveBlock = null;
+                return;
+            }
+
+            _reviveElapsed += deltaTime;
+
+            if (_reviveElapsed >= reviveShakeSeconds)
+            {
+                SettleRevive();
+                PlayImpact(block, 0.45f, 3.2f, true, Color.white);
+                Shake(0.7f);
+                Haptics.Heavy();
+                GameEvents.RaiseReviveStage(block.CachedTransform.position, true);
+                return;
+            }
+
+            float t = _reviveElapsed;
+            float k = t / reviveShakeSeconds;
+            float strength = Mathf.Lerp(0.012f, 0.085f, k * k);
+
+            Vector3 jitter = new Vector3(
+                Mathf.Sin(t * 61f) + 0.6f * Mathf.Sin(t * 97f + 1.3f),
+                0.5f * Mathf.Sin(t * 83f + 0.4f),
+                Mathf.Cos(t * 73f) + 0.6f * Mathf.Sin(t * 109f + 2.1f)) * strength;
+
+            Transform tr = block.CachedTransform;
+            tr.position = _reviveRestPosition + jitter;
+
+            float throb = 1f + 0.05f * k * Mathf.Sin(t * 37f);
+            tr.localScale = new Vector3(_reviveRestScale.x * throb, _reviveRestScale.y, _reviveRestScale.z * throb);
+
+            _reviveBeat -= deltaTime;
+
+            if (_reviveBeat <= 0f)
+            {
+                _reviveBeat = Mathf.Lerp(0.45f, 0.15f, k);
+                Haptics.Light();
+            }
+        }
+
+        /// <summary>
+        /// Ends the tremble right now: the block back on its spot at its new size. Used by
+        /// the pop itself, and by a suspend mid-tremble so the saved tower is never a
+        /// half-shaken one.
+        /// </summary>
+        private void SettleRevive()
+        {
+            MovingBlock block = _reviveBlock;
+            _reviveBlock = null;
+
+            if (block == null)
+            {
+                return;
+            }
+
+            Transform tr = block.CachedTransform;
+            tr.position = _reviveRestPosition;
+            tr.localScale = _reviveRestScale;
+            block.Resize(_reviveGrownSize.x, _reviveGrownSize.y);
         }
 
         // ---- Suspend and resume ------------------------------------------------------------
@@ -1323,6 +1423,12 @@ namespace SliceBlast.Core
             if (!_running)
             {
                 return;
+            }
+
+            if (_reviveBlock != null)
+            {
+                SettleRevive();
+                _spawnDelay = Mathf.Min(_spawnDelay, RevivePopSeconds);
             }
 
             SetPaused(true);

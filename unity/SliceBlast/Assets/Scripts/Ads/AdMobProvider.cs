@@ -185,7 +185,13 @@ namespace SliceBlast.Ads
                 ad.OnAdFullScreenContentFailed -= HandleFailed;
                 LoadRewarded();
 
-                if (!earned)
+                // The reward is only handed out once the ad has closed: the game it pays for
+                // starts with an animation, and it would play out behind the ad's end card.
+                if (earned)
+                {
+                    onEarned?.Invoke();
+                }
+                else
                 {
                     onUnavailable?.Invoke();
                 }
@@ -205,11 +211,16 @@ namespace SliceBlast.Ads
             ad.OnAdFullScreenContentFailed += HandleFailed;
 
             // Posted in the order the SDK reports them, so a reward that arrives before the
-            // close is still counted before Finish decides whether it was earned.
+            // close is still counted before Finish decides whether it was earned. One that
+            // somehow turns up after it is paid out on the spot.
             ad.Show(_ => AdsManager.Post(() =>
             {
                 earned = true;
-                onEarned?.Invoke();
+
+                if (finished)
+                {
+                    onEarned?.Invoke();
+                }
             }));
         }
 

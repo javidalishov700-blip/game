@@ -69,6 +69,12 @@ namespace SliceBlast.Core
         /// <summary>One beat of the current running up the tower.</summary>
         public static event Action<Vector3> CurrentPulsed;
 
+        /// <summary>
+        /// The rewarded continue's top block: false as it starts to tremble, true at the
+        /// instant it grows. The world point is the block's centre.
+        /// </summary>
+        public static event Action<Vector3, bool> ReviveStage;
+
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         public static void Clear()
         {
@@ -85,7 +91,10 @@ namespace SliceBlast.Core
             NeonCharged = null;
             CurrentPulsed = null;
             CoinsAwarded = null;
+            ReviveStage = null;
         }
+
+        public static void RaiseReviveStage(Vector3 position, bool grown) => ReviveStage?.Invoke(position, grown);
 
         public static void RaiseHomeShown(int best) => HomeShown?.Invoke(best);
 
