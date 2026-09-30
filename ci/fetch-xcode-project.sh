@@ -16,19 +16,42 @@ API="https://api.github.com/repos/${GITHUB_REPO}"
 # TestFlight-only test-ads build) and marked as the repository's "latest" release, so
 # "ios-xcode-latest" means: whatever GitHub currently calls the latest release.
 #
-# This deliberately avoids api.github.com. Codemagic's shared build machines burn through
-# GitHub's unauthenticated API allowance (60 requests an hour per address) and get HTTP 403;
-# github.com/<repo>/releases/latest is an ordinary redirect that has no such limit.
+# A public repository is resolved without api.github.com: Codemagic's shared build machines
+# burn through GitHub's unauthenticated API allowance (60 requests an hour per address) and
+# get HTTP 403, while github.com/<repo>/releases/latest is an ordinary redirect that has no
+# such limit. A private repository has no public redirect (it is a 404), so with a
+# GITHUB_TOKEN the newest release is asked of the API instead — an authenticated call has a
+# far larger allowance.
+#
+# Either way, if the newest release cannot be worked out this stops. It used to carry on with
+# the literal tag "ios-xcode-latest", an old rolling release, and happily built and uploaded
+# a stale app (1.2.0 after 1.2.1 existed) that App Store Connect then rejected.
 if [ "$TAG" = "ios-xcode-latest" ]; then
-  LATEST_URL="$(curl -fsSL -o /dev/null -w '%{url_effective}' "https://github.com/${GITHUB_REPO}/releases/latest" || true)"
-  RESOLVED="${LATEST_URL##*/releases/tag/}"
+  RESOLVED=""
+
+  if [ -n "${GITHUB_TOKEN:-}" ]; then
+    RESOLVED="$(curl -fsS \
+        -H "Authorization: Bearer $GITHUB_TOKEN" \
+        -H "Accept: application/vnd.github+json" \
+        "$API/releases/latest" \
+      | python3 -c 'import json, sys; print(json.load(sys.stdin)["tag_name"])' || true)"
+  fi
+
+  if [ -z "$RESOLVED" ]; then
+    LATEST_URL="$(curl -fsSL -o /dev/null -w '%{url_effective}' "https://github.com/${GITHUB_REPO}/releases/latest" || true)"
+    RESOLVED="${LATEST_URL##*/releases/tag/}"
+  fi
 
   case "$RESOLVED" in
     ios-xcode-*)
       TAG="$RESOLVED"
       ;;
     *)
-      echo "Could not work out the latest release from $LATEST_URL"
+      echo "ERROR: could not work out the newest Xcode project release."
+      echo "  If the repository is private, GITHUB_TOKEN must be set in the Codemagic"
+      echo "  environment group (fine-grained token, Contents: Read-only on $GITHUB_REPO)."
+      echo "  If the token was set, it has expired or been revoked: create a new one."
+      exit 1
       ;;
   esac
 
@@ -122,3 +145,10 @@ rm -rf .xcode-unpack
 find "$DESTINATION" -name '*.sh' -exec chmod +x {} +
 
 echo "Xcode project ready at $DESTINATION"
+
+# Say which app this actually is, so a stale download is one glance in the log rather than a
+# rejection from App Store Connect twenty minutes later.
+if [ -f "$DESTINATION/Info.plist" ]; then
+  VERSION_LINE="$(grep -A1 'CFBundleShortVersionString' "$DESTINATION/Info.plist" | grep '<string>' | sed 's/[^0-9.]//g' | head -n 1)"
+  echo "App version in this project (CFBundleShortVersionString): ${VERSION_LINE:-unknown}"
+fi
