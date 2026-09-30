@@ -317,12 +317,11 @@ namespace SliceBlast.EditorTools
             PlayerSettings.companyName = EnvOr("COMPANY_NAME", "Slice Blast Games");
             PlayerSettings.productName = ProductName;
             PlayerSettings.SetApplicationIdentifier(named, bundleId);
-            // 1.2: the fault line, the workshop, coins, missions and themes. Every build made
-            // from this point on carries that content, so it is stamped 1.2 whatever became of
-            // 1.1 — if 1.1 was approved, a new 1.1.0 upload is rejected outright (90062); if it
-            // is still in review, a 1.2.0 build goes to TestFlight on its own train and does
-            // not touch that review.
-            PlayerSettings.bundleVersion = EnvOr("APP_VERSION", "1.2.0");
+            // 1.2 is live on the App Store, so a new upload must carry a higher version or it
+            // is rejected outright (90062). 1.2.1 is the Game Center leaderboard release: App
+            // Store Connect lists a build only under the version string it was stamped with,
+            // so the 1.2.1 page cannot pick up a 1.2.0 build.
+            PlayerSettings.bundleVersion = EnvOr("APP_VERSION", "1.2.1");
 
             PlayerSettings.defaultInterfaceOrientation = UIOrientation.Portrait;
             PlayerSettings.allowedAutorotateToPortrait = true;
