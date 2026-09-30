@@ -244,6 +244,9 @@ namespace SliceBlast.Meta
             Set("theme.ember", "KÖZ");
             Set("theme.vapor", "BUXAR");
             Set("theme.signal", "SİQNAL");
+            Set("theme.glacier", "BUZLAQ");
+            Set("theme.citrus", "LİMON");
+            Set("theme.crimson", "QIRMIZI");
             Set("theme.mono", "MONOLİT");
             Set("theme.aurora", "ŞİMAL ŞÖLƏSİ");
             Set("theme.abyss", "DƏRİNLİK");
@@ -366,6 +369,9 @@ namespace SliceBlast.Meta
             Add("theme.ember", "EMBER", "KOR", "УГЛИ");
             Add("theme.vapor", "VAPOUR", "BUHAR", "ПАР");
             Add("theme.signal", "SIGNAL", "SİNYAL", "СИГНАЛ");
+            Add("theme.glacier", "GLACIER", "BUZUL", "ЛЕДНИК");
+            Add("theme.citrus", "CITRUS", "LİMON", "ЦИТРУС");
+            Add("theme.crimson", "CRIMSON", "KIZIL", "БАГРОВЫЙ");
             Add("theme.mono", "MONOLITH", "MONOLİT", "МОНОЛИТ");
             Add("theme.aurora", "AURORA", "KUTUP IŞIĞI", "СИЯНИЕ");
             Add("theme.abyss", "ABYSS", "DERİNLİK", "БЕЗДНА");

@@ -96,6 +96,21 @@ namespace SliceBlast.Meta
             },
             new ThemeDefinition
             {
+                Id = "glacier",
+                Name = "GLACIER",
+                Price = 6000,
+                SkyTop = new Color(0.07f, 0.17f, 0.27f),
+                SkyBottom = new Color(0.02f, 0.04f, 0.09f),
+                StarTint = new Color(0.86f, 0.97f, 1f),
+                Platform = new Color(0.44f, 0.60f, 0.72f),
+                Accent = new Color(0.72f, 0.95f, 1f),
+                HueStart = 0.54f,
+                HueSpan = 0.08f,
+                Saturation = 0.32f,
+                Brightness = 1f
+            },
+            new ThemeDefinition
+            {
                 Id = "mono",
                 Name = "MONOLITH",
                 Price = 7000,
@@ -110,6 +125,21 @@ namespace SliceBlast.Meta
                 // ignored entirely and every ordinary block lands on a value ramp.
                 Saturation = 0f,
                 Brightness = 0.92f
+            },
+            new ThemeDefinition
+            {
+                Id = "citrus",
+                Name = "CITRUS",
+                Price = 8000,
+                SkyTop = new Color(0.14f, 0.15f, 0.03f),
+                SkyBottom = new Color(0.03f, 0.04f, 0.01f),
+                StarTint = new Color(0.95f, 1f, 0.62f),
+                Platform = new Color(0.40f, 0.44f, 0.14f),
+                Accent = new Color(0.86f, 1f, 0.26f),
+                HueStart = 0.15f,
+                HueSpan = 0.12f,
+                Saturation = 0.64f,
+                Brightness = 0.98f
             },
             new ThemeDefinition
             {
@@ -143,6 +173,21 @@ namespace SliceBlast.Meta
                 HueSpan = 0.10f,
                 Saturation = 0.62f,
                 Brightness = 0.92f
+            },
+            new ThemeDefinition
+            {
+                Id = "crimson",
+                Name = "CRIMSON",
+                Price = 14000,
+                SkyTop = new Color(0.23f, 0.02f, 0.05f),
+                SkyBottom = new Color(0.04f, 0f, 0.01f),
+                StarTint = new Color(1f, 0.76f, 0.76f),
+                Platform = new Color(0.46f, 0.14f, 0.18f),
+                Accent = new Color(1f, 0.27f, 0.32f),
+                HueStart = 0.94f,
+                HueSpan = 0.09f,
+                Saturation = 0.66f,
+                Brightness = 0.95f
             },
             new ThemeDefinition
             {
