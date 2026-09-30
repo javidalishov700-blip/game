@@ -162,6 +162,20 @@ namespace SliceBlast.Meta
                 data.upgradeLevels = resized;
             }
 
+            // A track that has since lost its top level (Armour went from three to two): put
+            // the profile back at the new top and pay out what the removed level cost.
+            for (int i = 0; i < data.upgradeLevels.Length; i++)
+            {
+                UpgradeId id = (UpgradeId)i;
+                int max = UpgradeCatalogue.MaxLevel(id);
+
+                if (data.upgradeLevels[i] > max)
+                {
+                    data.coins += UpgradeCatalogue.RefundForRemovedLevels(id, data.upgradeLevels[i]);
+                    data.upgradeLevels[i] = max;
+                }
+            }
+
             if (data.ownedThemes == null)
             {
                 data.ownedThemes = new List<string>();

@@ -32,7 +32,7 @@ namespace SliceBlast.Meta
             {
                 Id = UpgradeId.Shield,
                 Key = "shield",
-                MaxLevel = 3
+                MaxLevel = 2
             },
             new UpgradeDefinition
             {
@@ -49,8 +49,14 @@ namespace SliceBlast.Meta
         // an upgrade. Two more levels spread the same ceiling thinner, and the price of
         // reaching it now runs several times the cost of maxing Shield or Fortune outright.
         private static readonly int[] MagnetCosts = { 300, 900, 2200, 4500, 8500, 15000, 26000 };
-        private static readonly int[] ShieldCosts = { 1000, 2500, 5000 };
+        private static readonly int[] ShieldCosts = { 1000, 2500 };
         private static readonly int[] LuckCosts = { 400, 1100, 2400, 4500 };
+
+        // Armour used to go to three shields, which is three free misses in every run. It now
+        // stops at two. What the old third level cost is listed here so anyone who had already
+        // bought it is paid back (see RefundForRemovedLevels) rather than left with a level
+        // that no longer exists.
+        private static readonly int[] ShieldRemovedCosts = { 5000 };
 
         public static int Count => Definitions.Length;
 
@@ -116,10 +122,10 @@ namespace SliceBlast.Meta
 
         // ---- Live effect queries, read by gameplay ------------------------------------
 
-        // Nudged up from 0.0025 after the 7-level rebalance read as too tight in play — still
-        // nowhere near the original flat 0.006 (which nearly doubled the base window at max
-        // level and felt like cheating), just a little more forgiving at every level.
-        private const float MagnetPerLevel = 0.003f;
+        // A maxed Magnet makes the perfect window 30% wider. It was 70% (0.003 a level), which
+        // players read as a hack: near-misses that should have sliced were landing perfect.
+        // Thirty percent is still felt on every level, and no longer decides the game.
+        private const float MagnetPerLevel = 0.0013f;
 
         // Mirrors BlockSlicer.magnetFraction, the base perfect window as a share of the block.
         // Only used to put Magnet's bonus into words the Workshop can show ("+30% wider").
@@ -154,10 +160,37 @@ namespace SliceBlast.Meta
 
         public static int StartingShieldsAt(int level)
         {
-            return Mathf.Max(0, level);
+            // Capped: a profile saved while Armour still had a third level can hold a 3 here.
+            return Mathf.Clamp(level, 0, MaxLevel(UpgradeId.Shield));
         }
 
-        /// <summary>Blocks shaved off the random gap between specials.</summary>
+        /// <summary>
+        /// Coins owed to a profile that holds more levels of a track than it now has — the
+        /// listed price of each level that was taken away.
+        /// </summary>
+        public static int RefundForRemovedLevels(UpgradeId id, int ownedLevel)
+        {
+            if (id != UpgradeId.Shield)
+            {
+                return 0;
+            }
+
+            int refund = 0;
+
+            for (int level = MaxLevel(id); level < ownedLevel; level++)
+            {
+                int index = level - MaxLevel(id);
+
+                if (index >= 0 && index < ShieldRemovedCosts.Length)
+                {
+                    refund += ShieldRemovedCosts[index];
+                }
+            }
+
+            return refund;
+        }
+
+        /// <summary>Blocks shaved off the random gap between specials: one a level (it was two).</summary>
         public static int SpecialGapReduction()
         {
             return SpecialGapReductionAt(PlayerProfile.GetUpgradeLevel(UpgradeId.Luck));
@@ -165,7 +198,7 @@ namespace SliceBlast.Meta
 
         public static int SpecialGapReductionAt(int level)
         {
-            return 2 * Mathf.Max(0, level);
+            return Mathf.Max(0, level);
         }
     }
 }
