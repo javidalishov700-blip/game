@@ -8,7 +8,8 @@ namespace SliceBlast.Core
         Neon = 1,
         Electric = 2,
         Glass = 3,
-        Steel = 4
+        Steel = 4,
+        Gold = 5
     }
 
     public struct BlockDefinition
@@ -26,6 +27,9 @@ namespace SliceBlast.Core
     {
         /// <summary>Electric blue — the block, its arcs and the current it sends up the tower.</summary>
         public static readonly Color ElectricBlue = new Color(0.45f, 0.85f, 1f);
+
+        /// <summary>Gold — the coin block, its engraving and the burst it pays out in.</summary>
+        public static readonly Color GoldYellow = new Color(1f, 0.80f, 0.25f);
 
         private static readonly BlockDefinition[] Definitions =
         {
@@ -74,6 +78,16 @@ namespace SliceBlast.Core
                 SpawnWeight = 2f,
                 UsesPalette = false,
                 Label = "STEEL"
+            },
+            new BlockDefinition
+            {
+                // Pays coins when it lands perfectly; a fumbled one shatters like any special.
+                Type = BlockType.Gold,
+                Tint = GoldYellow,
+                SpeedMultiplier = 1f,
+                SpawnWeight = 1.5f,
+                UsesPalette = false,
+                Label = "GOLD"
             }
         };
 

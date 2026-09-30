@@ -271,6 +271,7 @@ namespace SliceBlast.Meta
             Set("block.Electric", "ELEKTRİK");
             Set("block.Glass", "ŞÜŞƏ");
             Set("block.Steel", "FOLAD");
+            Set("block.Gold", "QIZIL");
         }
 
         static Loc()
@@ -404,6 +405,7 @@ namespace SliceBlast.Meta
             Add("block.Electric", "ELECTRIC", "ELEKTRİK", "ЭЛЕКТРО");
             Add("block.Glass", "GLASS", "CAM", "СТЕКЛО");
             Add("block.Steel", "STEEL", "ÇELİK", "СТАЛЬ");
+            Add("block.Gold", "GOLD", "ALTIN", "ЗОЛОТО");
 
             AddAzerbaijani();
         }

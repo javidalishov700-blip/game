@@ -222,6 +222,15 @@ namespace SliceBlast.Core
                     ShowAura(false);
                     break;
 
+                case BlockType.Gold:
+                    // Polished gold: metal that catches the light, with a warm glow of its own so
+                    // it never reads as a dull yellow block, and a halo that says "worth taking".
+                    _restEmission = tint * 0.2f;
+                    SetGlow(_body, _restEmission);
+                    SetSurface(0.85f, 0.8f);
+                    ShowAura(true);
+                    break;
+
                 default:
                     ShowAura(false);
                     break;
@@ -274,6 +283,9 @@ namespace SliceBlast.Core
 
                 case BlockType.Steel:
                     return new Color(0.16f, 0.18f, 0.24f);
+
+                case BlockType.Gold:
+                    return new Color(0.45f, 0.27f, 0.02f);
 
                 default:
                     return Color.white;

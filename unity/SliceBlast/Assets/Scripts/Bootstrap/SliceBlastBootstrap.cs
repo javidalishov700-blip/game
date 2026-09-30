@@ -835,6 +835,10 @@ namespace SliceBlast.Bootstrap
                     _audio.PlayPound();
                     _audio.PlayClank();
                     break;
+
+                case BlockType.Gold:
+                    _audio.PlayChime(1.15f);
+                    break;
             }
         }
 
@@ -860,6 +864,11 @@ namespace SliceBlast.Bootstrap
 
                 case BlockType.Steel:
                     _audio.PlayClank(0.62f);
+                    break;
+
+                case BlockType.Gold:
+                    _audio.PlayShatter();
+                    _audio.PlayChime(0.6f);
                     break;
 
                 default:
@@ -917,6 +926,12 @@ namespace SliceBlast.Bootstrap
                     break;
 
                 case BlockType.Glass:
+                    EmitShockwave(reward.Position, reward.Color);
+                    break;
+
+                case BlockType.Gold:
+                    _audio.PlayNeonCharge();
+                    _hud.Flash(0.2f);
                     EmitShockwave(reward.Position, reward.Color);
                     break;
             }
@@ -1328,6 +1343,7 @@ namespace SliceBlast.Bootstrap
             materials[(int)BlockType.Electric] = SymbolMaterial(glowMaterial, IconShape.ElectricArcs, Color.white);
             materials[(int)BlockType.Glass] = SymbolMaterial(unlitMaterial, IconShape.Shield, Color.white);
             materials[(int)BlockType.Steel] = SymbolMaterial(unlitMaterial, IconShape.Chevrons, Color.white);
+            materials[(int)BlockType.Gold] = SymbolMaterial(unlitMaterial, IconShape.Coin, Color.white);
 
             return materials;
         }

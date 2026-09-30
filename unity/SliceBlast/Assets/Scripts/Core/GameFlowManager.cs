@@ -75,6 +75,9 @@ namespace SliceBlast.Core
         [SerializeField] private int electricMultiplier = 2;
         [SerializeField, Range(0f, 1f)] private float steelExpansion = 0.22f;
         [SerializeField] private int specialPerfectBonus = 25;
+
+        // What a Gold block pays, in coins, when it lands perfectly.
+        [SerializeField] private int goldBlockCoins = 25;
         // Neon marks the layers it is taking, holds for a beat, and only then breaks them.
         [SerializeField] private float neonFuseSeconds = 0.4f;
         [SerializeField] private float currentSpeed = 7f;
@@ -911,6 +914,13 @@ namespace SliceBlast.Core
                     Reward(type, string.Empty, string.Empty, new Color(0.82f, 0.86f, 0.92f), position, 0);
                     break;
 
+                case BlockType.Gold:
+                    _score += specialPerfectBonus * TotalMultiplier;
+                    AwardCoins(goldBlockCoins, position);
+                    Shake(0.3f);
+                    Haptics.Medium();
+                    Reward(type, string.Empty, string.Empty, BlockCatalogue.GoldYellow, position, 0);
+                    break;
             }
         }
 
