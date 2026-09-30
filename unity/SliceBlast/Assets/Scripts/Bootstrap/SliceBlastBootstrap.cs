@@ -568,6 +568,7 @@ namespace SliceBlast.Bootstrap
             GameEvents.NeonCharged += OnNeonCharged;
             GameEvents.CurrentPulsed += OnCurrentPulsed;
             GameEvents.ReviveStage += OnReviveStage;
+            GameEvents.RecordBroken += OnRecordBroken;
             GameEvents.CoinsAwarded += OnCoinsAwarded;
             PlayerProfile.CoinsChanged += OnCoinsChanged;
             PlayerProfile.InventoryChanged += OnInventoryChanged;
@@ -593,6 +594,7 @@ namespace SliceBlast.Bootstrap
             GameEvents.NeonCharged -= OnNeonCharged;
             GameEvents.CurrentPulsed -= OnCurrentPulsed;
             GameEvents.ReviveStage -= OnReviveStage;
+            GameEvents.RecordBroken -= OnRecordBroken;
             GameEvents.CoinsAwarded -= OnCoinsAwarded;
             Leaderboards.AuthenticationResolved -= OnLeaderboardAuthResolved;
             PlayerProfile.CoinsChanged -= OnCoinsChanged;
@@ -923,6 +925,21 @@ namespace SliceBlast.Bootstrap
         private void OnShieldChanged(int charges)
         {
             _hud.SetShield(charges);
+        }
+
+        /// <summary>The score has just passed the best the run began with: said out loud, once.</summary>
+        private void OnRecordBroken(Vector3 position)
+        {
+            Color accent = ThemeCatalogue.Equipped.Accent;
+            int beaten = _flow != null ? _flow.BestScore : 0;
+
+            _audio.PlayChime(1.4f);
+            _audio.PlayPerfect(5);
+            _hud.ShowBanner(Loc.T("hud.new_best"), Loc.F("hud.record_beat", beaten), accent);
+            _hud.Flash(0.4f);
+            EmitSparks(position, accent, 8f, 0.15f);
+            EmitShockwave(position, accent);
+            Haptics.Medium();
         }
 
         /// <summary>A rewarded continue: a low swell as the top block starts to tremble, a boom when it pops.</summary>

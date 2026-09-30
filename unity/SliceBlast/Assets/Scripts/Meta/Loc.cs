@@ -189,6 +189,7 @@ namespace SliceBlast.Meta
             Set("hud.continue", "REKLAMA BAX, DAVAM ET");
             Set("hud.tap_anywhere", "VƏ YA İSTƏNİLƏN YERƏ TOXUN");
             Set("hud.new_best", "YENİ REKORD!");
+            Set("hud.record_beat", "{0} AŞILDI");
             Set("hud.run_coins", "+{0} SİKKƏ");
             Set("legal.privacy", "MƏXFİLİK SİYASƏTİ");
             Set("legal.terms", "İSTİFADƏ ŞƏRTLƏRİ");
@@ -305,6 +306,7 @@ namespace SliceBlast.Meta
             Add("hud.continue", "WATCH AD TO CONTINUE", "REKLAM İZLE, DEVAM ET", "РЕКЛАМА — И ПРОДОЛЖИТЬ");
             Add("hud.tap_anywhere", "OR TAP ANYWHERE", "YA DA HERHANGİ BİR YERE DOKUN", "ИЛИ НАЖМИ В ЛЮБОМ МЕСТЕ");
             Add("hud.new_best", "NEW BEST!", "YENİ REKOR!", "НОВЫЙ РЕКОРД!");
+            Add("hud.record_beat", "BEAT {0}", "{0} AŞILDI", "ПОБИТО {0}");
             Add("hud.run_coins", "+{0} COINS", "+{0} ALTIN", "МОНЕТЫ: +{0}");
             Add("legal.privacy", "PRIVACY POLICY", "GİZLİLİK POLİTİKASI", "КОНФИДЕНЦИАЛЬНОСТЬ");
             Add("legal.terms", "TERMS OF USE", "KULLANIM ŞARTLARI", "УСЛОВИЯ");

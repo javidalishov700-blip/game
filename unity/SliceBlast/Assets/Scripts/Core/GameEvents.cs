@@ -69,6 +69,9 @@ namespace SliceBlast.Core
         /// <summary>One beat of the current running up the tower.</summary>
         public static event Action<Vector3> CurrentPulsed;
 
+        /// <summary>The run's score has just passed the player's best, at this world point. Once a run.</summary>
+        public static event Action<Vector3> RecordBroken;
+
         /// <summary>
         /// The rewarded continue's top block: false as it starts to tremble, true at the
         /// instant it grows. The world point is the block's centre.
@@ -92,7 +95,10 @@ namespace SliceBlast.Core
             CurrentPulsed = null;
             CoinsAwarded = null;
             ReviveStage = null;
+            RecordBroken = null;
         }
+
+        public static void RaiseRecordBroken(Vector3 position) => RecordBroken?.Invoke(position);
 
         public static void RaiseReviveStage(Vector3 position, bool grown) => ReviveStage?.Invoke(position, grown);
 

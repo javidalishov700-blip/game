@@ -142,6 +142,9 @@ namespace SliceBlast.Core
         // from the opening pace instead of the speed it died at.
         private int _rampOrigin;
 
+        // Said once per run, the moment the score passes the best it started with.
+        private bool _recordAnnounced;
+
         // The top block while a continue is trembling it up to size, and what to put back.
         private MovingBlock _reviveBlock;
         private float _reviveElapsed;
@@ -341,6 +344,7 @@ namespace SliceBlast.Core
             _perfectStreak = 0;
             _spawnCount = 0;
             _rampOrigin = 0;
+            _recordAnnounced = false;
             _comboMultiplier = 1;
             _blastLevel = 0;
             _blastCount = 0;
@@ -862,6 +866,7 @@ namespace SliceBlast.Core
             }
 
             GameEvents.RaiseScoreChanged(_score, TotalMultiplier);
+            CheckRecord(position);
             _pendingSpawn = true;
 
             if (kind == PlacementKind.Perfect && _perfectStreak >= BlastStreakRequirement && _neonFuse <= 0f)
@@ -1057,6 +1062,22 @@ namespace SliceBlast.Core
             });
 
             GameEvents.RaiseScoreChanged(_score, TotalMultiplier);
+            CheckRecord(epicenter);
+        }
+
+        /// <summary>
+        /// Announces, once, that this run has passed the best it began with. Not on a player's
+        /// very first run, where every score is a record and saying so means nothing.
+        /// </summary>
+        private void CheckRecord(Vector3 position)
+        {
+            if (_recordAnnounced || _bestScore <= 0 || _score <= _bestScore)
+            {
+                return;
+            }
+
+            _recordAnnounced = true;
+            GameEvents.RaiseRecordBroken(position);
         }
 
         /// <summary>Pops the top layer, takes it out of the impact list and bursts it.</summary>
@@ -1554,6 +1575,9 @@ namespace SliceBlast.Core
             }
 
             _score = saved.score;
+
+            // A run resumed already past its best has been told already.
+            _recordAnnounced = _bestScore <= 0 || saved.score > _bestScore;
             _perfectStreak = saved.perfectStreak;
             _spawnCount = saved.spawnCount;
             _rampOrigin = Mathf.Clamp(saved.rampOrigin, 0, _spawnCount);
