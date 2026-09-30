@@ -2,15 +2,18 @@
 
 `slice-blast-playable.html` is the whole ad: one file, about 40 KB, no dependencies.
 
-How it plays: the first four seconds show the game playing itself, ending in a big blast, so the
-payoff is seen before the player has done anything ("WATCH THIS..."). Then the player takes over
-("YOUR TURN!") with a visible goal (three perfect drops in a row set off a blast) and a dashed
-outline of where the block has to land. A bad drop gets one retry. The end card shows the blast
-ladder (3, 5, 7, 9, 11) with "CAN YOU REACH 11?" and the PLAY FREE button, which opens the
-App Store page. A tap during the opening demo skips it.
+How it plays:
 
-Open it in any phone browser to try it. To change the store link, title or button text, edit the
-`CFG` block near the top of the script.
+1. **The fail (about 8 seconds).** A hand plays for the viewer and gets it wrong in the most
+   annoying way: two perfect drops, one away from a blast ("ONE MORE = BLAST!"), then late, then
+   early, the block gets smaller each time, and finally it misses completely. The fall plays in
+   slow motion, then "FAILED!" and "YOU CAN DO BETTER?". A tap at any point skips to the next step.
+2. **The player's turn.** The goal is always on screen (the dots at the top). Blasts climb
+   3, 5, 7, 9, 11 blocks, and each one needs more perfect drops (3, 3, 4, 4, 5), so a good run
+   lasts. A missed block gets one retry. The run ends at the 11-block blast, on a second miss,
+   or after 75 seconds.
+3. **The end card** shows how far up the ladder the player got ("YOU REACHED 7. CAN YOU REACH
+   11?") and the PLAY FREE button to the App Store.
 
 ## How it hands off to the ad network
 

@@ -98,6 +98,19 @@ var stack, block, debris, parts, waves, banners, stars;
 var state, time, drops, streak, need, blasts, score, perfects, flash, endT, failT, blastEndT, lastTap;
 var nextW, nextD, skyA, skyB, skyTarget, skyBlend, popScore, hintOn;
 var attempt = 1, demoEnd = 0, prevDelta = null, retryT = 0, tapRing = 0;
+var botStep = 0, botPrev = null, botDir = 0, handPress = 0, botFailT = 0, winT = 0, bestBlast = 0;
+var LADDER = [3, 5, 7, 9, 11];
+// Perfect drops needed for each blast: it gets harder, so the run lasts and the last blast is earned.
+var NEED = [3, 3, 4, 4, 5];
+// The opening: a player who nearly gets it, then keeps getting it wrong. Offsets are a fraction
+// of the layer's width: 0 lands dead centre, anything else slices; "miss" drops at the far edge.
+var BOT = [
+  { off: 0 }, { off: 0 },
+  { off: 0.30, say: 'NOOO! SO CLOSE!' },
+  { off: -0.28, say: 'TOO EARLY!' },
+  { off: 0.33, say: "IT'S TINY NOW..." },
+  { miss: true }
+];
 
 var SKY = [
   [[26, 28, 56], [8, 8, 15]],
@@ -111,6 +124,7 @@ function init(keepScore, demo) {
   debris = []; parts = []; waves = []; banners = [];
   state = demo ? 'DEMO' : 'PLAY'; time = 0; drops = 0; streak = 0; need = 3; blasts = 0; score = keep; perfects = 0;
   flash = 0; endT = 0; failT = 0; blastEndT = 0; lastTap = 0; popScore = 0; hintOn = !demo; demoEnd = 0; prevDelta = null;
+  botStep = 0; botPrev = null; botDir = 0; handPress = 0; botFailT = 0; winT = 0;
   // A tower already under way, so the first blast has something tall to knock down.
   for (var n = 1; n <= 5; n++) {
     var sh = n % 2 === 0 ? 0.16 : -0.16;
@@ -247,7 +261,7 @@ function drop() {
   var size = axis === 'x' ? t.w : t.d;
   var delta = block.pos - tc;
   var thr = 0.12 + size * 0.075 + (drops < 3 ? size * 0.16 : 0) + streak * 0.012 + (attempt > 1 ? 0.12 : 0);
-  if (state === 'DEMO') thr = 9;
+  if (state === 'DEMO') thr = 0.12 + size * 0.075;
   var y0 = stack.length * BH;
   var col = block.col;
   drops++;
@@ -265,7 +279,7 @@ function drop() {
     if (streak >= need) { blast(); return; }
   } else {
     var overlap = size - Math.abs(delta);
-    if (overlap <= 0.06) { fail(y0); return; }
+    if (overlap <= 0.06) { if (state === 'DEMO') botFail(y0); else fail(y0); return; }
     var lo = Math.max(tc - size / 2, block.pos - size / 2), hi = Math.min(tc + size / 2, block.pos + size / 2);
     var nc = (lo + hi) / 2;
     var L2 = { cx: axis === 'x' ? nc : t.cx, cz: axis === 'z' ? nc : t.cz,
@@ -284,7 +298,8 @@ function drop() {
 
 function blast() {
   blasts++;
-  var layers = blasts === 1 ? 3 : blasts === 2 ? 5 : 7;
+  var layers = LADDER[Math.min(blasts - 1, LADDER.length - 1)];
+  bestBlast = Math.max(bestBlast, layers);
   var removable = Math.min(layers, stack.length - 1);
   var t = top(), topY = stack.length * BH;
   var bxp = px(t.cx, topY, t.cz), byp = py(t.cx, topY, t.cz);
@@ -292,18 +307,17 @@ function blast() {
     var L = stack.pop(), y = stack.length * BH;
     addDebris(L.cx, L.cz, L.w, L.d, y, L.col, (Math.random() - 0.5) * 6, (Math.random() - 0.5) * 6, 3 + Math.random() * 3.5);
   }
-  var bonus = 15 * removable * (1 + blasts);
+  var bonus = 15 * layers * (1 + blasts);
   score += bonus;
-  banner(removable + ' BLOCK BLAST', '+' + bonus, [255, 202, 74], 1.7);
+  banner(layers + ' BLOCK BLAST', '+' + bonus, [255, 202, 74], 1.7);
   flash = 0.85; shakeNow(18); sfxBlast(); zp = 2.4; coinRain(blasts === 1 ? 26 : 46);
   shockwave(bxp, byp, [255, 220, 130]);
   burst(bxp, byp, 60, [[255, 202, 74], [255, 255, 255], [120, 230, 255], [255, 120, 200]], 520);
-  streak = 0; need = 2;
+  streak = 0; need = NEED[Math.min(blasts, NEED.length - 1)];
   nextW = Math.min(BASE, nextW * 1.22); nextD = Math.min(BASE, nextD * 1.22);
   skyA = SKY[Math.min(blasts - 1, 2)]; skyB = SKY[Math.min(blasts, 2)]; skyBlend = 0;
-  if (state === 'DEMO') { if (!demoEnd) demoEnd = time + 2.3; }
-  else if (blasts >= 2 && blastEndT === 0) blastEndT = 0.01;
-  else if (blasts === 1) banner('NEXT BLAST: 5 BLOCKS!', '', [255, 150, 200], 1.6);
+  if (blasts >= LADDER.length) { state = 'WIN'; winT = 0; block = null; banner('LEGEND!', '', [255, 232, 140], 2.2); return; }
+  banner('NEXT: ' + LADDER[blasts] + ' BLOCKS!', '', [255, 150, 200], 1.5);
   spawn();
 }
 
@@ -312,6 +326,13 @@ function fail(y0) {
   addDebris(bx(), bz(), block.w, block.d, y0, block.col, 0, 0, 0.5);
   block = null; sfxEnd(); shakeNow(8);
   banner(attempt === 1 ? 'OH NO! TRY AGAIN' : 'SO CLOSE!', '', [255, 108, 96], 1.1);
+}
+
+function botFail(y0) {
+  state = 'BOTFAIL'; botFailT = 0;
+  addDebris(bx(), bz(), block.w, block.d, y0, block.col, block.axis === 'x' ? 1.2 : 0, block.axis === 'z' ? 1.2 : 0, 0.4);
+  block = null; sfxEnd(); shakeNow(14); flash = 0.35;
+  banners.length = 0;
 }
 
 function endGame() { if (state === 'END') return; state = 'END'; endT = 0; block = null; sfxEnd(); }
@@ -341,22 +362,34 @@ function onDown(e) {
   startMusic();
   if (state === 'END') { cta(); return; }
   if (hitCta(x, y)) { cta(); return; }
-  if (state === 'DEMO') { startPlay(); return; }
+  if (state === 'DEMO' || state === 'BOTFAIL') { startPlay(); return; }
   drop();
 }
 cv.addEventListener('pointerdown', onDown, { passive: false });
 
 /* ---------- the opening demo: the game plays itself once, so the payoff is seen first ------- */
-function demoStep(dt) {
-  if (block) {
-    var cur = block.pos - block.pivot;
-    if (prevDelta !== null && prevDelta * cur <= 0 && time > 0.5) { block.pos = block.pivot; drop(); prevDelta = null; return; }
-    prevDelta = cur;
+function demoStep() {
+  if (!block || botStep >= BOT.length || time - block.born < 0.35) { botPrev = block ? block.pos : null; return; }
+  var plan = BOT[botStep], t = top();
+  var tc = block.axis === 'x' ? t.cx : t.cz, size = block.axis === 'x' ? t.w : t.d, pos = block.pos;
+  var go = false;
+  if (plan.miss) {
+    // wait for the far edge, where it cannot land at all
+    go = botDir !== 0 && botDir !== block.dir && Math.abs(pos - block.pivot) > RANGE * 0.9;
+    botDir = block.dir;
+  } else {
+    var target = tc + plan.off * size;
+    go = botPrev !== null && (target - botPrev) * (target - pos) <= 0;
+    if (go) block.pos = target;
   }
-  if (demoEnd && time > demoEnd) startPlay();
+  botPrev = pos;
+  if (!go) return;
+  handPress = 1; botStep++; botPrev = null; botDir = 0;
+  drop();
+  if (plan.say && state === 'DEMO') banner(plan.say, '', [255, 120, 100], 1.1);
 }
 function startPlay() {
-  if (state !== 'DEMO') return;
+  if (state !== 'DEMO' && state !== 'BOTFAIL') return;
   init(false, false); attempt = 1;
   banner('YOUR TURN!', '', [255, 232, 140], 1.3);
 }
@@ -373,15 +406,20 @@ function update(dt) {
 
   zp = Math.max(0, zp - dt * 2.2);
   tapRing = Math.max(0, tapRing - dt * 3);
+  handPress = Math.max(0, handPress - dt * 3.5);
+  if (state === 'BOTFAIL') {
+    botFailT += dt;
+    if (botFailT > 5.5) startPlay();
+    // the fall plays out in slow motion
+    if (botFailT < 1.1) dt *= 0.3;
+  }
+  if (state === 'WIN') { winT += dt; if (winT > 2.4) endGame(); }
   if ((state === 'PLAY' || state === 'DEMO') && block) {
-    var speed = state === 'DEMO' ? 4.6 : 2.9 + drops * 0.06;
+    var speed = state === 'DEMO' ? 2.5 : Math.min(2.5 + drops * 0.045, 4.3);
     block.pos += block.dir * speed * dt;
     if (block.pos > block.pivot + RANGE) { block.pos = 2 * (block.pivot + RANGE) - block.pos; block.dir = -1; }
     if (block.pos < block.pivot - RANGE) { block.pos = 2 * (block.pivot - RANGE) - block.pos; block.dir = 1; }
-    if (state === 'PLAY') {
-      if (blastEndT > 0) { blastEndT += dt; if (blastEndT > 2.0) endGame(); }
-      if (drops >= 20 || time > 55) { if (blastEndT === 0) blastEndT = 0.01; }
-    }
+    if (state === 'PLAY' && time > 75) endGame();
   }
   if (state === 'FAIL') {
     failT += dt;
@@ -390,7 +428,7 @@ function update(dt) {
       else endGame();
     }
   }
-  if (state === 'DEMO') demoStep(dt);
+  if (state === 'DEMO') demoStep();
   if (state === 'END') endT += dt;
 
   for (var i = debris.length - 1; i >= 0; i--) {
@@ -462,21 +500,17 @@ function draw() {
   if (flash > 0) { g.fillStyle = 'rgba(255,255,255,' + flash * 0.75 + ')'; g.fillRect(0, 0, W, H); }
 
   drawHud();
-  drawBanners();
+  if (state !== 'BOTFAIL') drawBanners();
   if (state === 'END') drawEnd();
   else drawCtaPill();
 }
 
 function drawHud() {
-  if (state === 'DEMO') {
-    text('WATCH THIS...', W / 2, H * 0.12, Math.min(W * 0.09, 40), '#ffe8a0');
-    text('TAP TO SKIP', W / 2, H * 0.12 + Math.min(W * 0.075, 34), Math.min(W * 0.038, 16), 'rgba(255,255,255,0.7)', 'rgba(0,0,0,0)');
-    return;
-  }
+  if (state === 'BOTFAIL') { drawBotFail(); return; }
   var s = 1 + popScore * 0.18;
   g.save(); g.translate(W / 2, H * 0.1); g.scale(s, s);
   text(String(score), 0, 0, Math.min(W * 0.16, 76), '#ffffff'); g.restore();
-  if (state === 'PLAY') {
+  if (state === 'PLAY' || state === 'DEMO') {
     // the goal, always on screen: this many perfect drops in a row set off a blast
     var pr = Math.min(W * 0.022, 10), gap = pr * 3.2, py0 = H * 0.1 + Math.min(W * 0.11, 50);
     for (var q = 0; q < need; q++) {
@@ -484,8 +518,15 @@ function drawHud() {
       g.beginPath(); g.arc(qx, py0, pr, 0, 6.283);
       if (q < streak) { g.fillStyle = 'rgb(140,255,225)'; g.fill(); } else { g.lineWidth = 2.5; g.strokeStyle = 'rgba(255,255,255,0.5)'; g.stroke(); }
     }
-    text(need + ' PERFECT = BLAST', W / 2, py0 + pr * 3, Math.min(W * 0.036, 15), 'rgba(255,255,255,0.75)', 'rgba(0,0,0,0)');
+    if (streak === need - 1) {
+      var bl = 1 + 0.08 * Math.sin(time * 10);
+      g.save(); g.translate(W / 2, py0 + pr * 3.2); g.scale(bl, bl);
+      text('ONE MORE = BLAST!', 0, 0, Math.min(W * 0.045, 19), '#ffe08a'); g.restore();
+    } else {
+      text(need + ' PERFECT = BLAST', W / 2, py0 + pr * 3, Math.min(W * 0.036, 15), 'rgba(255,255,255,0.75)', 'rgba(0,0,0,0)');
+    }
   }
+  if (state === 'DEMO') drawHand(W / 2 + W * 0.2, H * 0.845, handPress);
   // tutorial hand
   if (hintOn && state === 'PLAY' && time > 0.4 || (state === 'PLAY' && drops < 3 && time - lastTap > 3)) {
     var pulse = 0.5 + 0.5 * Math.sin(time * 5), cxh = W / 2, cyh = H * 0.86 - 30;
@@ -493,6 +534,45 @@ function drawHud() {
     g.strokeStyle = 'rgba(255,255,255,' + (0.7 - pulse * 0.5) + ')'; g.lineWidth = 4; g.stroke();
     g.beginPath(); g.arc(cxh, cyh, 20 - pulse * 4, 0, Math.PI * 2); g.fillStyle = 'rgba(255,255,255,0.85)'; g.fill();
     text('TAP WHEN THEY LINE UP', W / 2, H * 0.86 - 92, Math.min(W * 0.062, 27), 'rgba(255,255,255,0.92)');
+  }
+}
+function drawHand(x, y, press) {
+  // a plain pointing hand, pressing down when the demo player taps
+  var s = Math.min(W, 460) / 390 * (1 - press * 0.12), dy = press * 10;
+  g.save(); g.translate(x, y + dy); g.scale(s, s); g.rotate(-0.25);
+  if (press > 0) {
+    g.beginPath(); g.arc(0, -46, 20 + (1 - press) * 26, 0, 6.283);
+    g.strokeStyle = 'rgba(255,255,255,' + press * 0.8 + ')'; g.lineWidth = 4; g.stroke();
+  }
+  g.lineWidth = 4; g.strokeStyle = 'rgba(10,8,26,0.9)'; g.fillStyle = '#ffffff';
+  g.beginPath(); g.moveTo(-9, -46); g.arcTo(-9, -58, 0, -58, 9); g.arcTo(9, -58, 9, -46, 9); g.lineTo(9, -8);
+  g.lineTo(26, -6); g.arcTo(36, -5, 36, 6, 9); g.lineTo(36, 30); g.arcTo(36, 46, 20, 46, 14); g.lineTo(-14, 46);
+  g.arcTo(-28, 46, -28, 32, 12); g.lineTo(-28, 4); g.arcTo(-28, -6, -18, -6, 9); g.lineTo(-9, -6); g.closePath();
+  g.fill(); g.stroke();
+  g.beginPath(); g.moveTo(9, 6); g.lineTo(9, 18); g.moveTo(22, 6); g.lineTo(22, 20); g.stroke();
+  g.restore();
+}
+function drawBotFail() {
+  var t = botFailT, dim = clamp((t - 0.6) / 0.6, 0, 1);
+  g.fillStyle = 'rgba(10,6,20,' + 0.72 * dim + ')'; g.fillRect(0, 0, W, H);
+  var fs = easeOutBack((t - 0.15) / 0.35), fa = clamp(t / 0.15, 0, 1);
+  g.save(); g.globalAlpha = fa; g.translate(W / 2, H * 0.3); g.rotate(-0.07); g.scale(Math.max(0.01, fs), Math.max(0.01, fs));
+  text('FAILED!', 0, 0, Math.min(W * 0.2, 96), '#ff5a4e'); g.restore();
+  var qa = easeOutCubic((t - 1.2) / 0.5);
+  if (qa > 0) {
+    g.save(); g.globalAlpha = qa;
+    text('YOU CAN DO BETTER?', W / 2, H * 0.44 + (1 - qa) * 24, Math.min(W * 0.085, 38), '#ffffff');
+    g.restore();
+  }
+  var ha = clamp((t - 1.8) / 0.4, 0, 1);
+  if (ha > 0) {
+    g.save(); g.globalAlpha = ha;
+    var pulse = 0.5 + 0.5 * Math.sin(t * 6);
+    g.beginPath(); g.arc(W / 2, H * 0.62, 34 + pulse * 18, 0, 6.283);
+    g.strokeStyle = 'rgba(92,232,196,' + (0.8 - pulse * 0.5) + ')'; g.lineWidth = 5; g.stroke();
+    drawHand(W / 2 + 10, H * 0.62 + 50, pulse);
+    text('TAP TO PLAY', W / 2, H * 0.74, Math.min(W * 0.075, 32), '#5ce8c4');
+    g.restore();
   }
 }
 function drawBanners() {
@@ -541,10 +621,12 @@ function drawEnd() {
   var ladder = [3, 5, 7, 9, 11], lx = W / 2, ly = H * 0.2 + isz / 2 + ts * 4.7, lw = Math.min(W * 0.14, 62);
   for (var li = 0; li < 5; li++) {
     var bxl = lx + (li - 2) * lw * 1.12, hgt = lw * (0.62 + li * 0.14), c = layerColor(li * 3 + 2);
-    roundRect(bxl - lw * 0.42, ly - hgt / 2, lw * 0.84, hgt, 8, rgb(c, 1, 0.95));
-    text(String(ladder[li]), bxl, ly, Math.min(lw * 0.5, 28), '#ffffff', 'rgba(10,8,26,0.7)');
+    var got = ladder[li] <= bestBlast;
+    roundRect(bxl - lw * 0.42, ly - hgt / 2, lw * 0.84, hgt, 8, got ? rgb(c, 1, 0.95) : 'rgba(255,255,255,0.12)');
+    text(String(ladder[li]), bxl, ly, Math.min(lw * 0.5, 28), got ? '#ffffff' : 'rgba(255,255,255,0.55)', 'rgba(10,8,26,0.7)');
   }
-  text('CAN YOU REACH 11?', W / 2, ly + lw * 1.15, Math.min(W * 0.055, 24), '#ffe8a0');
+  text(bestBlast >= 11 ? 'YOU REACHED 11!' : bestBlast > 0 ? 'YOU REACHED ' + bestBlast + '. CAN YOU REACH 11?' : 'CAN YOU REACH 11?',
+    W / 2, ly + lw * 1.15, Math.min(W * (bestBlast > 0 && bestBlast < 11 ? 0.045 : 0.055), 24), '#ffe8a0');
   g.restore();
 
   var ca = easeOutBack((endT - 0.7) / 0.5), pulse = 1 + 0.045 * Math.sin(Math.max(0, endT - 1.1) * 5);
@@ -574,7 +656,7 @@ else start();
 /* test hook, harmless in production */
 window.__pg = {
   info: function () { return { state: state, drops: drops, score: score, blasts: blasts, streak: streak,
-    delta: block ? block.pos - block.pivot : null, layers: stack.length }; },
+    delta: block ? block.pos - block.pivot : null, layers: stack.length, t: time, bot: botStep, best: bestBlast }; },
   drop: function () { drop(); }, end: function () { endGame(); }, play: function () { startPlay(); }
 };
 })();
