@@ -219,6 +219,30 @@ workflows:
       - name: Apply provisioning profiles
         script: xcode-project use-profiles --project "$XCODE_PROJECT"
 
+      - name: Signing diagnostics (read-only)
+        ignore_failure: true
+        script: |
+          security find-identity -v -p codesigning || true
+          echo "--- all identities (incl. invalid)"
+          security find-identity -p codesigning || true
+          echo "--- certificates on the App Store Connect side"
+          app-store-connect certificates list --type DISTRIBUTION || true
+          echo "--- installed profiles"
+          for p in "$HOME/Library/MobileDevice/Provisioning Profiles/"*.mobileprovision; do
+            [ -f "$p" ] || continue
+            security cms -D -i "$p" > /tmp/prof.plist 2>/dev/null || continue
+            echo "PROFILE: $(/usr/libexec/PlistBuddy -c 'Print :Name' /tmp/prof.plist)"
+            echo "  expires: $(/usr/libexec/PlistBuddy -c 'Print :ExpirationDate' /tmp/prof.plist)"
+            echo "  team: $(/usr/libexec/PlistBuddy -c 'Print :TeamIdentifier:0' /tmp/prof.plist)"
+            i=0
+            while /usr/libexec/PlistBuddy -c "Print :DeveloperCertificates:$i" /tmp/prof.plist >/dev/null 2>&1; do
+              /usr/libexec/PlistBuddy -c "Print :DeveloperCertificates:$i" /tmp/prof.plist > /tmp/cert.der 2>/dev/null
+              openssl x509 -inform DER -in /tmp/cert.der -noout -serial -subject -enddate 2>&1 | sed 's/^/  cert: /' || true
+              i=$((i+1))
+            done
+          done
+          exit 0
+
       - name: Set the build number
         script: |
           # Minutes since 2024 — the same formula the Unity post-process uses, so the number
