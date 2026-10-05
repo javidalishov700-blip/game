@@ -200,6 +200,7 @@ namespace SliceBlast.Meta
             Set("board.your_rank", "SƏNİN YERİN");
             Set("board.loading", "YÜKLƏNİR…");
             Set("board.error", "GAME CENTER-Ə QOŞULMAQ MÜMKÜN OLMADI.\nBİRAZDAN YENİDƏN CƏHD ET.");
+            Set("board.open_native", "GAME CENTER-Ə KEÇ");
             Set("board.empty", "HƏLƏ NƏTİCƏ YOXDUR.\nOYNA VƏ BİRİNCİ YERİ TUT.");
             Set("board.player", "OYUNÇU");
             Set("board.you", "SƏN");
@@ -322,6 +323,7 @@ namespace SliceBlast.Meta
             Add("board.your_rank", "YOUR RANK", "SENİN SIRAN", "ВАШЕ МЕСТО");
             Add("board.loading", "LOADING…", "YÜKLENİYOR…", "ЗАГРУЗКА…");
             Add("board.error", "COULDN'T REACH GAME CENTER.\nTRY AGAIN IN A MOMENT.", "GAME CENTER'A ULAŞILAMADI.\nBİRAZ SONRA TEKRAR DENE.", "НЕТ СВЯЗИ С GAME CENTER.\nПОПРОБУЙТЕ ПОЗЖЕ.");
+            Add("board.open_native", "OPEN GAME CENTER", "GAME CENTER'I AÇ", "ОТКРЫТЬ GAME CENTER");
             Add("board.empty", "NO SCORES YET.\nPLAY A RUN AND TAKE FIRST PLACE.", "HENÜZ SKOR YOK.\nBİR OYUN OYNA, ZİRVEYE YERLEŞ.", "ПОКА НЕТ РЕЗУЛЬТАТОВ.\nСЫГРАЙТЕ И ЗАЙМИТЕ ПЕРВОЕ МЕСТО.");
             Add("board.player", "PLAYER", "OYUNCU", "ИГРОК");
             Add("board.you", "YOU", "SEN", "ВЫ");

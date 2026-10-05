@@ -43,6 +43,28 @@ namespace SliceBlast.Platform
 
         private static bool _attempted;
 
+        /// <summary>
+        /// Why the last LoadTop came back empty-handed: "not-signed-in", "load-failed" (Game
+        /// Center answered with an error — the leaderboard missing or not live yet, no network)
+        /// or "timeout". Shown in small type under the error so a screenshot says which it was,
+        /// instead of three different problems all reading "couldn't reach Game Center".
+        /// </summary>
+        public static string LastFailure { get; private set; } = string.Empty;
+
+        public static void NoteTimeout()
+        {
+            LastFailure = "timeout";
+        }
+
+        /// <summary>
+        /// Apple's own leaderboard screen. It does not depend on this file's loading code at
+        /// all, so it is the way in when the in-game board cannot load.
+        /// </summary>
+        public static void ShowNativeBoard()
+        {
+            UnityEngine.Social.ShowLeaderboardUI();
+        }
+
         /// <summary>Raised once sign-in has an answer, successful or not.</summary>
         public static event Action<bool> AuthenticationResolved;
 
@@ -59,6 +81,7 @@ namespace SliceBlast.Platform
         private static void ResetStatics()
         {
             _attempted = false;
+            LastFailure = string.Empty;
             AuthenticationResolved = null;
         }
 
@@ -103,8 +126,11 @@ namespace SliceBlast.Platform
         /// </summary>
         public static void LoadTop(int count, Action<LeaderboardPage> done)
         {
+            LastFailure = string.Empty;
+
             if (!IsAuthenticated)
             {
+                LastFailure = "not-signed-in";
                 done?.Invoke(null);
                 return;
             }
@@ -121,6 +147,7 @@ namespace SliceBlast.Platform
             {
                 if (!success)
                 {
+                    LastFailure = "load-failed";
                     done?.Invoke(null);
                     return;
                 }

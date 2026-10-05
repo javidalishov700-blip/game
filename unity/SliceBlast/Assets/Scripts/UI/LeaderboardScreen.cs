@@ -56,6 +56,10 @@ namespace SliceBlast.UI
         private Text _youCaption;
         private Text _status;
 
+        // Under the error: a way into Apple's own board, and the reason in small type.
+        private MenuControl _openNative;
+        private Text _reason;
+
         // The gold medal's shine: a glow behind it that breathes, and a bar of light that
         // sweeps across the face every couple of seconds.
         private Image _goldGlow;
@@ -98,10 +102,28 @@ namespace SliceBlast.UI
             UiKit.Anchor(_status.rectTransform, new Vector2(0f, 0.5f), new Vector2(1f, 0.5f), new Vector2(60f, -120f), new Vector2(-60f, 120f));
             _status.horizontalOverflow = HorizontalWrapMode.Wrap;
 
+            BuildErrorExtras(safeContent);
+
             // Nothing to say and no standing to show until the first answer arrives.
             HideStatus();
             _you.Root.gameObject.SetActive(false);
             _youCaption.gameObject.SetActive(false);
+        }
+
+        private void BuildErrorExtras(RectTransform root)
+        {
+            _openNative = UiKit.CreateButton(_font, "OpenGameCenter", root, "-", 40, new Color(1f, 1f, 1f, 0.16f), Color.white, IconShape.Crown);
+            UiKit.BindLabel(_openNative, "board.open_native", 560f);
+            RectTransform rect = _openNative.Root;
+            rect.anchorMin = new Vector2(0.5f, 0.5f);
+            rect.anchorMax = new Vector2(0.5f, 0.5f);
+            rect.pivot = new Vector2(0.5f, 0.5f);
+            rect.sizeDelta = new Vector2(760f, 112f);
+            rect.anchoredPosition = new Vector2(0f, -230f);
+            _openNative.Button.onClick.AddListener(Leaderboards.ShowNativeBoard);
+
+            _reason = UiKit.CreateText(_font, "Reason", root, 30, FontStyle.Normal, new Color(1f, 1f, 1f, 0.35f), TextAnchor.MiddleCenter);
+            UiKit.Anchor(_reason.rectTransform, new Vector2(0f, 0.5f), new Vector2(1f, 0.5f), new Vector2(60f, -360f), new Vector2(-60f, -310f));
         }
 
         private void BuildHeader(RectTransform root)
@@ -298,7 +320,7 @@ namespace SliceBlast.UI
             if (page == null)
             {
                 ClearRows();
-                ShowStatus(Loc.T("board.error"));
+                ShowStatus(Loc.T("board.error"), true);
                 return;
             }
 
@@ -420,15 +442,36 @@ namespace SliceBlast.UI
             _youCaption.gameObject.SetActive(false);
         }
 
-        private void ShowStatus(string text)
+        private void ShowStatus(string text, bool error = false)
         {
             _status.text = text;
             _status.gameObject.SetActive(true);
+
+            if (_openNative != null)
+            {
+                _openNative.Root.gameObject.SetActive(error);
+            }
+
+            if (_reason != null)
+            {
+                _reason.text = error ? Leaderboards.LastFailure : string.Empty;
+                _reason.gameObject.SetActive(error);
+            }
         }
 
         private void HideStatus()
         {
             _status.gameObject.SetActive(false);
+
+            if (_openNative != null)
+            {
+                _openNative.Root.gameObject.SetActive(false);
+            }
+
+            if (_reason != null)
+            {
+                _reason.gameObject.SetActive(false);
+            }
         }
 
         private void Update()
@@ -447,6 +490,7 @@ namespace SliceBlast.UI
 
             if (_loading && Clock.Unscaled - _loadStarted > LoadTimeout)
             {
+                Leaderboards.NoteTimeout();
                 Complete(_token, null);
             }
 
