@@ -454,7 +454,7 @@ namespace SliceBlast.UI
 
             if (_reason != null)
             {
-                _reason.text = error ? Leaderboards.LastFailure : string.Empty;
+                _reason.text = error ? Leaderboards.Diagnostics : string.Empty;
                 _reason.gameObject.SetActive(error);
             }
         }

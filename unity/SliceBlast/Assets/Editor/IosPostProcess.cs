@@ -54,6 +54,7 @@ namespace SliceBlast.EditorTools
             StampInfoPlist(builtPath);
             WriteAppIcon(builtPath);
             WriteLocalizations(builtPath);
+            LinkGameKit(builtPath);
         }
 
         private static void StampInfoPlist(string builtPath)
@@ -173,6 +174,28 @@ namespace SliceBlast.EditorTools
             catch (Exception exception)
             {
                 Debug.LogWarning($"[SliceBlast] Localization injection skipped: {exception.Message}");
+            }
+        }
+
+        /// <summary>
+        /// The Game Center plugin (Plugins/iOS/SliceBlastGameCenter.mm) names GameKit as a
+        /// dependency itself; this makes sure of it on the framework target that holds the code,
+        /// since an unlinked framework fails at link time, on the Mac, far from here.
+        /// </summary>
+        private static void LinkGameKit(string builtPath)
+        {
+            try
+            {
+                string pbxPath = PBXProject.GetPBXProjectPath(builtPath);
+                PBXProject project = new PBXProject();
+                project.ReadFromFile(pbxPath);
+                project.AddFrameworkToProject(project.GetUnityFrameworkTargetGuid(), "GameKit.framework", false);
+                project.WriteToFile(pbxPath);
+                Debug.Log("[SliceBlast] GameKit linked");
+            }
+            catch (Exception exception)
+            {
+                Debug.LogWarning($"[SliceBlast] GameKit link skipped: {exception.Message}");
             }
         }
 

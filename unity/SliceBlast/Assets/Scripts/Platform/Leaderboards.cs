@@ -56,6 +56,13 @@ namespace SliceBlast.Platform
             LastFailure = "timeout";
         }
 
+        /// <summary>How the last score post went: "ok", or where it failed. Empty until one has been tried.</summary>
+        public static string LastReport { get; private set; } = string.Empty;
+
+        /// <summary>The one line the board prints under an error.</summary>
+        public static string Diagnostics =>
+            string.IsNullOrEmpty(LastReport) ? LastFailure : LastFailure + "   score: " + LastReport;
+
         /// <summary>
         /// Apple's own leaderboard screen. It does not depend on this file's loading code at
         /// all, so it is the way in when the in-game board cannot load.
@@ -82,6 +89,7 @@ namespace SliceBlast.Platform
         {
             _attempted = false;
             LastFailure = string.Empty;
+            LastReport = string.Empty;
             AuthenticationResolved = null;
         }
 
@@ -116,6 +124,23 @@ namespace SliceBlast.Platform
                 return;
             }
 
+            // On a phone, GameKit's current API, which also says why a post failed; Unity's
+            // older call is the fallback if that one is refused, and what everything else uses.
+            if (GameCenterNative.Available)
+            {
+                GameCenterNative.Submit(BestScoreId, score, result =>
+                {
+                    LastReport = result != null ? result.Describe() : "no-result";
+
+                    if (result == null || !result.ok)
+                    {
+                        UnityEngine.Social.ReportScore(score, BestScoreId, success => { });
+                    }
+                });
+
+                return;
+            }
+
             UnityEngine.Social.ReportScore(score, BestScoreId, success => { });
         }
 
@@ -132,6 +157,23 @@ namespace SliceBlast.Platform
             {
                 LastFailure = "not-signed-in";
                 done?.Invoke(null);
+                return;
+            }
+
+            if (GameCenterNative.Available)
+            {
+                GameCenterNative.LoadTop(BestScoreId, count, result =>
+                {
+                    if (result == null || !result.ok)
+                    {
+                        LastFailure = result != null ? result.Describe() : "no-result";
+                        done?.Invoke(null);
+                        return;
+                    }
+
+                    done?.Invoke(BuildNativePage(result));
+                });
+
                 return;
             }
 
@@ -170,6 +212,41 @@ namespace SliceBlast.Platform
 
                 UnityEngine.Social.LoadUsers(ids, profiles => done?.Invoke(BuildPage(board, scores, profiles)));
             });
+        }
+
+        private static LeaderboardPage BuildNativePage(NativeBoardResult result)
+        {
+            ILocalUser local = UnityEngine.Social.localUser;
+            string localName = local != null && !string.IsNullOrEmpty(local.userName) ? local.userName : Loc.T("board.you");
+
+            NativeBoardEntry[] entries = result.entries ?? new NativeBoardEntry[0];
+            LeaderboardEntry[] top = new LeaderboardEntry[entries.Length];
+
+            for (int i = 0; i < entries.Length; i++)
+            {
+                NativeBoardEntry entry = entries[i];
+
+                top[i] = new LeaderboardEntry
+                {
+                    Rank = entry.rank > 0 ? entry.rank : i + 1,
+                    Name = entry.local ? localName : string.IsNullOrEmpty(entry.name) ? Loc.T("board.player") : entry.name,
+                    Score = entry.score,
+                    IsLocalPlayer = entry.local
+                };
+            }
+
+            Array.Sort(top, (a, b) => a.Rank.CompareTo(b.Rank));
+
+            bool hasLocal = result.hasLocal && result.localRank > 0 && result.localScore > 0;
+
+            return new LeaderboardPage
+            {
+                Top = top,
+                HasLocalScore = hasLocal,
+                LocalRank = hasLocal ? result.localRank : 0,
+                LocalScore = hasLocal ? result.localScore : 0,
+                LocalName = localName
+            };
         }
 
         private static LeaderboardPage BuildPage(ILeaderboard board, IScore[] scores, IUserProfile[] profiles)
