@@ -118,10 +118,62 @@ namespace SliceBlast.EditorTools
             }
         }
 
+        /// <summary>
+        /// Android build. With a release keystore in the environment (ANDROID_KEYSTORE_BASE64 or
+        /// ANDROID_KEYSTORE_NAME, plus the two passwords and the key alias) it produces a signed
+        /// .aab for Google Play; without one, an installable .apk signed with Unity's debug key,
+        /// which is what a first test on a phone needs. GameCI passes the output folder with
+        /// -customBuildPath.
+        /// </summary>
         [MenuItem("Slice & Blast/Build Android APK")]
         public static void BuildAndroid()
         {
-            Run(BuildTarget.Android, BuildTargetGroup.Android, "build/android/sliceblast.apk");
+            bool bundle = HasAndroidKeystore();
+            EditorUserBuildSettings.buildAppBundle = bundle;
+
+            string folder = CommandLineArgument("-customBuildPath", "build/android");
+            Run(BuildTarget.Android, BuildTargetGroup.Android,
+                Path.Combine(folder, bundle ? "sliceblast.aab" : "sliceblast.apk"));
+        }
+
+        private static bool HasAndroidKeystore()
+        {
+            return !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("ANDROID_KEYSTORE_BASE64"))
+                || !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("ANDROID_KEYSTORE_NAME"));
+        }
+
+        private static void ApplyAndroidSettings()
+        {
+            PlayerSettings.Android.minSdkVersion = AndroidSdkVersions.AndroidApiLevel24;
+            PlayerSettings.Android.targetSdkVersion = AndroidSdkVersions.AndroidApiLevelAuto;
+            PlayerSettings.Android.targetArchitectures = AndroidArchitecture.ARMv7 | AndroidArchitecture.ARM64;
+            PlayerSettings.Android.bundleVersionCode = int.TryParse(
+                EnvOr("ANDROID_VERSION_CODE", CommandLineArgument("-androidVersionCode", string.Empty)),
+                out int code) && code > 0
+                ? code
+                // Minutes since 2024, the same climbing number iOS uses: Google Play refuses an
+                // upload whose version code is not higher than every earlier one.
+                : (int)((DateTimeOffset.UtcNow.ToUnixTimeSeconds() - 1704067200L) / 60);
+
+            if (!HasAndroidKeystore())
+            {
+                PlayerSettings.Android.useCustomKeystore = false;
+                return;
+            }
+
+            string keystorePath = EnvOr("ANDROID_KEYSTORE_NAME", "sliceblast-release.keystore");
+            string base64 = Environment.GetEnvironmentVariable("ANDROID_KEYSTORE_BASE64");
+
+            if (!string.IsNullOrEmpty(base64) && !File.Exists(keystorePath))
+            {
+                File.WriteAllBytes(keystorePath, Convert.FromBase64String(base64));
+            }
+
+            PlayerSettings.Android.useCustomKeystore = true;
+            PlayerSettings.Android.keystoreName = Path.GetFullPath(keystorePath);
+            PlayerSettings.Android.keystorePass = EnvOr("ANDROID_KEYSTORE_PASS", string.Empty);
+            PlayerSettings.Android.keyaliasName = EnvOr("ANDROID_KEYALIAS_NAME", string.Empty);
+            PlayerSettings.Android.keyaliasPass = EnvOr("ANDROID_KEYALIAS_PASS", string.Empty);
         }
 
         private static void Run(BuildTarget target, BuildTargetGroup group, string outputPath)
@@ -335,7 +387,18 @@ namespace SliceBlast.EditorTools
             // The Google Mobile Ads Unity Plugin is in the repo and its own settings asset is
             // configured (Assets/GoogleMobileAds/Resources/GoogleMobileAdsSettings.asset) — no
             // manual per-machine "Scripting Define Symbols" step needed any more.
-            AddScriptingDefine(named, "SLICEBLAST_ADS_ENABLED");
+            //
+            // Android stays ad-free until the AdMob account has an Android app: the units in
+            // AdMobProvider's Android branch are Google's public test ones, which must not
+            // reach players. Set ANDROID_ADS=1 for a build that should show those test ads.
+            if (target != BuildTarget.Android || EnvOr("ANDROID_ADS", "0") == "1")
+            {
+                AddScriptingDefine(named, "SLICEBLAST_ADS_ENABLED");
+            }
+            else
+            {
+                RemoveScriptingDefine(named, "SLICEBLAST_ADS_ENABLED");
+            }
 
             // com.unity.ads.ios-support (iOS 14 Advertising Support) is in the project —
             // AppTrackingTransparency.cs can now actually show the system permission prompt
@@ -355,6 +418,11 @@ namespace SliceBlast.EditorTools
             }
 
             ApplySplashSettings();
+
+            if (target == BuildTarget.Android)
+            {
+                ApplyAndroidSettings();
+            }
 
             if (target != BuildTarget.iOS)
             {

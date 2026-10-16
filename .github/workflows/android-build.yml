@@ -1,0 +1,93 @@
+# Builds the Android player with Unity on a free Linux runner (no Mac needed).
+#
+# Without signing secrets it produces an installable .apk (debug-signed) — enough to try the
+# game on a phone. With the four ANDROID_* secrets below it produces a signed .aab for
+# Google Play instead. Either way the file is published as an `android-<run_id>` release.
+#
+# Secrets (Settings → Secrets and variables → Actions):
+#   UNITY_EMAIL / UNITY_PASSWORD / UNITY_LICENSE   same ones the iOS workflow uses
+#   ANDROID_KEYSTORE_BASE64   optional — the release keystore, base64 encoded
+#   ANDROID_KEYSTORE_PASS     optional
+#   ANDROID_KEYALIAS_NAME     optional
+#   ANDROID_KEYALIAS_PASS     optional
+name: Android build
+
+on:
+  workflow_dispatch:
+    inputs:
+      unityVersion:
+        description: "Unity version (must have a GameCI image published)"
+        required: false
+        default: "6000.3.22f1"
+
+jobs:
+  android:
+    name: Unity → Android
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: false
+
+      - name: Free disk space
+        run: |
+          set -u
+          df -h / | tail -n 1
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/.ghcup \
+            /usr/local/share/boost /opt/hostedtoolcache/CodeQL || true
+          sudo docker image prune --all --force > /dev/null 2>&1 || true
+          df -h / | tail -n 1
+
+      - uses: actions/cache@v4
+        with:
+          path: unity/SliceBlast/Library
+          key: unity-library-android-${{ hashFiles('unity/SliceBlast/Assets/**') }}
+          restore-keys: unity-library-android-
+
+      - uses: game-ci/unity-builder@v4
+        env:
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+        with:
+          projectPath: unity/SliceBlast
+          unityVersion: ${{ inputs.unityVersion }}
+          targetPlatform: Android
+          allowDirtyBuild: true
+          # Our own entry point, for the same reason as the iOS workflow: it applies the player
+          # settings (IL2CPP, ARM64, signing, version code) before BuildPlayer runs.
+          buildMethod: SliceBlast.EditorTools.SliceBlastBuild.BuildAndroid
+          androidKeystoreBase64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          androidKeystorePass: ${{ secrets.ANDROID_KEYSTORE_PASS }}
+          androidKeyaliasName: ${{ secrets.ANDROID_KEYALIAS_NAME }}
+          androidKeyaliasPass: ${{ secrets.ANDROID_KEYALIAS_PASS }}
+
+      - name: Find the build output
+        id: out
+        run: |
+          set -eu
+          FILE="$(find build -type f \( -name '*.aab' -o -name '*.apk' \) | head -n 1)"
+          test -n "$FILE" || { echo "::error::No .apk/.aab was produced"; find build | head -50; exit 1; }
+          ls -la "$FILE"
+          echo "file=$FILE" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android
+          path: ${{ steps.out.outputs.file }}
+          retention-days: 14
+
+      - name: Publish as an android release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -eu
+          TAG="android-${{ github.run_id }}"
+          gh release create "$TAG" "${{ steps.out.outputs.file }}" --latest=false \
+            --title "Android build ${{ github.run_id }}" \
+            --notes "Generated from ${{ github.sha }}. Ads are off on Android until an Android AdMob app exists." \
+            --target "${{ github.sha }}"
